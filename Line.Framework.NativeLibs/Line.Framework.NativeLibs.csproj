@@ -1,0 +1,52 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <!-- 该项目不产生托管代码，只分发原生文件 -->
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <NoWarn>$(NoWarn);NU5128</NoWarn> <!-- 忽略NuGet打包警告（因为无托管代码） -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 使用 Content 标签将所有原生库包含进来，并复制到输出目录 -->
+    
+    <!-- Android -->
+    <Content Include="runtimes/android/**/*.so">
+      <Link>runtimes/%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Pack>true</Pack>
+      <PackagePath>runtimes/%(RecursiveDir)</PackagePath>
+    </Content>
+
+    <!-- iOS (framework) 需要特殊处理，因为是文件夹结构 -->
+    <Content Include="runtimes/ios/**/*">
+      <Link>runtimes/ios/%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Pack>true</Pack>
+      <PackagePath>runtimes/ios/%(RecursiveDir)</PackagePath>
+    </Content>
+
+    <!-- Linux -->
+    <Content Include="runtimes/linux/**/*.so">
+      <Link>runtimes/linux/%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Pack>true</Pack>
+      <PackagePath>runtimes/linux/%(RecursiveDir)</PackagePath>
+    </Content>
+
+    <!-- macOS -->
+    <Content Include="runtimes/osx/*.dylib">
+      <Link>runtimes/osx/%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Pack>true</Pack>
+      <PackagePath>runtimes/osx/</PackagePath>
+    </Content>
+
+    <!-- Windows -->
+    <Content Include="runtimes/win/**/*.dll">
+      <Link>runtimes/win/%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Pack>true</Pack>
+      <PackagePath>runtimes/win/%(RecursiveDir)</PackagePath>
+    </Content>
+  </ItemGroup>
+</Project>
