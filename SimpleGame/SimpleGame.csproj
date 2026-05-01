@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../Line.Framework.NativeLibs/Line.Framework.NativeLibs.csproj" />
     <ProjectReference Include="../Line.Framework/Line.Framework.csproj" />
   </ItemGroup>
 </Project>
