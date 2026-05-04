@@ -1,217 +1,112 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Runtime.InteropServices;
-using System.Threading;
-using System.Threading.Tasks;
 using ManagedBass;
 
 namespace Line.Framework.Audio
 {
     public sealed class AudioThread : IDisposable
     {
-        private readonly Thread thread;
-        private readonly BlockingCollection<Action> taskQueue = new();
-        private volatile bool running = true;
-        private static bool resolverSet;
+        private bool initialized = false;
+        private int currentDevice = -1;
+
+        // 事件：使用明确且唯一的名称
+        public event Action? OnBeforeReinit;
+        public event Action<int>? OnAfterReinit;
 
         public AudioThread()
         {
-            thread = new Thread(Run) { Name = "AudioThread", IsBackground = true };
-            thread.Start();
+            Initialize(-1);
         }
 
-        // 跨平台库解析器
-        private static void EnsureBassResolver()
+        private void Initialize(int deviceIndex)
         {
-            if (resolverSet)
-                return;
+            if (initialized)
+                Bass.Free();
 
-            NativeLibrary.SetDllImportResolver(
-                typeof(Bass).Assembly,
-                (name, asm, path) =>
-                {
-                    if (
-                        name == "bass"
-                        || name == "libbass"
-                        || name == "bass.dll"
-                        || name == "libbass.so"
-                        || name == "libbass.dylib"
-                    )
-                    {
-                        string os =
-                            RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "win"
-                            : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "linux"
-                            : "osx";
-                        string arch = RuntimeInformation.OSArchitecture switch
-                        {
-                            Architecture.X64 => "x86_64",
-                            Architecture.X86 => "x86",
-                            Architecture.Arm64 => "arm64",
-                            _ => "x86_64",
-                        };
-                        string libFileName =
-                            os == "win"
-                                ? "bass.dll"
-                                : (os == "osx" ? "libbass.dylib" : "libbass.so");
-                        string fullPath = Path.Combine(
-                            AppContext.BaseDirectory,
-                            "runtimes",
-                            os,
-                            arch,
-                            libFileName
-                        );
-                        if (File.Exists(fullPath))
-                            return NativeLibrary.Load(fullPath);
-                    }
-                    return IntPtr.Zero;
-                }
-            );
-
-            resolverSet = true;
-        }
-
-        private void Run()
-        {
-            EnsureBassResolver();
-            if (!Bass.Init())
-                throw new Exception("Failed to initialize BASS audio system.");
-
-            foreach (var action in taskQueue.GetConsumingEnumerable())
+            if (!Bass.Init(deviceIndex))
             {
-                if (!running)
-                    break;
-                action();
+                // 如果指定设备失败，回退到默认设备
+                if (deviceIndex != -1 && Bass.Init(-1))
+                    deviceIndex = -1;
+                else
+                    throw new InvalidOperationException($"Bass.Init failed, error: {Bass.LastError}");
             }
 
-            Bass.Free();
+            initialized = true;
+            currentDevice = Bass.CurrentDevice;
         }
 
-        public void Post(Action action)
-        {
-            if (!running)
-                return;
-            taskQueue.Add(action);
-        }
-
-        public T PostSync<T>(Func<T> func)
-        {
-            var tcs = new TaskCompletionSource<T>();
-            Post(() =>
-            {
-                try
-                {
-                    tcs.SetResult(func());
-                }
-                catch (Exception ex)
-                {
-                    tcs.SetException(ex);
-                }
-            });
-            return tcs.Task.GetAwaiter().GetResult();
-        }
-
-        // ---------- 设备管理（兼容旧版 ManagedBass）----------
         public List<DeviceInfo> GetDevices()
         {
-            return PostSync(() =>
+            var devices = new List<DeviceInfo>();
+            int count = Bass.DeviceCount;
+            for (int i = 0; i < count; i++)
             {
-                var list = new List<DeviceInfo>();
-                // 使用 try-catch 尝试不同的 API
-                try
-                {
-                    // 方法1：使用 Bass.DeviceCount 属性 + Bass.GetDeviceInfo
-                    for (int i = 0; i < Bass.DeviceCount; i++)
-                    {
-                        var info = Bass.GetDeviceInfo(i);
-                        if (info.IsEnabled)
-                            list.Add(info);
-                    }
-                }
-                catch
-                {
-                    // 方法2：如果上面的方法失败，尝试使用 Bass.GetDeviceInfos()（如果存在）
-                    // 但这里简单处理：只返回一个空列表，不崩溃
-                }
-                return list;
-            });
+                var info = Bass.GetDeviceInfo(i);
+                if (info.IsEnabled)
+                    devices.Add(info);
+            }
+            return devices;
         }
 
         public bool SetCurrentDevice(int deviceIndex)
         {
-            return PostSync(() =>
-            {
-                try
-                {
-                    // 检查设备索引有效性
-                    if (deviceIndex < 0)
-                        return false;
-                    // 尝试设置 CurrentDevice，忽略返回值（因为没有返回值）
-                    Bass.CurrentDevice = deviceIndex;
-                    return true;
-                }
-                catch
-                {
-                    return false;
-                }
-            });
+            if (!initialized)
+                return false;
+
+            var devInfo = Bass.GetDeviceInfo(deviceIndex);
+            if (!devInfo.IsEnabled)
+                return false;
+
+            if (deviceIndex == currentDevice)
+                return true;
+
+            return Reinit(deviceIndex);
         }
 
-        public int GetCurrentDevice()
+        private bool Reinit(int newDeviceIndex)
         {
-            return PostSync(() =>
+            // 1. 通知外部保存所有 Track 状态
+            OnBeforeReinit?.Invoke();
+
+            // 2. 释放 BASS
+            Bass.Free();
+            initialized = false;
+
+            // 3. 重新初始化新设备
+            if (!Bass.Init(newDeviceIndex))
             {
-                try
-                {
-                    return Bass.CurrentDevice;
-                }
-                catch
-                {
-                    return -1;
-                }
-            });
+                // 回滚：重新初始化旧设备
+                Bass.Init(currentDevice);
+                return false;
+            }
+
+            currentDevice = Bass.CurrentDevice;
+            initialized = true;
+
+            // 4. 通知外部重建所有 Track
+            OnAfterReinit?.Invoke(currentDevice);
+            return true;
         }
 
-        public void SwitchToDefaultDevice()
+        public int GetCurrentDevice() => currentDevice;
+
+        public void SwitchToDefaultDevice() => SetCurrentDevice(-1);
+
+        internal int CreateStream(string filePath, BassFlags flags)
         {
-            Post(() =>
-            {
-                try
-                {
-                    // 尝试获取默认设备索引
-                    var devices = GetDevices();
-                    var defaultDev = devices.FirstOrDefault(d => d.IsDefault);
-                    if (defaultDev.IsEnabled)
-                    {
-                        // 通过遍历找到索引（因为 DeviceInfo 可能没有 Index 属性）
-                        for (int i = 0; i < devices.Count; i++)
-                        {
-                            if (devices[i].Equals(defaultDev))
-                            {
-                                Bass.CurrentDevice = i;
-                                break;
-                            }
-                        }
-                    }
-                    else if (devices.Count > 0)
-                    {
-                        Bass.CurrentDevice = 0;
-                    }
-                }
-                catch
-                {
-                    // 忽略错误，保持原设备
-                }
-            });
+            if (!initialized)
+                throw new InvalidOperationException("AudioThread not initialized");
+            return Bass.CreateStream(filePath, 0, 0, flags);
         }
 
         public void Dispose()
         {
-            running = false;
-            taskQueue.CompleteAdding();
-            thread.Join();
+            if (initialized)
+            {
+                Bass.Free();
+                initialized = false;
+            }
         }
     }
 }
