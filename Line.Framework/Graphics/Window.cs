@@ -8,6 +8,7 @@ using Veldrid.MetalBindings;
 using Veldrid.Sdl2;
 using Veldrid.SPIRV;
 using Veldrid.StartupUtilities;
+using Line.Framework.Graphics.GLSL;
 
 #nullable enable
 
@@ -15,6 +16,8 @@ namespace Line.Framework.Graphics;
 
 public class Window
 {
+    public Shader vs{get;init;}
+    public Shader fs{get;init;}
     public Sdl2Window TargetWindow { get; init; }
     public GraphicsDevice Dev { get; init; }
     private Thread MainThread;
@@ -97,6 +100,9 @@ public class Window
         };
         //一个管线
         Dev = VeldridStartup.CreateGraphicsDevice(TargetWindow, Options, (GraphicsBackend)Backend);
+        //神秘着色器
+        vs=GLSL.GLSL.vertex(Dev.ResourceFactory);
+        vs=GLSL.GLSL.fragment(Dev.ResourceFactory);
         MainThread = new Thread(UpdateWindow);
         MainThread.Start();
     }

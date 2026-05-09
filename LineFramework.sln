@@ -7,7 +7,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Line.Framework", "Line.Fram
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleGame", "SimpleGame\SimpleGame.csproj", "{C80ED1C7-7B72-3A7D-D236-37F5C232A912}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Line.Framework.NativeLibs", "Line.Framework.NativeLibs\Line.Framework.NativeLibs.csproj", "{D9469493-DB76-443E-9CBE-4BD80B61F638}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "osu.Framework.NativeLibs", "osu.Framework.NativeLibs\osu.Framework.NativeLibs.csproj", "{D9469493-DB76-443E-9CBE-4BD80B61F638}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
