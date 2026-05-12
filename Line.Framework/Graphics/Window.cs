@@ -1,14 +1,15 @@
 using System;
 using System.Diagnostics;
 using System.Dynamic;
+using System.IO.Pipelines;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks.Dataflow;
+using Line.Framework.Graphics.GLSL;
 using Veldrid;
 using Veldrid.MetalBindings;
 using Veldrid.Sdl2;
 using Veldrid.SPIRV;
 using Veldrid.StartupUtilities;
-using Line.Framework.Graphics.GLSL;
 
 #nullable enable
 
@@ -16,8 +17,9 @@ namespace Line.Framework.Graphics;
 
 public class Window
 {
-    public Shader vs{get;init;}
-    public Shader fs{get;init;}
+    public Shader vs { get; init; }
+    public Shader fs { get; init; }
+    public Pipeline pipeline { get; init; }
     public Sdl2Window TargetWindow { get; init; }
     public GraphicsDevice Dev { get; init; }
     private Thread MainThread;
@@ -98,11 +100,12 @@ public class Window
             PreferStandardClipSpaceYDirection = true,
             SwapchainSrgbFormat = false,
         };
-        //一个管线
         Dev = VeldridStartup.CreateGraphicsDevice(TargetWindow, Options, (GraphicsBackend)Backend);
         //神秘着色器
-        vs=GLSL.GLSL.vertex(Dev.ResourceFactory);
-        vs=GLSL.GLSL.fragment(Dev.ResourceFactory);
+        vs = GLSL.GLSL.vertex(Dev.ResourceFactory);
+        vs = GLSL.GLSL.fragment(Dev.ResourceFactory);
+        //一个管线
+
         MainThread = new Thread(UpdateWindow);
         MainThread.Start();
     }
