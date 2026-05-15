@@ -1,29 +1,20 @@
-using System;
 using System.Diagnostics;
-using System.Dynamic;
-using System.IO.Pipelines;
-using System.Runtime.InteropServices;
-using System.Threading.Tasks.Dataflow;
-using Line.Framework.Graphics.GLSL;
 using Veldrid;
 using Veldrid.MetalBindings;
 using Veldrid.Sdl2;
-using Veldrid.SPIRV;
 using Veldrid.StartupUtilities;
 
 #nullable enable
 
 namespace Line.Framework.Graphics;
 
-public class Window
+public class BaseWindow
 {
-    public Shader vs { get; init; }
-    public Shader fs { get; init; }
-    public Pipeline pipeline { get; init; }
     public Sdl2Window TargetWindow { get; init; }
     public GraphicsDevice Dev { get; init; }
     private Thread MainThread;
     public int UpdatePerSecond = 1;
+    public CommandList commandList { get; init; }
 
     //更新事件💩
     public class OnUpdateArgs : EventArgs
@@ -58,7 +49,7 @@ public class Window
         return (GraphicsBackend)Choice;
     }
 
-    public Window(
+    public BaseWindow(
         int X = 0,
         int Y = 0,
         int Width = 640,
@@ -101,11 +92,12 @@ public class Window
             SwapchainSrgbFormat = false,
         };
         Dev = VeldridStartup.CreateGraphicsDevice(TargetWindow, Options, (GraphicsBackend)Backend);
-        //神秘着色器
-        vs = GLSL.GLSL.vertex(Dev.ResourceFactory);
-        vs = GLSL.GLSL.fragment(Dev.ResourceFactory);
-        //一个管线
-
+        //指令
+        commandList = Dev.ResourceFactory.CreateCommandList();
+        RendererContext = () =>
+        {
+            WindowsRenderer.UIRenderer(this);
+        };
         MainThread = new Thread(UpdateWindow);
         MainThread.Start();
     }
@@ -119,7 +111,14 @@ public class Window
         while (TargetWindow.Exists)
         {
             TargetWindow.PumpEvents();
-            RendererContext();
+            try
+            {
+                RendererContext();
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[Renderer]{ex}");
+            }
             Dev.SwapBuffers();
             long eTick = sw.ElapsedTicks;
             double elapsedMs = (eTick - tick) * 1000.0 / Stopwatch.Frequency;
