@@ -81,15 +81,14 @@ void main()
         RgbaFloat color,
         float rotation,
         Vector2 anchor,
-        float Opacity,
         Vector2 source,
         UIWidget s
     )
     {
         float cos = (float)Math.Cos(rotation * Math.PI / 180f);
         float sin = (float)Math.Sin(rotation * Math.PI / 180f);
-        RgbaFloat f = new(color.R, color.G, color.B, color.A * Opacity);
-        var scale=s.Size.scale;
+        RgbaFloat f = new(color.R, color.G, color.B, color.A * s.o);
+        var scale = s.Size.scale;
         Rectangle tmp = new()
         {
             X = rect.X * 2 / source.X - 1,
@@ -158,10 +157,11 @@ void main()
             }
             collector.Clear();
             //检查矩形
-            foreach (var item in trees(window.Root).OrderBy(c=>c.z))
+            foreach (var item in trees(window.Root).OrderBy(c => c.z))
             {
                 if (item is UIWidget target && target.RendererContext != null) // 添加 null 检查
                 {
+                    //同步渲染区大小
                     try
                     {
                         var t = target.parent as UIWidget;
@@ -174,6 +174,7 @@ void main()
                     {
                         target.s = new(window.TargetWindow.Width, window.TargetWindow.Height);
                     }
+                    //同步移位
                     try
                     {
                         var t = target.parent as UIWidget;
@@ -192,6 +193,23 @@ void main()
                     catch
                     {
                         target.s = new(0, 0);
+                    }
+                    //同步透明度
+                    try
+                    {
+                        var t = target.parent as UIWidget;
+                        if (t is UIScreen a)
+                        {
+                            target.o = target.Opacity;
+                        }
+                        else
+                        {
+                            target.o = target.Opacity*t.o;
+                        }
+                    }
+                    catch
+                    {
+                        target.o = target.Opacity;
                     }
                     var source = target.s;
                     target.RendererContext(
@@ -224,7 +242,6 @@ void main()
                     rect.Color,
                     rect.Rotation,
                     rect.Anchor,
-                    rect.Opacity,
                     new(window.TargetWindow.Width, window.TargetWindow.Height),
                     rect.Source
                 );

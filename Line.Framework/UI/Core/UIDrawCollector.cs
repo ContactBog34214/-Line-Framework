@@ -38,7 +38,6 @@ public class UIDrawCollector
         public RgbaFloat Color;
         public float Rotation;
         public Vector2 Anchor;
-        public float Opacity;
         public UIWidget Source;
     }
 
@@ -58,7 +57,6 @@ public class UIDrawCollector
         float rotation,
         Vector2 anchor,
         RgbaFloat color,
-        float opacity,
         UIWidget source
     ) =>
         Rects.Add(
@@ -68,7 +66,6 @@ public class UIDrawCollector
                 Color = color,
                 Rotation = rotation,
                 Anchor = anchor,
-                Opacity = opacity,
                 Source = source,
             }
         );
@@ -79,7 +76,6 @@ public class UIDrawCollector
         Vector2 anchor,
         Texture texture,
         RgbaFloat tint,
-        float opacity,
         UIWidget source
     ) =>
         Textures.Add(
@@ -90,7 +86,6 @@ public class UIDrawCollector
                 Tint = tint,
                 Rotation = rotation,
                 Anchor = anchor,
-                Opacity = opacity,
                 Source = source,
             }
         );
@@ -102,7 +97,6 @@ public class UIDrawCollector
         string text,
         Font font,
         RgbaFloat color,
-        float opacity,
         UIWidget source
     ) =>
         Texts.Add(
@@ -114,7 +108,6 @@ public class UIDrawCollector
                 Color = color,
                 Rotation = rotation,
                 Anchor = anchor,
-                Opacity = opacity,
                 Source = source,
             }
         );

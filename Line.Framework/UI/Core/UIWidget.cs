@@ -15,6 +15,7 @@ public class UIWidget : UINode
     public float Opacity { get; set; } = 1;
     public Vector2 s { get; set; } = new(0, 0);
     public Vector2 p { get; set; } = new(0, 0);
+    public float o{get;set;}=1;
 }
 
 public class RendererContextArgs

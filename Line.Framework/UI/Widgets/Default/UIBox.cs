@@ -31,7 +31,6 @@ public class UIBox : UIWidget
                 rotation,
                 anchor,
                 color,
-                Opacity,
                 this
             );
         };
