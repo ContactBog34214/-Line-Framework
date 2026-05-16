@@ -3,183 +3,183 @@ using ManagedBass;
 
 namespace Line.Framework.Audio
 {
-    public class Track : IAudioPlayable, IDisposable
+    public sealed class Track : IDisposable
     {
         private readonly AudioThread audioThread;
         private readonly string filePath;
         private int streamHandle;
-        private float volume = 1.0f;
-        private double position = 0.0;
-        private bool wasPlaying = false;
-        private bool needsRebuild = false;
         private bool disposed = false;
+        private float volume = 1.0f;
+        private bool isPlaying = false;
+        private float originalFrequency;
 
-        internal Track(AudioThread thread, string path)
-        {
-            audioThread = thread;
-            filePath = path;
-            streamHandle = thread.PostSync(() => Bass.CreateStream(filePath));
-            if (streamHandle == 0)
-                throw new Exception($"Failed to load track: {filePath}");
-        }
+        internal int StreamHandle => streamHandle;
+        public string FilePath => filePath;
 
-        /// <summary>播放音频（若设备丢失后已重建，则恢复位置和音量）</summary>
-        public void Play()
-        {
-            audioThread.Post(() =>
-            {
-                if (needsRebuild)
-                    RebuildStream();
-
-                if (streamHandle != 0)
-                {
-                    Bass.ChannelPlay(streamHandle);
-                    wasPlaying = true;
-                }
-            });
-        }
-
-        /// <summary>暂停音频</summary>
-        public void Pause()
-        {
-            audioThread.Post(() =>
-            {
-                if (streamHandle != 0)
-                {
-                    Bass.ChannelPause(streamHandle);
-                    wasPlaying = false;
-                }
-            });
-        }
-
-        /// <summary>停止音频（位置重置到开头）</summary>
-        public void Stop()
-        {
-            audioThread.Post(() =>
-            {
-                if (streamHandle != 0)
-                {
-                    Bass.ChannelStop(streamHandle);
-                    wasPlaying = false;
-                    position = 0;
-                }
-            });
-        }
-
-        /// <summary>音量（0.0 ~ 1.0）</summary>
         public float Volume
         {
             get => volume;
             set
             {
                 volume = Math.Clamp(value, 0f, 1f);
-                audioThread.Post(() =>
-                {
-                    if (streamHandle != 0)
-                        Bass.ChannelSetAttribute(streamHandle, ChannelAttribute.Volume, volume);
-                });
+                if (streamHandle != 0)
+                    Bass.ChannelSetAttribute(streamHandle, ChannelAttribute.Volume, volume);
             }
         }
 
-        /// <summary>当前播放位置（秒）</summary>
-        public double CurrentTime
+        public bool IsPlaying => isPlaying && streamHandle != 0 && Bass.ChannelIsActive(streamHandle) == PlaybackState.Playing;
+
+        public double TotalSeconds { get; private set; }
+
+        public double CurrentPosition
         {
             get
             {
-                if (needsRebuild)
-                    return position;
-                return audioThread.PostSync(() =>
-                {
-                    if (streamHandle != 0)
-                        return Bass.ChannelBytes2Seconds(
-                            streamHandle,
-                            Bass.ChannelGetPosition(streamHandle)
-                        );
-                    return 0;
-                });
+                if (streamHandle == 0) return 0;
+                long bytes = Bass.ChannelGetPosition(streamHandle);
+                return Bass.ChannelBytes2Seconds(streamHandle, bytes);
+            }
+            set
+            {
+                if (streamHandle == 0) return;
+                long bytes = Bass.ChannelSeconds2Bytes(streamHandle, Math.Max(0, value));
+                Bass.ChannelSetPosition(streamHandle, bytes);
             }
         }
 
-        /// <summary>跳转到指定位置（秒）</summary>
-        public void Seek(double seconds)
+        internal Track(AudioThread thread, string path)
         {
-            position = seconds;
-            audioThread.Post(() =>
-            {
-                if (streamHandle != 0)
-                    Bass.ChannelSetPosition(
-                        streamHandle,
-                        Bass.ChannelSeconds2Bytes(streamHandle, seconds)
-                    );
-            });
+            audioThread = thread ?? throw new ArgumentNullException(nameof(thread));
+            filePath = path;
+
+            streamHandle = audioThread.CreateStream(filePath, BassFlags.Default);
+            if (streamHandle == 0)
+                throw new InvalidOperationException($"Failed to create stream: {Bass.LastError}");
+
+            // 获取原始采样率（用于变速变调）
+            Bass.ChannelGetAttribute(streamHandle, ChannelAttribute.Frequency, out originalFrequency);
+            if (originalFrequency <= 0) originalFrequency = 44100;
+
+            long lengthBytes = Bass.ChannelGetLength(streamHandle);
+            TotalSeconds = Bass.ChannelBytes2Seconds(streamHandle, lengthBytes);
+
+            Bass.ChannelSetAttribute(streamHandle, ChannelAttribute.Volume, volume);
         }
 
-        /// <summary>是否正在播放</summary>
-        public bool IsPlaying =>
-            audioThread.PostSync(() =>
-            {
-                if (needsRebuild || streamHandle == 0)
-                    return false;
-                return Bass.ChannelIsActive(streamHandle) == PlaybackState.Playing;
-            });
-
-        /// <summary>标记为需要重建（设备丢失时调用）</summary>
-        internal void MarkForRebuild(bool wasActive)
+        // ---------- 播放控制 ----------
+        public void Play()
         {
-            needsRebuild = true;
-            wasPlaying = wasActive;
-            // 保存当前播放位置
-            if (streamHandle != 0)
-                position = Bass.ChannelBytes2Seconds(
-                    streamHandle,
-                    Bass.ChannelGetPosition(streamHandle)
-                );
-            // 释放旧流
+            if (streamHandle == 0) return;
+            if (!Bass.ChannelPlay(streamHandle))
+                return;
+            isPlaying = true;
+        }
+
+        public void Pause()
+        {
+            if (streamHandle == 0) return;
+            Bass.ChannelPause(streamHandle);
+            isPlaying = false;
+        }
+
+        public void Stop()
+        {
+            if (streamHandle == 0) return;
+            Bass.ChannelStop(streamHandle);
+            CurrentPosition = 0;
+            isPlaying = false;
+        }
+
+        // ---------- 跳转时间 ----------
+        public void SeekToSeconds(double seconds)
+        {
+            CurrentPosition = seconds;
+        }
+
+        // ---------- 变速变调（音调同时改变）----------
+        public void SetPlaybackSpeed(float speed)
+        {
+            if (streamHandle == 0) return;
+            float newFreq = originalFrequency * Math.Clamp(speed, 0.1f, 10.0f);
+            Bass.ChannelSetAttribute(streamHandle, ChannelAttribute.Frequency, newFreq);
+        }
+
+        // ---------- 变速不变调（需要 BASS_FX）----------
+        public void SetTempo(float tempoPercent)
+        {
+            if (streamHandle == 0) return;
+            // tempoPercent: -95.0 ～ +5000.0，0 = 正常速度
+            var attr = (ChannelAttribute)65536; // BASS_ATTRIB_TEMPO
+            Bass.ChannelSetAttribute(streamHandle, attr, tempoPercent);
+        }
+
+        public void SetPitch(float pitch)
+        {
+            if (streamHandle == 0) return;
+            var attr = (ChannelAttribute)65537; // BASS_ATTRIB_TEMPO_PITCH
+            Bass.ChannelSetAttribute(streamHandle, attr, pitch);
+        }
+
+        public void SetTempoAndPitch(float tempoPercent, float pitch)
+        {
+            SetTempo(tempoPercent);
+            SetPitch(pitch);
+        }
+
+        // ---------- 重置所有效果 ----------
+        public void ResetEffects()
+        {
+            if (streamHandle == 0) return;
+            // 重置频率
+            Bass.ChannelSetAttribute(streamHandle, ChannelAttribute.Frequency, originalFrequency);
+            // 重置 tempo 效果
+            var tempoAttr = (ChannelAttribute)65536;
+            Bass.ChannelSetAttribute(streamHandle, tempoAttr, 0f);
+            // 重置 pitch
+            var pitchAttr = (ChannelAttribute)65537;
+            Bass.ChannelSetAttribute(streamHandle, pitchAttr, 0f);
+        }
+
+        // ---------- 设备迁移（切换输出设备时使用）----------
+        public bool MoveToDevice(int newDeviceIndex)
+        {
+            if (streamHandle == 0) return false;
+
+            bool wasPlaying = IsPlaying;
+            double position = CurrentPosition;
+            float vol = Volume;
+
+            if (wasPlaying)
+                Pause();
+
+            bool success = Bass.ChannelSetDevice(streamHandle, newDeviceIndex);
+            if (!success)
+            {
+                if (wasPlaying)
+                    Play();
+                return false;
+            }
+
+            Volume = vol;
+            CurrentPosition = position;
+
+            if (wasPlaying)
+                Play();
+
+            return true;
+        }
+
+        // ---------- 资源释放 ----------
+        public void Dispose()
+        {
+            if (disposed) return;
             if (streamHandle != 0)
             {
+                Bass.ChannelStop(streamHandle);
                 Bass.StreamFree(streamHandle);
                 streamHandle = 0;
             }
-        }
-
-        private void RebuildStream()
-        {
-            if (!needsRebuild)
-                return;
-
-            int newHandle = Bass.CreateStream(filePath);
-            if (newHandle == 0)
-                throw new Exception($"Failed to reload track after device change: {filePath}");
-
-            streamHandle = newHandle;
-            // 恢复音量
-            Bass.ChannelSetAttribute(streamHandle, ChannelAttribute.Volume, volume);
-            // 恢复位置
-            if (position > 0)
-                Bass.ChannelSetPosition(
-                    streamHandle,
-                    Bass.ChannelSeconds2Bytes(streamHandle, position)
-                );
-            // 如果之前正在播放，则恢复播放
-            if (wasPlaying)
-                Bass.ChannelPlay(streamHandle);
-
-            needsRebuild = false;
-        }
-
-        public void Dispose()
-        {
-            if (disposed)
-                return;
             disposed = true;
-            audioThread.Post(() =>
-            {
-                if (streamHandle != 0)
-                    Bass.StreamFree(streamHandle);
-                streamHandle = 0;
-            });
         }
-
-        ~Track() => Dispose();
     }
 }
