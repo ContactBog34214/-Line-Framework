@@ -1,7 +1,12 @@
 using System.Numerics;
 using System.Text;
+using Line.Framework.UI;
+using TagLib.Ape;
 using Veldrid;
 using Veldrid.SPIRV;
+using Veldrid.Utilities;
+using Vortice.Direct3D11.Debug;
+using Rectangle = System.Drawing.RectangleF;
 
 namespace Line.Framework.Graphics;
 
@@ -48,7 +53,7 @@ void main()
     static Shader[] _shaders;
     static Pipeline _pipeline;
     static DeviceBuffer _vertexBuffer;
-    static DeviceBuffer _indexBuffer;
+    private const uint INITIAL_BUFFER_SIZE = 1024 * 1024;
 
     public struct VertexPositionColor
     {
@@ -64,86 +69,234 @@ void main()
         public const uint SizeInBytes = 24;
     }
 
-    public static Action<BaseWindow> UIRenderer { get; } =
-        (BaseWindow window) =>
+    static Vector2 r(Vector2 a, float b)
+    {
+        var c = (float)Math.Cos(b);
+        var s = (float)Math.Sin(b);
+        return new Vector2(a.X * c + a.Y * s, a.Y * c + a.X * s);
+    }
+
+    static VertexPositionColor[] GetRectVertices(
+        Rectangle rect,
+        RgbaFloat color,
+        float rotation,
+        Vector2 anchor,
+        float Opacity,
+        Vector2 source,
+        UIWidget s
+    )
+    {
+        float cos = (float)Math.Cos(rotation * Math.PI / 180f);
+        float sin = (float)Math.Sin(rotation * Math.PI / 180f);
+        RgbaFloat f = new(color.R, color.G, color.B, color.A * Opacity);
+        var scale=s.Size.scale;
+        Rectangle tmp = new()
         {
-            var cl = window.commandList;
-            var tmp = new VertexPositionColor[]
+            X = rect.X * 2 / source.X - 1,
+            Y = 1 - rect.Y * 2 / source.Y,
+            Width = rect.Width * 2 / source.X,
+            Height = rect.Height * 2 / source.Y,
+        };
+
+        //初步定位
+        Vector2 tl = new(anchor.X * -tmp.Width, anchor.Y * tmp.Height);
+        Vector2 tr = new((1 - anchor.X) * tmp.Width, anchor.Y * tmp.Height);
+        Vector2 bl = new(anchor.X * -tmp.Width, (1 - anchor.Y) * -tmp.Height);
+        Vector2 br = new((1 - anchor.X) * tmp.Width, (1 - anchor.Y) * -tmp.Height);
+
+        //旋转
+        tl = new(tl.X * cos - tl.Y * sin, tl.Y * cos + tl.X * sin);
+        tr = new(tr.X * cos - tr.Y * sin, tr.Y * cos + tr.X * sin);
+        bl = new(bl.X * cos - bl.Y * sin, bl.Y * cos + bl.X * sin);
+        br = new(br.X * cos - br.Y * sin, br.Y * cos + br.X * sin);
+
+        //映射
+        var pos = new Vector2(tmp.X, tmp.Y);
+        tl = tl + pos;
+        tr = tr + pos;
+        bl = bl + pos;
+        br = br + pos;
+        RgbaFloat finalColor = f;
+
+        // 返回两个三角形共 6 个顶点
+        return
+        [
+            new VertexPositionColor(tl, finalColor), // 三角形1
+            new VertexPositionColor(tr, finalColor),
+            new VertexPositionColor(bl, finalColor),
+            new VertexPositionColor(tr, finalColor), // 三角形2
+            new VertexPositionColor(br, finalColor),
+            new VertexPositionColor(bl, finalColor),
+        ];
+    }
+
+    static List<UIWidget> trees(UIWidget root)
+    {
+        var result = new List<UIWidget>();
+        void Collect(UIWidget node)
+        {
+            if (!node.visible)
+                return;
+            result.Add(node);
+            foreach (var child in node.children.OfType<UIWidget>())
             {
-                new VertexPositionColor(new Vector2(-0.75f, -0.75f), RgbaFloat.Red),
-                new VertexPositionColor(new Vector2(0f, 0.75f), RgbaFloat.Green),
-                new VertexPositionColor(new Vector2(0.75f, -0.75f), RgbaFloat.Blue),
-            };
-            ushort[] a = [0, 1, 2];
-            if (_vertexBuffer == null)
-            {
-                _vertexBuffer = window.Dev.ResourceFactory.CreateBuffer(
-                    new BufferDescription(
-                        VertexPositionColor.SizeInBytes * 4,
-                        BufferUsage.VertexBuffer
-                    )
-                );
-                window.Dev.UpdateBuffer(_vertexBuffer, 0, tmp);
+                if (!child.visible)
+                    continue;
+                Collect(child);
             }
-            if (_indexBuffer == null)
+        }
+        Collect(root);
+        return result;
+    }
+
+    public static Action<BaseWindow, UIDrawCollector> UIRenderer { get; } =
+        (BaseWindow window, UIDrawCollector collector) =>
+        {
+            if (collector == null)
             {
-                _indexBuffer = window.Dev.ResourceFactory.CreateBuffer(
-                    new BufferDescription(sizeof(ushort) * 4, BufferUsage.IndexBuffer)
-                );
-                window.Dev.UpdateBuffer(_indexBuffer, 0, a);
+                collector = new();
+            }
+            collector.Clear();
+            //检查矩形
+            foreach (var item in trees(window.Root).OrderBy(c=>c.z))
+            {
+                if (item is UIWidget target && target.RendererContext != null) // 添加 null 检查
+                {
+                    try
+                    {
+                        var t = target.parent as UIWidget;
+                        target.s = new(
+                            t.Size.offset.X + t.Size.scale.X * t.s.X,
+                            t.Size.offset.Y + t.Size.scale.Y * t.s.Y
+                        );
+                    }
+                    catch
+                    {
+                        target.s = new(window.TargetWindow.Width, window.TargetWindow.Height);
+                    }
+                    try
+                    {
+                        var t = target.parent as UIWidget;
+                        if (t is UIScreen a)
+                        {
+                            target.p = new(0, 0);
+                        }
+                        else
+                        {
+                            target.p = new(
+                                t.Position.offset.X + t.Position.scale.X * t.s.X + t.p.X,
+                                t.Position.offset.Y + t.Position.scale.Y * t.s.Y + t.p.Y
+                            );
+                        }
+                    }
+                    catch
+                    {
+                        target.s = new(0, 0);
+                    }
+                    var source = target.s;
+                    target.RendererContext(
+                        new RendererContextArgs
+                        {
+                            X =
+                                target.Position.offset.X
+                                + target.Position.scale.X * source.X
+                                + target.p.X,
+                            Y =
+                                target.Position.offset.Y
+                                + target.Position.scale.Y * source.Y
+                                + target.p.Y,
+                            width = target.Size.offset.X + target.Size.scale.X * source.X,
+                            height = target.Size.offset.Y + target.Size.scale.Y * source.Y,
+                            Collector = collector,
+                        }
+                    );
+                }
             }
             var gd = window.Dev;
-            gd.UpdateBuffer(_vertexBuffer, 0, tmp);
-            gd.UpdateBuffer(_indexBuffer, 0, a);
-            VertexLayoutDescription vertexLayout = new VertexLayoutDescription(
-                new VertexElementDescription(
-                    "Position",
-                    VertexElementSemantic.TextureCoordinate,
-                    VertexElementFormat.Float2
-                ),
-                new VertexElementDescription(
-                    "Color",
-                    VertexElementSemantic.TextureCoordinate,
-                    VertexElementFormat.Float4
-                )
-            );
-            if (_shaders == null)
+            var cl = window.commandList;
+
+            // 1. 收集所有矩形的顶点
+            List<VertexPositionColor> allVertices = new List<VertexPositionColor>();
+            foreach (var rect in collector.Rects)
             {
-                _shaders = gd.ResourceFactory.CreateFromSpirv(vertexShaderDesc, fragmentShaderDesc);
+                var verts = GetRectVertices(
+                    rect.Rect,
+                    rect.Color,
+                    rect.Rotation,
+                    rect.Anchor,
+                    rect.Opacity,
+                    new(window.TargetWindow.Width, window.TargetWindow.Height),
+                    rect.Source
+                );
+                allVertices.AddRange(verts); // 每个矩形4个顶点
             }
+
+            // 2. 创建/更新顶点缓冲区
+            uint requiredSize = (uint)(allVertices.Count * VertexPositionColor.SizeInBytes);
+            DeviceBuffer vertexBuffer;
+            if (_vertexBuffer == null || requiredSize > _vertexBuffer.SizeInBytes)
+            {
+                _vertexBuffer?.Dispose();
+                vertexBuffer = gd.ResourceFactory.CreateBuffer(
+                    new BufferDescription(
+                        requiredSize,
+                        BufferUsage.VertexBuffer | BufferUsage.Dynamic
+                    )
+                );
+                _vertexBuffer = vertexBuffer;
+            }
+            else
+            {
+                vertexBuffer = _vertexBuffer;
+            }
+            gd.UpdateBuffer(vertexBuffer, 0, allVertices.ToArray());
+
+            // 3. 确保 Pipeline 已创建
+            if (_shaders == null)
+                _shaders = gd.ResourceFactory.CreateFromSpirv(vertexShaderDesc, fragmentShaderDesc);
             if (_pipeline == null)
             {
-                GraphicsPipelineDescription pipelineDescription = new GraphicsPipelineDescription();
-                pipelineDescription.BlendState = BlendStateDescription.SingleOverrideBlend;
-                pipelineDescription.RasterizerState = new RasterizerStateDescription(
-                    cullMode: FaceCullMode.Back,
-                    fillMode: PolygonFillMode.Solid,
-                    frontFace: FrontFace.Clockwise,
-                    depthClipEnabled: true,
-                    scissorTestEnabled: false
+                var vertexLayout = new VertexLayoutDescription(
+                    new VertexElementDescription(
+                        "Position",
+                        VertexElementSemantic.TextureCoordinate,
+                        VertexElementFormat.Float2
+                    ),
+                    new VertexElementDescription(
+                        "Color",
+                        VertexElementSemantic.TextureCoordinate,
+                        VertexElementFormat.Float4
+                    )
                 );
-                pipelineDescription.PrimitiveTopology = PrimitiveTopology.TriangleStrip;
-                pipelineDescription.ResourceLayouts = System.Array.Empty<ResourceLayout>();
-                pipelineDescription.ShaderSet = new ShaderSetDescription(
-                    vertexLayouts: new VertexLayoutDescription[] { vertexLayout },
-                    shaders: _shaders
-                );
-                pipelineDescription.Outputs = gd.SwapchainFramebuffer.OutputDescription;
+                GraphicsPipelineDescription pipelineDescription = new GraphicsPipelineDescription
+                {
+                    RasterizerState = new RasterizerStateDescription(
+                        FaceCullMode.Back,
+                        PolygonFillMode.Solid,
+                        FrontFace.Clockwise,
+                        true,
+                        false
+                    ),
+                    PrimitiveTopology = PrimitiveTopology.TriangleList,
+                    ResourceLayouts = Array.Empty<ResourceLayout>(),
+                    ShaderSet = new ShaderSetDescription(new[] { vertexLayout }, _shaders),
+                    Outputs = gd.SwapchainFramebuffer.OutputDescription,
+                    BlendState = BlendStateDescription.SingleAlphaBlend,
+                };
+
                 _pipeline = gd.ResourceFactory.CreateGraphicsPipeline(pipelineDescription);
             }
+
+            // 4. 记录命令
             cl.Begin();
             cl.SetFramebuffer(gd.SwapchainFramebuffer);
             cl.ClearColorTarget(0, RgbaFloat.Black);
-            cl.SetIndexBuffer(_indexBuffer, IndexFormat.UInt16);
-            cl.SetVertexBuffer(0, _vertexBuffer);
+            cl.SetVertexBuffer(0, vertexBuffer);
             cl.SetPipeline(_pipeline);
-            cl.DrawIndexed(
-                indexCount: 3,
-                instanceCount: 1,
-                indexStart: 0,
-                vertexOffset: 0,
-                instanceStart: 0
-            );
+
+            // 一次绘制所有矩形（每个矩形4个顶点）
+            cl.Draw((uint)allVertices.Count, 1, 0, 0);
+
             cl.End();
             gd.SubmitCommands(cl);
         };

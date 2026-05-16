@@ -1,8 +1,10 @@
 using System.Diagnostics;
+using Line.Framework.UI;
 using Veldrid;
 using Veldrid.MetalBindings;
 using Veldrid.Sdl2;
 using Veldrid.StartupUtilities;
+using UIScreen = Line.Framework.UI.UIScreen;
 
 #nullable enable
 
@@ -12,9 +14,11 @@ public class BaseWindow
 {
     public Sdl2Window TargetWindow { get; init; }
     public GraphicsDevice Dev { get; init; }
+    public UIScreen Root { get; } = new(0, 0);
     private Thread MainThread;
     public int UpdatePerSecond = 1;
     public CommandList commandList { get; init; }
+    public UIDrawCollector Collector { get; init; } = new();
 
     //更新事件💩
     public class OnUpdateArgs : EventArgs
@@ -80,7 +84,6 @@ public class BaseWindow
         {
             Backend = BackendSelector();
         }
-        RendererContext = (() => { });
         WindowCreateInfo CreateInfo = new WindowCreateInfo(X, Y, Width, Height, State, Title);
         //一个窗口
         TargetWindow = VeldridStartup.CreateWindow(CreateInfo);
@@ -94,10 +97,13 @@ public class BaseWindow
         Dev = VeldridStartup.CreateGraphicsDevice(TargetWindow, Options, (GraphicsBackend)Backend);
         //指令
         commandList = Dev.ResourceFactory.CreateCommandList();
+        Collector = new();
         RendererContext = () =>
         {
-            WindowsRenderer.UIRenderer(this);
+            WindowsRenderer.UIRenderer(this, Collector);
         };
+        TargetWindow.Resized += OnWindowResized;
+        Root.UpdateScreenSize(TargetWindow.Width, TargetWindow.Height);
         MainThread = new Thread(UpdateWindow);
         MainThread.Start();
     }
@@ -111,6 +117,22 @@ public class BaseWindow
         while (TargetWindow.Exists)
         {
             TargetWindow.PumpEvents();
+            //处理大小更新
+            if (_resizePending)
+            {
+                Dev.MainSwapchain.Resize(_newWidth, _newHeight);
+                _resizePending = false;
+            }
+
+            try
+            {
+                RendererContext();
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[Renderer]{ex}");
+            }
+            //正式渲染
             try
             {
                 RendererContext();
@@ -148,5 +170,17 @@ public class BaseWindow
         }
     }
 
-    public Action RendererContext { get; init; }
+    private bool _resizePending = false;
+    private uint _newWidth,
+        _newHeight;
+
+    private void OnWindowResized()
+    {
+        _resizePending = true;
+        _newWidth = (uint)TargetWindow.Width;
+        _newHeight = (uint)TargetWindow.Height;
+        Root.UpdateScreenSize(TargetWindow.Width, TargetWindow.Height);
+    }
+
+    public Action RendererContext { get; init; } = () => { };
 }

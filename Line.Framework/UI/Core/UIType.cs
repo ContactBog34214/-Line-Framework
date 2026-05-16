@@ -1,7 +1,12 @@
 using System.Numerics;
 
-public class Coord2
+public struct Coord2
 {
-    public Vector2 offset = new Vector2(0, 0);
-    public Vector2 scale = new Vector2(0, 0);
+    public Vector2 offset;
+    public Vector2 scale;
+    public Coord2(Vector2 offset, Vector2 scale)
+    {
+        this.offset = offset;
+        this.scale = scale;
+    }
 }

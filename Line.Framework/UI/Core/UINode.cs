@@ -2,7 +2,7 @@ namespace Line.Framework.UI;
 
 public class UINode : IDisposable
 {
-    public string name;
+    public string name{get;set;}
 
     //对外的加点料
     private UINode _parent;

@@ -1,26 +1,27 @@
 using System.Numerics;
-using Veldrid;
 
 namespace Line.Framework.UI;
 
 public class UIWidget : UINode
 {
-    public Vector2 Position = new(0, 0);
-    public Vector2 Size = new(0, 0);
-    public Vector2 anchor = new(0, 0);
-    public bool visible = true;
-
-    public class RendererContextArgs : EventArgs
-    {
-        public double X;
-        public double Y;
-        public double width;
-        public double height;
-        public CommandList command;
-    }
+    public Coord2 Position { get; set; } = new();
+    public Coord2 Size { get; set; } = new();
+    public Vector2 anchor { get; set; } = new(0, 0);
+    public bool visible { get; set; } = true;
 
     public Action<RendererContextArgs> RendererContext;
-    public float z = 0;
-    public float rotation = 0;
-    public float Opacity = 0;
+    public float z { get; set; } = 0;
+    public float rotation { get; set; } = 0;
+    public float Opacity { get; set; } = 1;
+    public Vector2 s { get; set; } = new(0, 0);
+    public Vector2 p { get; set; } = new(0, 0);
+}
+
+public class RendererContextArgs
+{
+    public double X { get; set; }
+    public double Y { get; set; }
+    public double width { get; set; }
+    public double height { get; set; }
+    public UIDrawCollector Collector { get; set; }
 }
