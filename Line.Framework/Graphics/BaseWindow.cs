@@ -12,12 +12,12 @@ using UIScreen = Line.Framework.UI.UIScreen;
 
 namespace Line.Framework.Graphics;
 
-public class BaseWindow:IDisposable
+public class BaseWindow : IDisposable
 {
     public Sdl2Window TargetWindow { get; init; }
     public InputManager Input { get; init; }
     public GraphicsDevice Dev { get; init; }
-    public UIScreen Root { get; } = new(0, 0);
+    public UIScreen Root { get; init; }
     private Thread MainThread;
     public float FramePerSecond = 10;
     public float UpdatePerSecond = 1000;
@@ -114,6 +114,7 @@ public class BaseWindow:IDisposable
             WindowsRenderer.UIRenderer(this, Collector);
         };
         TargetWindow.Resized += OnWindowResized;
+        Root = new(this, 0, 0);
         Root.UpdateScreenSize(TargetWindow.Width, TargetWindow.Height);
 
         //输入器
@@ -176,6 +177,7 @@ public class BaseWindow:IDisposable
             {
                 Log.Error($"[Renderer]{ex}");
             }
+        Thread.Sleep(1);
         }
     }
 
@@ -192,6 +194,7 @@ public class BaseWindow:IDisposable
     }
 
     public Action RendererContext { get; init; } = () => { };
+
     public void Dispose()
     {
         MainThread.Interrupt();

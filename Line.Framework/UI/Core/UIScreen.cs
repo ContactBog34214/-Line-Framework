@@ -1,14 +1,17 @@
 using System.Numerics;
+using Line.Framework.Graphics;
 
 namespace Line.Framework.UI;
 
 public class UIScreen : UIWidget
 {
     private int _screenWidth;
+    public BaseWindow window { get; init; }
     private int _screenHeight;
 
-    public UIScreen(int screenWidth, int screenHeight)
+    public UIScreen(BaseWindow w, int screenWidth, int screenHeight)
     {
+        window = w;
         // 固定位置为 (0,0)
         Position = new Coord2 { scale = Vector2.Zero, offset = Vector2.Zero };
         // 设置大小为屏幕像素尺寸
