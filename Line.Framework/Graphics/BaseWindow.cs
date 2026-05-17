@@ -1,5 +1,7 @@
 using System.Diagnostics;
+using Line.Framework.Input;
 using Line.Framework.UI;
+using SharpGen.Runtime;
 using Veldrid;
 using Veldrid.MetalBindings;
 using Veldrid.Sdl2;
@@ -10,17 +12,26 @@ using UIScreen = Line.Framework.UI.UIScreen;
 
 namespace Line.Framework.Graphics;
 
-public class BaseWindow
+public class BaseWindow : IDisposable
 {
     public Sdl2Window TargetWindow { get; init; }
+    public InputManager Input { get; init; }
     public GraphicsDevice Dev { get; init; }
-    public UIScreen Root { get; } = new(0, 0);
+    public UIScreen Root { get; init; }
     private Thread MainThread;
-    public int UpdatePerSecond = 1;
+    public float FramePerSecond = 10;
+    public float UpdatePerSecond = 1000;
     public CommandList commandList { get; init; }
     public UIDrawCollector Collector { get; init; } = new();
 
     //更新事件💩
+    public class OnRenderArgs : EventArgs
+    {
+        public double delay;
+    }
+
+    public event EventHandler<OnRenderArgs>? OnRender;
+
     public class OnUpdateArgs : EventArgs
     {
         public double delay;
@@ -103,7 +114,11 @@ public class BaseWindow
             WindowsRenderer.UIRenderer(this, Collector);
         };
         TargetWindow.Resized += OnWindowResized;
+        Root = new(this, 0, 0);
         Root.UpdateScreenSize(TargetWindow.Width, TargetWindow.Height);
+
+        //输入器
+        Input = new(TargetWindow);
         MainThread = new Thread(UpdateWindow);
         MainThread.Start();
     }
@@ -113,10 +128,32 @@ public class BaseWindow
         var sw = new Stopwatch();
         sw.Start();
         long tick = sw.ElapsedTicks;
+        double milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
+        double RenderMs = 0;
+        double UpdateMs = 0;
         //开始考试
         while (TargetWindow.Exists)
         {
-            TargetWindow.PumpEvents();
+            tick = sw.ElapsedTicks;
+            milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
+            //防止冻结
+            if (UpdatePerSecond <= 0)
+            {
+                UpdatePerSecond = 1;
+            }
+            if (FramePerSecond <= 0)
+            {
+                FramePerSecond = 1;
+            }
+
+            //输入更新
+            while (milliseconds - UpdateMs >= 1000d / UpdatePerSecond)
+            {
+                var args = new OnUpdateArgs { delay = milliseconds - UpdateMs };
+                OnUpdate?.Invoke(this, args);
+                UpdateMs += 1000d / UpdatePerSecond;
+                TargetWindow.PumpEvents();
+            }
             //处理大小更新
             if (_resizePending)
             {
@@ -124,49 +161,23 @@ public class BaseWindow
                 _resizePending = false;
             }
 
-            try
-            {
-                RendererContext();
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"[Renderer]{ex}");
-            }
             //正式渲染
             try
             {
-                RendererContext();
+                while (milliseconds - RenderMs >= 1000d / FramePerSecond)
+                {
+                    var args = new OnRenderArgs { delay = milliseconds - RenderMs };
+                    OnRender?.Invoke(this, args);
+                    RenderMs += 1000d / FramePerSecond;
+                    RendererContext();
+                    Dev.SwapBuffers();
+                }
             }
             catch (Exception ex)
             {
                 Log.Error($"[Renderer]{ex}");
             }
-            Dev.SwapBuffers();
-            long eTick = sw.ElapsedTicks;
-            double elapsedMs = (eTick - tick) * 1000.0 / Stopwatch.Frequency;
-            double delay = elapsedMs;
-            if (UpdatePerSecond <= 0)
-            {
-                UpdatePerSecond = 1;
-            }
-            double targetSleepMs = 1000.0 / UpdatePerSecond;
-            if (elapsedMs < targetSleepMs)
-            {
-                //强制睡眠
-                delay = targetSleepMs;
-                var args = new OnUpdateArgs { delay = delay };
-                OnUpdate?.Invoke(this, args);
-                Thread.Sleep((int)(targetSleepMs - elapsedMs));
-                eTick = sw.ElapsedTicks;
-                elapsedMs = (eTick - tick) * 1000.0 / Stopwatch.Frequency;
-            }
-            else
-            {
-                //杂鱼
-                var args = new OnUpdateArgs { delay = delay };
-                OnUpdate?.Invoke(this, args);
-            }
-            tick = sw.ElapsedTicks;
+        Thread.Sleep(1);
         }
     }
 
@@ -183,4 +194,10 @@ public class BaseWindow
     }
 
     public Action RendererContext { get; init; } = () => { };
+
+    public void Dispose()
+    {
+        MainThread.Interrupt();
+        TargetWindow.Close();
+    }
 }

@@ -1,12 +1,4 @@
-using System.Numerics;
-using System.Text;
-using Line.Framework.Graphics;
 using Veldrid;
-using Veldrid.OpenGLBinding;
-using Veldrid.SPIRV;
-using Veldrid.StartupUtilities;
-using Vortice.Mathematics;
-using Vulkan.Xlib;
 using Rectangle = System.Drawing.RectangleF;
 
 namespace Line.Framework.UI.DefaultWidget;
@@ -28,7 +20,7 @@ public class UIBox : UIWidget
                     Height = (float)args.height,
                     Width = (float)args.width,
                 },
-                rotation,
+                0,
                 anchor,
                 color,
                 this
