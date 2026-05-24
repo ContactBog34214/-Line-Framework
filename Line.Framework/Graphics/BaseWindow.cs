@@ -15,6 +15,7 @@ namespace Line.Framework.Graphics;
 
 public class BaseWindow : IDisposable
 {
+    public WindowsRenderer RendererClass { get; init; }
     public FontSystem FontSystem { get; private set; }
     public Sdl2Window TargetWindow { get; init; }
     public InputManager Input { get; init; }
@@ -111,9 +112,10 @@ public class BaseWindow : IDisposable
         //指令
         commandList = Dev.ResourceFactory.CreateCommandList();
         Collector = new();
+        RendererClass = new(Dev);
         RendererContext = () =>
         {
-            WindowsRenderer.UIRenderer(this, Collector);
+            RendererClass.UIRenderer(this, Collector);
         };
         TargetWindow.Resized += OnWindowResized;
         Root = new(this, 0, 0);

@@ -10,7 +10,7 @@ using Rectangle = System.Drawing.RectangleF;
 
 namespace Line.Framework.Graphics;
 
-public static class WindowsRenderer
+public class WindowsRenderer
 {
     public const string VertexCode =
         @"
@@ -44,24 +44,24 @@ void main()
     fsout_Color = texture(_texture, fsin_UV) * fsin_Color;
 }";
 
-    static ShaderDescription vertexShaderDesc = new ShaderDescription(
+    ShaderDescription vertexShaderDesc = new ShaderDescription(
         ShaderStages.Vertex, // 顶点着色器阶段
         Encoding.UTF8.GetBytes(VertexCode), // GLSL 源代码（转为字节数组）
         "main" // 入口函数名
     );
 
-    static ShaderDescription fragmentShaderDesc = new ShaderDescription(
+    ShaderDescription fragmentShaderDesc = new ShaderDescription(
         ShaderStages.Fragment,
         Encoding.UTF8.GetBytes(FragmentCode),
         "main"
     );
-    static Shader[] _shaders;
-    static Pipeline _pipeline;
-    static ResourceLayout _textureLayout;
-    static ResourceSet _textureResourceSet;
-    static DeviceBuffer _vertexBuffer;
+    Shader[] _shaders;
+    Pipeline _pipeline;
+    ResourceLayout _textureLayout;
+    ResourceSet _textureResourceSet;
+    DeviceBuffer _vertexBuffer;
     private const uint INITIAL_BUFFER_SIZE = 1024 * 1024;
-    public static ResourceLayout TextureLayout => _textureLayout;
+    public ResourceLayout TextureLayout => _textureLayout;
 
     public struct VertexPositionColor
     {
@@ -79,14 +79,14 @@ void main()
         public const uint SizeInBytes = 32;
     }
 
-    static Vector2 r(Vector2 a, float b)
+    Vector2 r(Vector2 a, float b)
     {
         var c = (float)Math.Cos(b);
         var s = (float)Math.Sin(b);
         return new Vector2(a.X * c + a.Y * s, a.Y * c + a.X * s);
     }
 
-    static VertexPositionColor[] GetRectVertices(
+    VertexPositionColor[] GetRectVertices(
         Rectangle rect,
         RgbaFloat color,
         float rotation,
@@ -101,21 +101,21 @@ void main()
         var scale = s.Size.scale;
         Rectangle tmp = new()
         {
-            X = (s.GetPositionOnScreen().X+rect.X) * 2 / source.X - 1,
-            Y = 1 - (s.GetPositionOnScreen().Y+rect.Y) * 2 / source.Y,
+            X = (s.GetPositionOnScreen().X + rect.X) * 2 / source.X - 1,
+            Y = 1 - (s.GetPositionOnScreen().Y + rect.Y) * 2 / source.Y,
             Width = rect.Width * 2 / source.X,
             Height = rect.Height * 2 / source.Y,
         };
 
         //初步定位
-        Vector2 tl = new(0,tmp.Height);
-        Vector2 tr = new(tmp.Width,tmp.Height);
-        Vector2 bl = new(0,0);
-        Vector2 br = new(tmp.Width,0);
-        tl.Y-=tmp.Height;
-        tr.Y-=tmp.Height;
-        bl.Y-=tmp.Height;
-        br.Y-=tmp.Height;
+        Vector2 tl = new(0, tmp.Height);
+        Vector2 tr = new(tmp.Width, tmp.Height);
+        Vector2 bl = new(0, 0);
+        Vector2 br = new(tmp.Width, 0);
+        tl.Y -= tmp.Height;
+        tr.Y -= tmp.Height;
+        bl.Y -= tmp.Height;
+        br.Y -= tmp.Height;
 
         //旋转
         tl = new(tl.X * cos - tl.Y * sin, tl.Y * cos + tl.X * sin);
@@ -168,8 +168,13 @@ void main()
         return result;
     }
 
-    public static Action<BaseWindow, UIDrawCollector> UIRenderer { get; } =
-        (BaseWindow window, UIDrawCollector collector) =>
+    public Action<BaseWindow, UIDrawCollector> UIRenderer { get; }
+
+    public WindowsRenderer(GraphicsDevice gd)
+    {
+        CreateShader(gd);
+        CreatePipeline(gd);
+        UIRenderer = (BaseWindow window, UIDrawCollector collector) =>
         {
             if (collector == null)
             {
@@ -344,130 +349,111 @@ void main()
                 group.AddRange(verts);
             }
 
-            // 3. 确保 Pipeline 已创建
+            //开始正式渲染
+            // 1. 确保 Pipeline 已创建
             if (_shaders == null)
-                _shaders = gd.ResourceFactory.CreateFromSpirv(vertexShaderDesc, fragmentShaderDesc);
+                CreateShader(gd);
             if (_pipeline == null)
             {
-                // 1. 创建资源布局 (ResourceLayout)
-                _textureLayout = gd.ResourceFactory.CreateResourceLayout(
-                    new ResourceLayoutDescription(
-                        new ResourceLayoutElementDescription(
-                            "_texture",
-                            ResourceKind.TextureReadOnly,
-                            ShaderStages.Fragment
-                        )
-                    )
-                );
-
-                // 2. 创建 1x1 白色纹理
-                Texture whiteTexture = gd.ResourceFactory.CreateTexture(
-                    TextureDescription.Texture2D(
-                        1,
-                        1,
-                        1,
-                        1,
-                        PixelFormat.R8_G8_B8_A8_UNorm,
-                        TextureUsage.Sampled
-                    )
-                );
-                // 填充白色像素数据
-                byte[] whitePixel = new byte[] { 255, 255, 255, 255 };
-                gd.UpdateTexture(whiteTexture, whitePixel, 0, 0, 0, 1, 1, 1, 0, 0);
-
-                // 3. 创建资源集 (ResourceSet)
-                _textureResourceSet = gd.ResourceFactory.CreateResourceSet(
-                    new ResourceSetDescription(_textureLayout, whiteTexture)
-                );
-
-                var vertexLayout = new VertexLayoutDescription(
-                    new VertexElementDescription(
-                        "Position",
-                        VertexElementSemantic.TextureCoordinate,
-                        VertexElementFormat.Float2
-                    ),
-                    new VertexElementDescription(
-                        "Color",
-                        VertexElementSemantic.TextureCoordinate,
-                        VertexElementFormat.Float4
-                    ),
-                    new VertexElementDescription(
-                        "UV",
-                        VertexElementSemantic.TextureCoordinate,
-                        VertexElementFormat.Float2
-                    )
-                );
-                GraphicsPipelineDescription pipelineDescription = new GraphicsPipelineDescription
-                {
-                    RasterizerState = new RasterizerStateDescription(
-                        FaceCullMode.None,
-                        PolygonFillMode.Solid,
-                        FrontFace.Clockwise,
-                        true,
-                        false
-                    ),
-                    PrimitiveTopology = PrimitiveTopology.TriangleList,
-                    //ResourceLayouts = Array.Empty<ResourceLayout>(),
-                    ResourceLayouts = new[] { _textureLayout },
-                    ShaderSet = new ShaderSetDescription(new[] { vertexLayout }, _shaders),
-                    Outputs = gd.SwapchainFramebuffer.OutputDescription,
-                    BlendState = BlendStateDescription.SingleAlphaBlend,
-                };
-
-                _pipeline = gd.ResourceFactory.CreateGraphicsPipeline(pipelineDescription);
+                CreatePipeline(gd);
             }
 
+            // 2. 收集命令列表（已按 Z 排序）
             collector.Update();
+            var commands = collector.AllCommands;
+            if (commands.Count == 0)
+                return;
 
-            // 4. 记录命令
+            // 3. 第一遍遍历：计算总顶点数，并记录每个命令的起始偏移和资源集
+            int totalVertexCount = 0;
+            var cmdInfos =
+                new List<(
+                    int startVertex,
+                    int vertexCount,
+                    ResourceSet resourceSet,
+                    VertexPositionColor[] vertices
+                )>();
+            foreach (var cmd in commands)
+            {
+                int vertexCount = 6; // 每个控件固定 6 个顶点
+                ResourceSet rs = null;
+                VertexPositionColor[] verts = null;
+
+                if (cmd is UIDrawCollector.DrawRectCommand rc)
+                {
+                    rs = _textureResourceSet; // 默认白色纹理
+                    verts = GetRectVertices(
+                        rc.Rect,
+                        rc.Color,
+                        rc.Rotation,
+                        rc.Anchor,
+                        screenSize,
+                        rc.Source
+                    );
+                }
+                else if (cmd is UIDrawCollector.DrawTextureCommand tc)
+                {
+                    if (tc.TextureResourceSet == null)
+                        continue;
+                    rs = tc.TextureResourceSet;
+                    verts = GetRectVertices(
+                        tc.Rect,
+                        tc.Tint,
+                        tc.Rotation,
+                        tc.Anchor,
+                        screenSize,
+                        tc.Source
+                    );
+                }
+                else
+                    continue;
+
+                if (verts == null || verts.Length != vertexCount)
+                    continue;
+                cmdInfos.Add((totalVertexCount, vertexCount, rs, verts));
+                totalVertexCount += vertexCount;
+            }
+
+            if (totalVertexCount == 0)
+                return;
+
+            // 4. 确保顶点缓冲区足够大
+            uint totalSize = (uint)(totalVertexCount * VertexPositionColor.SizeInBytes);
+            if (_vertexBuffer == null || totalSize > _vertexBuffer.SizeInBytes)
+            {
+                _vertexBuffer?.Dispose();
+                _vertexBuffer = gd.ResourceFactory.CreateBuffer(
+                    new BufferDescription(totalSize, BufferUsage.VertexBuffer | BufferUsage.Dynamic)
+                );
+            }
+
+            // 5. 将所有控件的顶点数据写入缓冲区（不同偏移）
+            foreach (var info in cmdInfos)
+            {
+                uint offsetBytes = (uint)(info.startVertex * VertexPositionColor.SizeInBytes);
+                gd.UpdateBuffer(_vertexBuffer, offsetBytes, info.vertices);
+            }
+
+            // 6. 开始命令录制
             cl.Begin();
             cl.SetFramebuffer(gd.SwapchainFramebuffer);
             cl.ClearColorTarget(0, RgbaFloat.Black);
             cl.SetPipeline(_pipeline);
+            cl.SetVertexBuffer(0, _vertexBuffer);
 
-            _verts.Clear();
-            _res.Clear();
-
-            foreach (var cmd in collector.AllCommands)
+            // 7. 逐个控件绘制（每个 Draw 绑定自己的资源集）
+            foreach (var info in cmdInfos)
             {
-                // 根据命令类型生成顶点并绘制
-                switch (cmd)
-                {
-                    case UIDrawCollector.DrawRectCommand rectCmd:
-                        DrawRectCommand(cl, gd, rectCmd, screenSize);
-                        break;
-                    case UIDrawCollector.DrawTextureCommand texCmd:
-                        DrawTextureCommand(cl, gd, texCmd, screenSize);
-                        break;
-                    case UIDrawCollector.DrawTextCommand textCmd:
-                        DrawTextCommand(cl, gd, textCmd, screenSize);
-                        break;
-                }
+                cl.SetGraphicsResourceSet(0, info.resourceSet);
+                cl.Draw((uint)info.vertexCount, 1, (uint)info.startVertex, 0);
             }
-            /*
-            //动态调整顶点缓冲区
-            uint requiredSize = (uint)_verts.Count * VertexPositionColor.SizeInBytes;
-            if (_vertexBuffer == null || requiredSize > _vertexBuffer.SizeInBytes)
-            {
-                _vertexBuffer?.Dispose();
-                _vertexBuffer = gd.ResourceFactory.CreateBuffer(
-                    new BufferDescription(
-                        requiredSize,
-                        BufferUsage.VertexBuffer | BufferUsage.Dynamic
-                    )
-                );
-            }
-            gd.UpdateBuffer(_vertexBuffer,0,_verts.ToArray());
-            cl.SetVertexBuffer(0,_vertexBuffer);
-            cl.SetGraphicsResourceSet(0,rs);
-            cl.Draw((uint)_verts.ToArray().Length, 1, 0, 0);
-            */
 
             cl.End();
             gd.SubmitCommands(cl);
         };
+    }
 
-    static void DrawRectCommand(
+    void DrawRectCommand(
         CommandList cl,
         GraphicsDevice gd,
         UIDrawCollector.DrawRectCommand cmd,
@@ -487,7 +473,7 @@ void main()
         UploadAndDraw(cl, gd, vertices, resourceSet);
     }
 
-    static void DrawTextureCommand(
+    void DrawTextureCommand(
         CommandList cl,
         GraphicsDevice gd,
         UIDrawCollector.DrawTextureCommand cmd,
@@ -510,7 +496,7 @@ void main()
     }
 
     // 文本命令暂不实现，留作扩展
-    static void DrawTextCommand(
+    void DrawTextCommand(
         CommandList cl,
         GraphicsDevice gd,
         UIDrawCollector.DrawTextCommand cmd,
@@ -520,13 +506,14 @@ void main()
         // 需要字体图集支持，暂时留空
     }
 
-    static void UploadAndDraw(
+    void UploadAndDraw(
         CommandList cl,
         GraphicsDevice gd,
         VertexPositionColor[] vertices,
         ResourceSet resourceSet
     )
     {
+        /*
         if (vertices.Length == 0)
             return;
 
@@ -542,7 +529,7 @@ void main()
         cl.SetVertexBuffer(0, _vertexBuffer);
         cl.SetGraphicsResourceSet(0, resourceSet);
         cl.Draw((uint)vertices.Length, 1, 0, 0);
-
+        */
         /*
         _verts.AddRange(vertices);
         _res.Add(resourceSet);
@@ -550,7 +537,82 @@ void main()
         */
     }
 
-    static List<VertexPositionColor> _verts = [];
-    static List<ResourceSet> _res = [];
-    static ResourceSet rs;
+    List<VertexPositionColor> _verts = [];
+    List<ResourceSet> _res = [];
+    ResourceSet rs;
+
+    void CreatePipeline(GraphicsDevice gd)
+    {
+        // 1. 创建资源布局 (ResourceLayout)
+        _textureLayout = gd.ResourceFactory.CreateResourceLayout(
+            new ResourceLayoutDescription(
+                new ResourceLayoutElementDescription(
+                    "_texture",
+                    ResourceKind.TextureReadOnly,
+                    ShaderStages.Fragment
+                )
+            )
+        );
+
+        // 2. 创建 1x1 白色纹理
+        Texture whiteTexture = gd.ResourceFactory.CreateTexture(
+            TextureDescription.Texture2D(
+                1,
+                1,
+                1,
+                1,
+                PixelFormat.R8_G8_B8_A8_UNorm,
+                TextureUsage.Sampled
+            )
+        );
+        // 填充白色像素数据
+        byte[] whitePixel = new byte[] { 255, 255, 255, 255 };
+        gd.UpdateTexture(whiteTexture, whitePixel, 0, 0, 0, 1, 1, 1, 0, 0);
+
+        // 3. 创建资源集 (ResourceSet)
+        _textureResourceSet = gd.ResourceFactory.CreateResourceSet(
+            new ResourceSetDescription(_textureLayout, whiteTexture)
+        );
+
+        var vertexLayout = new VertexLayoutDescription(
+            new VertexElementDescription(
+                "Position",
+                VertexElementSemantic.TextureCoordinate,
+                VertexElementFormat.Float2
+            ),
+            new VertexElementDescription(
+                "Color",
+                VertexElementSemantic.TextureCoordinate,
+                VertexElementFormat.Float4
+            ),
+            new VertexElementDescription(
+                "UV",
+                VertexElementSemantic.TextureCoordinate,
+                VertexElementFormat.Float2
+            )
+        );
+        GraphicsPipelineDescription pipelineDescription = new GraphicsPipelineDescription
+        {
+            RasterizerState = new RasterizerStateDescription(
+                FaceCullMode.None,
+                PolygonFillMode.Solid,
+                FrontFace.Clockwise,
+                true,
+                false
+            ),
+            PrimitiveTopology = PrimitiveTopology.TriangleList,
+            //ResourceLayouts = Array.Empty<ResourceLayout>(),
+            ResourceLayouts = new[] { _textureLayout },
+            ShaderSet = new ShaderSetDescription(new[] { vertexLayout }, _shaders),
+            Outputs = gd.SwapchainFramebuffer.OutputDescription,
+            BlendState = BlendStateDescription.SingleAlphaBlend,
+        };
+
+        _pipeline = gd.ResourceFactory.CreateGraphicsPipeline(pipelineDescription);
+    }
+
+    void CreateShader(GraphicsDevice gd)
+    {
+        _shaders = gd.ResourceFactory.CreateFromSpirv(vertexShaderDesc, fragmentShaderDesc);
+    }
 }
