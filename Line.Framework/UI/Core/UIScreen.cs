@@ -19,7 +19,7 @@ public class UIScreen : UIWidget
         // 锚点设为左上角 (0,0)
         anchor = Vector2.Zero;
         visible = true;
-        z = 0;
+        Z = 0;
     }
 
     public void UpdateScreenSize(int width, int height)

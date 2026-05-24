@@ -28,7 +28,7 @@ public class UIButton : UIWidget
                 && enabled
                 && HitTest(
                     GetPositionOnScreen(),
-                    new(Size.offset.X + Size.scale.X * s.X, Size.offset.Y + Size.scale.Y * s.Y),
+                    GetSizeOnScreen(),
                     input.TotalMouseDelta
                 )
             )
@@ -59,8 +59,8 @@ public class UIButton : UIWidget
             collector.DrawRect(
                 new Rectangle
                 {
-                    X = (float)args.X,
-                    Y = (float)args.Y,
+                    X = 0,
+                    Y = 0,
                     Height = (float)args.height,
                     Width = (float)args.width,
                 },

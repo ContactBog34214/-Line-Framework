@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using FontStashSharp;
 using Line.Framework.Input;
 using Line.Framework.UI;
 using SharpGen.Runtime;
@@ -14,6 +15,8 @@ namespace Line.Framework.Graphics;
 
 public class BaseWindow : IDisposable
 {
+    public WindowsRenderer RendererClass { get; init; }
+    public FontSystem FontSystem { get; private set; }
     public Sdl2Window TargetWindow { get; init; }
     public InputManager Input { get; init; }
     public GraphicsDevice Dev { get; init; }
@@ -109,13 +112,18 @@ public class BaseWindow : IDisposable
         //指令
         commandList = Dev.ResourceFactory.CreateCommandList();
         Collector = new();
+        RendererClass = new(Dev);
         RendererContext = () =>
         {
-            WindowsRenderer.UIRenderer(this, Collector);
+            RendererClass.UIRenderer(this, Collector);
         };
         TargetWindow.Resized += OnWindowResized;
         Root = new(this, 0, 0);
         Root.UpdateScreenSize(TargetWindow.Width, TargetWindow.Height);
+
+        //字
+        FontSystem = new FontSystem();
+        FontSystem.AddFont(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Font.ttf")));
 
         //输入器
         Input = new(TargetWindow);
@@ -177,7 +185,7 @@ public class BaseWindow : IDisposable
             {
                 Log.Error($"[Renderer]{ex}");
             }
-        Thread.Sleep(1);
+            Thread.Sleep(1);
         }
     }
 

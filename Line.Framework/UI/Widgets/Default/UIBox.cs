@@ -15,8 +15,8 @@ public class UIBox : UIWidget
             collector.DrawRect(
                 new Rectangle
                 {
-                    X = (float)args.X,
-                    Y = (float)args.Y,
+                    X = 0,
+                    Y = 0,
                     Height = (float)args.height,
                     Width = (float)args.width,
                 },
