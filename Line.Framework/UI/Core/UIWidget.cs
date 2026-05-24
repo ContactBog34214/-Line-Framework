@@ -24,7 +24,8 @@ public class UIWidget : UINode
     }
 
     public Action<RendererContextArgs> RendererContext;
-    public float z { get; set; } = 0;
+    public float Z { get; set; } = 0;
+    public float oz = 0;
     public float rotation { get; set; } = 0;
     public float Opacity { get; set; } = 1;
     public Vector2 s { get; set; } = new(0, 0);

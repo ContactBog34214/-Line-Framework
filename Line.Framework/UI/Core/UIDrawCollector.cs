@@ -1,6 +1,8 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.Numerics;
+using FreeTypeSharp;
 using TagLib.Riff;
 using Veldrid;
 using Rectangle = System.Drawing.RectangleF;
@@ -9,47 +11,55 @@ namespace Line.Framework.UI;
 
 public class UIDrawCollector
 {
-    public struct DrawRectCommand
+    public class DrawCommand
     {
+        public float Z;
         public Rectangle Rect;
-        public RgbaFloat Color;
         public float Rotation;
         public Vector2 Anchor;
-        public float Opacity;
         public UIWidget Source;
     }
 
-    public struct DrawTextureCommand
+    public class DrawRectCommand : DrawCommand
     {
-        public Rectangle Rect;
+        public RgbaFloat Color;
+        public float Opacity;
+    }
+
+    public class DrawTextureCommand : DrawCommand
+    {
         public Texture Texture;
         public RgbaFloat Tint;
-        public float Rotation;
-        public Vector2 Anchor;
-        public float Opacity;
-        public UIWidget Source;
+        public ResourceSet TextureResourceSet;
     }
 
-    public struct DrawTextCommand
+    public class DrawTextCommand : DrawCommand
     {
-        public Rectangle Rect;
         public string Text;
-        public Font Font;
         public RgbaFloat Color;
-        public float Rotation;
-        public Vector2 Anchor;
-        public UIWidget Source;
+        public float FontSize;
     }
 
     public List<DrawRectCommand> Rects = [];
     public List<DrawTextureCommand> Textures = [];
     public List<DrawTextCommand> Texts = [];
+    public List<DrawCommand> AllCommands = new List<DrawCommand>();
+
+    public void Update()
+    {
+        AllCommands.Clear();
+        AllCommands.AddRange(Rects);
+        AllCommands.AddRange(Textures);
+        AllCommands.AddRange(Texts);
+        AllCommands.Sort((a, b) => a.Z.CompareTo(b.Z));
+    }
 
     public void Clear()
     {
         Rects.Clear();
         Textures.Clear();
         Texts.Clear();
+        AllCommands.Clear();
     }
 
     public void DrawRect(
@@ -67,6 +77,7 @@ public class UIDrawCollector
                 Rotation = rotation,
                 Anchor = anchor,
                 Source = source,
+                Z = source.oz,
             }
         );
 
@@ -74,6 +85,7 @@ public class UIDrawCollector
         Rectangle rect,
         float rotation,
         Vector2 anchor,
+        ResourceSet textureResourceSet,
         Texture texture,
         RgbaFloat tint,
         UIWidget source
@@ -87,6 +99,8 @@ public class UIDrawCollector
                 Rotation = rotation,
                 Anchor = anchor,
                 Source = source,
+                TextureResourceSet = textureResourceSet,
+                Z = source.oz,
             }
         );
 
@@ -95,20 +109,21 @@ public class UIDrawCollector
         float rotation,
         Vector2 anchor,
         string text,
-        Font font,
         RgbaFloat color,
-        UIWidget source
+        UIWidget source,
+        float fontsize
     ) =>
         Texts.Add(
             new DrawTextCommand
             {
                 Rect = rect,
                 Text = text,
-                Font = font,
                 Color = color,
                 Rotation = rotation,
                 Anchor = anchor,
                 Source = source,
+                FontSize = fontsize,
+                Z = source.oz,
             }
         );
 }
