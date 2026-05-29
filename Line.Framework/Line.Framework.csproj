@@ -14,6 +14,7 @@
     <PackageReference Include="ppy.osu.Framework.NativeLibs" Version="1.0.0" />
     <PackageReference Include="sdl2" Version="2.0.5" />
     <PackageReference Include="SDL2-CS" Version="2.0.0" />
+    <PackageReference Include="SharpFont" Version="4.0.1" />
     <PackageReference Include="SharpText.Core" Version="0.3.1" />
     <PackageReference Include="SharpText.Veldrid" Version="0.3.1" />
     <PackageReference Include="StbImageSharp" Version="2.30.15" />

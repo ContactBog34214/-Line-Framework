@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Numerics;
 using FreeTypeSharp;
+using Line.Framework.Graphics;
 using TagLib.Riff;
 using Veldrid;
 using Rectangle = System.Drawing.RectangleF;
@@ -14,7 +15,7 @@ public class UIDrawCollector
     public class DrawCommand
     {
         public float Z;
-        public Rectangle Rect;
+
         public float Rotation;
         public Vector2 Anchor;
         public UIWidget Source;
@@ -22,27 +23,28 @@ public class UIDrawCollector
 
     public class DrawRectCommand : DrawCommand
     {
+        public Rectangle Rect;
         public RgbaFloat Color;
         public float Opacity;
     }
 
     public class DrawTextureCommand : DrawCommand
     {
+        public Rectangle Rect;
         public Texture Texture;
         public RgbaFloat Tint;
         public ResourceSet TextureResourceSet;
     }
 
-    public class DrawTextCommand : DrawCommand
+    public class DrawVertCommand : DrawCommand
     {
-        public string Text;
-        public RgbaFloat Color;
-        public float FontSize;
+        public WindowsRenderer.Vertex[] Vert;
     }
 
     public List<DrawRectCommand> Rects = [];
     public List<DrawTextureCommand> Textures = [];
-    public List<DrawTextCommand> Texts = [];
+    public List<DrawVertCommand> Verts = [];
+
     public List<DrawCommand> AllCommands = new List<DrawCommand>();
 
     public void Update()
@@ -50,7 +52,8 @@ public class UIDrawCollector
         AllCommands.Clear();
         AllCommands.AddRange(Rects);
         AllCommands.AddRange(Textures);
-        AllCommands.AddRange(Texts);
+        AllCommands.AddRange(Verts);
+
         AllCommands.Sort((a, b) => a.Z.CompareTo(b.Z));
     }
 
@@ -58,7 +61,7 @@ public class UIDrawCollector
     {
         Rects.Clear();
         Textures.Clear();
-        Texts.Clear();
+        Verts.Clear();
         AllCommands.Clear();
     }
 
@@ -104,26 +107,13 @@ public class UIDrawCollector
             }
         );
 
-    public void DrawText(
-        Rectangle rect,
-        float rotation,
-        Vector2 anchor,
-        string text,
-        RgbaFloat color,
-        UIWidget source,
-        float fontsize
-    ) =>
-        Texts.Add(
-            new DrawTextCommand
+    public void DrawVertex(WindowsRenderer.Vertex[] v, UIWidget source) =>
+        Verts.Add(
+            new()
             {
-                Rect = rect,
-                Text = text,
-                Color = color,
-                Rotation = rotation,
-                Anchor = anchor,
-                Source = source,
-                FontSize = fontsize,
+                Vert = v,
                 Z = source.oz,
+                Source = source,
             }
         );
 }

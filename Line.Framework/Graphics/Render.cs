@@ -9,6 +9,7 @@ using Veldrid;
 using Veldrid.SPIRV;
 using Veldrid.Utilities;
 using Vortice.Direct3D11.Debug;
+using Vulkan.Wayland;
 using Rectangle = System.Drawing.RectangleF;
 
 namespace Line.Framework.Graphics;
@@ -88,32 +89,41 @@ void main()
         public RgbaFloat Color { get; set; }
         public Coord2 UV { get; set; }
         public Texture Texture { get; set; }
+        public ResourceSet ResourceSet { get; set; }
+        public float Opacity { get; set; }
 
-        public Vertex(Vector2 p, RgbaFloat c, Coord2 u, Texture rs)
+        public Vertex(Vector2 p, RgbaFloat c, Coord2 u, Texture t, ResourceSet rs, float o)
         {
             Position = p;
             Color = c;
             UV = u;
-            Texture = rs;
+            Texture = t;
+            ResourceSet = rs;
+            Opacity = o;
         }
 
-        public VertexPositionColor Export()
+        public VertexTask Export()
         {
-            return new(
-                Position,
-                Color,
-                UV.scale + UV.offset / new Vector2(Texture.Width, Texture.Height)
-            );
+            return new()
+            {
+                Position = Position,
+                UV = UV.scale + UV.offset / new Vector2(Texture?.Width ?? 1, Texture?.Height ?? 1),
+                Color = Color,
+                Texture = Texture,
+                ResourceSet = ResourceSet,
+                Opacity = Opacity,
+            };
         }
     }
 
-    class VertexTask
+    public class VertexTask
     {
         public Vector2 Position { get; set; }
         public RgbaFloat Color { get; set; }
         public Vector2 UV { get; set; }
         public Texture Texture { get; set; }
         public ResourceSet ResourceSet { get; set; }
+        public float Opacity { get; set; }
     }
 
     Vector2 r(Vector2 a, float b)
@@ -123,7 +133,7 @@ void main()
         return new Vector2(a.X * c + a.Y * s, a.Y * c + a.X * s);
     }
 
-    VertexPositionColor[] GetRectVertices(VertexPositionColor[] vertex, Vector2 source, UIWidget s)
+    VertexPositionColor[] GetVertices(VertexPositionColor[] vertex, Vector2 source, UIWidget s)
     {
         float cos = (float)Math.Cos(s.rotation * Math.PI / 180f);
         float sin = (float)Math.Sin(s.rotation * Math.PI / 180f);
@@ -134,7 +144,7 @@ void main()
             var target = tmp[i];
             //颜色处理
             RgbaFloat rgba = new(
-                new(target.Color.R, target.Color.G, target.Color.B, target.Color.A * s.o)
+                new(target.Color.R, target.Color.G, target.Color.B, target.Color.A)
             );
             target.Color = rgba;
 
@@ -196,26 +206,39 @@ void main()
             new VertexPositionColor(br, finalColor, uv_br),
             new VertexPositionColor(bl, finalColor, uv_bl),
         ];
-        return GetRectVertices(vert, source, s);
+        return GetVertices(vert, source, s);
     }
 
-    static List<UIWidget> trees(UIWidget root)
+    static List<List<UIWidget>> trees(UIWidget root)
     {
-        var result = new List<UIWidget>();
-        void Collect(UIWidget node)
+        List<List<UIWidget>> widgets = [];
+        var i = 0;
+        void Collect(UIWidget node, int i, float b)
         {
             if (!node.visible)
                 return;
-            result.Add(node);
-            foreach (var child in node.children.OfType<UIWidget>())
+            if (widgets.Count <= i)
+            {
+                widgets.Add([]);
+            }
+            node.oz = i+b;
+            widgets[i].Add(node);
+            float c=0;
+            var d=node.children.OfType<UIWidget>().OrderBy(c => c.Z);
+            foreach (var child in d)
             {
                 if (!child.visible)
                     continue;
-                Collect(child);
+                Collect(child, i + 1,c/d.Count());
+                c++;
             }
         }
-        Collect(root);
-        return result;
+        Collect(root, i,0);
+        for(int f = 0; f < widgets.Count; f++)
+        {
+            widgets[f].OrderBy(c=>c.Z);
+        }
+        return widgets;
     }
 
     public Action<BaseWindow, UIDrawCollector> UIRenderer { get; }
@@ -231,34 +254,15 @@ void main()
                 collector = new();
             }
             collector.Clear();
-
-            //刷新层级
-            foreach (var item in trees(window.Root).OrderBy(c => c.Z))
+            List<List<UIWidget>> widgets = trees(window.Root);
+            List<UIWidget> ws = [];
+            foreach (var item in widgets)
             {
-                if (item is UIWidget target && target.RendererContext != null)
-                {
-                    //同步层级
-                    try
-                    {
-                        var t = target.parent as UIWidget;
-                        if (t is UIScreen a)
-                        {
-                            target.oz = target.Z;
-                        }
-                        else
-                        {
-                            target.oz = target.Z + t.oz;
-                        }
-                    }
-                    catch
-                    {
-                        target.oz = target.Z;
-                    }
-                }
+                ws.AddRange(item);
             }
 
             //各种同步然后请求渲染内容
-            foreach (var item in trees(window.Root).OrderBy(c => c.oz))
+            foreach (var item in ws)
             {
                 if (item is UIWidget target && target.RendererContext != null) // 添加 null 检查
                 {
@@ -336,48 +340,6 @@ void main()
             var cl = window.commandList;
             var screenSize = new Vector2(window.TargetWindow.Width, window.TargetWindow.Height);
 
-            // 分组字典：ResourceSet -> 顶点列表
-            var groups = new Dictionary<ResourceSet, List<VertexPositionColor>>();
-
-            // 1. 处理普通矩形（默认白色纹理资源集）
-            if (_textureResourceSet != null)
-            {
-                var defaultGroup = new List<VertexPositionColor>();
-                groups[_textureResourceSet] = defaultGroup;
-                foreach (var rect in collector.Rects)
-                {
-                    var verts = GetRectVertices(rect.Rect, rect.Color, screenSize, rect.Source);
-                    defaultGroup.AddRange(verts);
-                }
-            }
-
-            // 2. 处理纹理矩形（按各自的 ResourceSet 分组）
-            foreach (var texCmd in collector.Textures)
-            {
-                if (texCmd.TextureResourceSet == null)
-                    continue;
-                if (!groups.TryGetValue(texCmd.TextureResourceSet, out var group))
-                {
-                    group = new List<VertexPositionColor>();
-                    groups[texCmd.TextureResourceSet] = group;
-                }
-                var verts = GetRectVertices(texCmd.Rect, texCmd.Tint, screenSize, texCmd.Source);
-                group.AddRange(verts);
-            }
-
-            foreach (var texCmd in collector.Textures)
-            {
-                if (texCmd.TextureResourceSet == null)
-                    continue;
-                if (!groups.TryGetValue(texCmd.TextureResourceSet, out var group))
-                {
-                    group = new List<VertexPositionColor>();
-                    groups[texCmd.TextureResourceSet] = group;
-                }
-                var verts = GetRectVertices(texCmd.Rect, texCmd.Tint, screenSize, texCmd.Source);
-                group.AddRange(verts);
-            }
-
             //开始正式渲染
             // 1. 确保 Pipeline 已创建
             if (_shaders == null)
@@ -393,46 +355,96 @@ void main()
             if (commands.Count == 0)
                 return;
 
-            // 3. 第一遍遍历：计算总顶点数，并记录每个命令的起始偏移和资源集
-            int totalVertexCount = 0;
-            var cmdInfos =
-                new List<(
-                    int startVertex,
-                    int vertexCount,
-                    ResourceSet resourceSet,
-                    VertexPositionColor[] vertices
-                )>();
-            foreach (var cmd in commands)
+            // 3.将所有commands转为顶点们
+            List<Vertex[]> v = [];
+            foreach (var i in commands)
             {
-                int vertexCount = 6; // 每个控件固定 6 个顶点
-                ResourceSet rs = null;
-                VertexPositionColor[] verts = null;
-
-                if (cmd is UIDrawCollector.DrawRectCommand rc)
+                if (i is UIDrawCollector.DrawRectCommand r)
                 {
-                    rs = _textureResourceSet; // 默认白色纹理
-                    verts = GetRectVertices(rc.Rect, rc.Color, screenSize, rc.Source);
+                    //矩形处理
+                    var a = GetRectVertices(r.Rect, r.Color, screenSize, r.Source);
+                    List<Vertex> tasks = [];
+                    foreach (var b in a)
+                    {
+                        tasks.Add(
+                            new Vertex(
+                                b.Position,
+                                b.Color,
+                                new(new(), b.UV),
+                                null,
+                                _textureResourceSet,
+                                r.Source.o
+                            )
+                        );
+                    }
+                    v.Add(tasks.ToArray());
                 }
-                else if (cmd is UIDrawCollector.DrawTextureCommand tc)
+                else if (i is UIDrawCollector.DrawTextureCommand t)
                 {
-                    if (tc.TextureResourceSet == null)
-                        continue;
-                    rs = tc.TextureResourceSet;
-                    verts = GetRectVertices(tc.Rect, tc.Tint, screenSize, tc.Source);
+                    //带材质矩形处理
+                    var a = GetRectVertices(t.Rect, t.Tint, screenSize, t.Source);
+                    List<Vertex> tasks = [];
+                    foreach (var b in a)
+                    {
+                        tasks.Add(
+                            new Vertex(
+                                b.Position,
+                                b.Color,
+                                new(new(), b.UV),
+                                t.Texture,
+                                t.TextureResourceSet,
+                                t.Source.o
+                            )
+                        );
+                    }
+                    v.Add(tasks.ToArray());
                 }
-                else
-                    continue;
+                else if (i is UIDrawCollector.DrawVertCommand verts)
+                {
+                    //顶点组处理
+                    List<Vertex> tasks = [];
+                    foreach (var c in verts.Vert)
+                    {
+                        var a = GetVertices(
+                            [new(c.Position, c.Color, c.Export().UV)],
+                            screenSize,
+                            verts.Source
+                        )[0];
+                        tasks.Add(
+                            new(
+                                a.Position,
+                                a.Color,
+                                new(new(), a.UV),
+                                c.Texture,
+                                c?.ResourceSet ?? _textureResourceSet,
+                                verts.Source.o
+                            )
+                        );
+                    }
+                    v.Add(tasks.ToArray());
+                }
+            }
+            ;
 
-                if (verts == null || verts.Length != vertexCount)
-                    continue;
-                cmdInfos.Add((totalVertexCount, vertexCount, rs, verts));
-                totalVertexCount += vertexCount;
+            // 4. 第一遍遍历：计算总顶点数，以及转换一下
+            int totalVertexCount = 0;
+            List<VertexTask[]> Tasks = [];
+            foreach (var i in v)
+            {
+                List<VertexTask> t = [];
+                foreach (var a in i)
+                {
+                    t.Add(a.Export());
+                    totalVertexCount++;
+                }
+                if (t.Count != 0)
+                    Tasks.Add(t.ToArray());
             }
 
             if (totalVertexCount == 0)
                 return;
 
-            // 4. 确保顶点缓冲区足够大
+            // 5. 确保顶点缓冲区足够大
             uint totalSize = (uint)(totalVertexCount * VertexPositionColor.SizeInBytes);
             if (_vertexBuffer == null || totalSize > _vertexBuffer.SizeInBytes)
             {
@@ -443,10 +455,23 @@ void main()
             }
 
             // 5. 将所有控件的顶点数据写入缓冲区（不同偏移）
-            foreach (var info in cmdInfos)
+            List<VertexPositionColor> vert = [];
+            foreach (var t in Tasks)
             {
-                uint offsetBytes = (uint)(info.startVertex * VertexPositionColor.SizeInBytes);
-                gd.UpdateBuffer(_vertexBuffer, offsetBytes, info.vertices);
+                foreach (var i in t)
+                {
+                    var c = i.Color;
+                    c = new(c.R, c.G, c.B, c.A*i.Opacity);
+                    vert.Add(
+                        new()
+                        {
+                            Position = i.Position,
+                            Color = c,
+                            UV = i.UV,
+                        }
+                    );
+                }
+                gd.UpdateBuffer(_vertexBuffer, 0, vert.ToArray());
             }
 
             // 6. 开始命令录制
@@ -457,90 +482,19 @@ void main()
             cl.SetVertexBuffer(0, _vertexBuffer);
 
             // 7. 逐个控件绘制（每个 Draw 绑定自己的资源集）
-            foreach (var info in cmdInfos)
+            uint index = 0;
+            foreach (var i in Tasks)
             {
-                cl.SetGraphicsResourceSet(0, info.resourceSet);
-                cl.Draw((uint)info.vertexCount, 1, (uint)info.startVertex, 0);
+                uint num = (uint)i.Length;
+                cl.SetGraphicsResourceSet(0, i[0].ResourceSet);
+                cl.Draw(num, 1, index, 0);
+                index += num;
             }
 
             cl.End();
             gd.SubmitCommands(cl);
         };
     }
-
-    void DrawRectCommand(
-        CommandList cl,
-        GraphicsDevice gd,
-        UIDrawCollector.DrawRectCommand cmd,
-        Vector2 screenSize
-    )
-    {
-        // 使用默认白色纹理资源集
-        var resourceSet = _textureResourceSet; // 全局默认资源集
-        var vertices = GetRectVertices(cmd.Rect, cmd.Color, screenSize, cmd.Source);
-        UploadAndDraw(cl, gd, vertices, resourceSet);
-    }
-
-    void DrawTextureCommand(
-        CommandList cl,
-        GraphicsDevice gd,
-        UIDrawCollector.DrawTextureCommand cmd,
-        Vector2 screenSize
-    )
-    {
-        // 使用纹理自带的资源集
-        var resourceSet = cmd.TextureResourceSet;
-        if (resourceSet == null)
-            return; // 安全起见
-        var vertices = GetRectVertices(cmd.Rect, cmd.Tint, screenSize, cmd.Source);
-        UploadAndDraw(cl, gd, vertices, resourceSet);
-    }
-
-    // 文本命令暂不实现，留作扩展
-    void DrawTextCommand(
-        CommandList cl,
-        GraphicsDevice gd,
-        UIDrawCollector.DrawTextCommand cmd,
-        Vector2 screenSize
-    )
-    {
-        // 需要字体图集支持，暂时留空
-    }
-
-    void UploadAndDraw(
-        CommandList cl,
-        GraphicsDevice gd,
-        VertexPositionColor[] vertices,
-        ResourceSet resourceSet
-    )
-    {
-        /*
-        if (vertices.Length == 0)
-            return;
-
-        uint requiredSize = (uint)(vertices.Length * VertexPositionColor.SizeInBytes);
-        if (_vertexBuffer == null || requiredSize > _vertexBuffer.SizeInBytes)
-        {
-            _vertexBuffer?.Dispose();
-            _vertexBuffer = gd.ResourceFactory.CreateBuffer(
-                new BufferDescription(requiredSize, BufferUsage.VertexBuffer | BufferUsage.Dynamic)
-            );
-        }
-        gd.UpdateBuffer(_vertexBuffer, 0, vertices);
-        cl.SetVertexBuffer(0, _vertexBuffer);
-        cl.SetGraphicsResourceSet(0, resourceSet);
-        cl.Draw((uint)vertices.Length, 1, 0, 0);
-        */
-        /*
-        _verts.AddRange(vertices);
-        _res.Add(resourceSet);
-        rs=resourceSet;
-        */
-    }
-
-    List<VertexPositionColor> _verts = [];
-    List<ResourceSet> _res = [];
-    ResourceSet rs;
 
     void CreatePipeline(GraphicsDevice gd)
     {

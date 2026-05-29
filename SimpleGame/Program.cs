@@ -21,9 +21,9 @@ a.TargetWindow.CursorVisible = false;
 //一个盒子
 var b = new UIBox();
 b.parent = a.Root;
-b.Position = new(new(), new(0, 0));
+b.Position = new(new(), new(0.5f, 0));
 b.Size = new(new(10, 10), new(0, 0));
-b.color = new(new(255f / 255f, 255f / 255f, 255f / 255f, 0.8f));
+b.color = new(new(255f / 255f, 255f / 255f, 255f / 255f, 1f));
 b.anchor = new(0f, 0f);
 b.Z = 1;
 b.name = "box";
@@ -33,9 +33,9 @@ var c = new UIButton();
 c.parent = a.Root;
 c.Position = new(new(), new(0.5f, 0));
 c.Size = new(new(100, 100), new(0, 0));
-c.color = new(new(0f / 255f, 255f / 255f, 255f / 255f, 0.8f));
+c.color = new(new(0f / 255f, 255f / 255f, 255f / 255f, 1f));
 c.anchor = new(0.5f, 0.5f);
-c.Z = 2;
+c.Z = 0;
 c.UpdateRoot();
 
 //一个指示鼠标的图片框
@@ -43,8 +43,8 @@ var d = new UIImage();
 d.parent = a.Root;
 d.Position = new(new(), new(0, 0));
 d.Size = new(new(75, 75), new(0, 0));
-d.BackgroundColor = new(new(255f / 255f, 255f / 255f, 255f / 255f, 1f));
-d.Z = 1000;
+d.Color = new(new(255f / 255f, 255f / 255f, 255f / 255f, 1f));
+d.Z = 10;
 d.anchor = new(0.5f, 0.5f);
 d.LoadImage(a.Dev, a.RendererClass.TextureLayout, "./assets/lazer.png");
 
@@ -59,7 +59,7 @@ a.Input.MouseMove += (dx, dy) =>
     pos.X += dx;
     pos.Y += dy;
     */
-    b.Position = new Coord2(c.GetPositionOnScreen(), b.Position.scale);
+    //b.Position = new Coord2(c.GetPositionOnScreen(), b.Position.scale);
 };
 
 a.TargetWindow.MouseWheel += (n) =>
@@ -74,22 +74,19 @@ c.WhenClick += (o, p) =>
     Log.Debug("Click");
 };
 
-a.Input.MouseMove += (x, y) =>
-{
-    d.Position = new(a.Input.TotalMouseDelta, d.Position.scale);
-};
-
 //判断
 a.OnUpdate += (o, p) =>
 {
     if (UIWidget.HitTest(c.GetPositionOnScreen(), c.GetSizeOnScreen(), a.Input.TotalMouseDelta))
     {
-        c.color = new(new(0f / 255f, 255f / 255f, 0f / 255f, 0.8f));
+        c.color = new(new(0f / 255f, 255f / 255f, 0f / 255f, 1f));
     }
     else
     {
-        c.color = new(new(0f / 255f, 0f / 255f, 255f / 255f, 0.8f));
+        c.color = new(new(0f / 255f, 0f / 255f, 255f / 255f, 1f));
     }
+    d.Position = new(a.Input.TotalMouseDelta, d.Position.scale);
+    b.Position=new(new(0,a.Input.TotalMouseWheelDelta),b.Position.scale);
 };
 
 a.Input.MouseDown += (o) =>
@@ -101,10 +98,11 @@ a.Input.MouseDown += (o) =>
             Size = new(d.Size.offset, new()),
             Opacity = 1,
             anchor = d.anchor,
-            Z = 0,
+            Z = -1,
             parent = d,
-            BackgroundColor = new(new(255f / 255f, 255f / 255f, 255f / 255f, 1f)),
+            BackgroundColor = d.BackgroundColor,
             rotation=d.rotation,
+            Color=d.Color
         }
     );
     l[l.Count - 1].LoadTexture(a.Dev, a.RendererClass.TextureLayout, d.Texture);
