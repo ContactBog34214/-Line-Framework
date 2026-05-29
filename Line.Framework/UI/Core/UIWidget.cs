@@ -31,6 +31,7 @@ public class UIWidget : UINode
     public Vector2 s { get; set; } = new(0, 0);
     public Vector2 p { get; set; } = new(0, 0);
     public float o { get; set; } = 1;
+    public Vector2 Scale { get; set; } = new(1, 1);
 
     public static bool HitTest(Vector2 position, Vector2 Size, Vector2 mousePixel)
     {

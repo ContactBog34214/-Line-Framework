@@ -1,6 +1,9 @@
+using System.Diagnostics;
 using System.Numerics;
+using System.Security.Cryptography;
 using System.Text;
 using Line.Framework.UI;
+using SharpText.Core;
 using TagLib.Ape;
 using Veldrid;
 using Veldrid.SPIRV;
@@ -79,6 +82,40 @@ void main()
         public const uint SizeInBytes = 32;
     }
 
+    public class Vertex
+    {
+        public Vector2 Position { get; set; }
+        public RgbaFloat Color { get; set; }
+        public Coord2 UV { get; set; }
+        public Texture Texture { get; set; }
+
+        public Vertex(Vector2 p, RgbaFloat c, Coord2 u, Texture rs)
+        {
+            Position = p;
+            Color = c;
+            UV = u;
+            Texture = rs;
+        }
+
+        public VertexPositionColor Export()
+        {
+            return new(
+                Position,
+                Color,
+                UV.scale + UV.offset / new Vector2(Texture.Width, Texture.Height)
+            );
+        }
+    }
+
+    class VertexTask
+    {
+        public Vector2 Position { get; set; }
+        public RgbaFloat Color { get; set; }
+        public Vector2 UV { get; set; }
+        public Texture Texture { get; set; }
+        public ResourceSet ResourceSet { get; set; }
+    }
+
     Vector2 r(Vector2 a, float b)
     {
         var c = (float)Math.Cos(b);
@@ -86,49 +123,62 @@ void main()
         return new Vector2(a.X * c + a.Y * s, a.Y * c + a.X * s);
     }
 
+    VertexPositionColor[] GetRectVertices(VertexPositionColor[] vertex, Vector2 source, UIWidget s)
+    {
+        float cos = (float)Math.Cos(s.rotation * Math.PI / 180f);
+        float sin = (float)Math.Sin(s.rotation * Math.PI / 180f);
+        var tmp = vertex;
+
+        for (var i = 0; i < tmp.Length; i++)
+        {
+            var target = tmp[i];
+            //颜色处理
+            RgbaFloat rgba = new(
+                new(target.Color.R, target.Color.G, target.Color.B, target.Color.A * s.o)
+            );
+            target.Color = rgba;
+
+            //从绝对映射到相对锚点
+            var size = s.GetSizeOnScreen();
+            target.Position -= s.anchor * size;
+
+            //旋转
+            var pos = target.Position;
+            target.Position.X = pos.X * cos - pos.Y * sin;
+            target.Position.Y = pos.Y * cos + pos.X * sin;
+
+            //缩放
+            target.Position *= s.Scale;
+
+            //映射回前面
+            target.Position += s.anchor * size;
+
+            //到绝对
+            target.Position += s.GetPositionOnScreen();
+
+            //跑回NDC
+            target.Position.X = 2 * target.Position.X / source.X - 1;
+            target.Position.Y = 1 - 2 * target.Position.Y / source.Y;
+            tmp[i] = target;
+        }
+        return tmp;
+    }
+
     VertexPositionColor[] GetRectVertices(
         Rectangle rect,
         RgbaFloat color,
-        float rotation,
-        Vector2 anchor,
         Vector2 source,
         UIWidget s
     )
     {
-        float cos = (float)Math.Cos(rotation * Math.PI / 180f);
-        float sin = (float)Math.Sin(rotation * Math.PI / 180f);
-        RgbaFloat f = new(color.R, color.G, color.B, color.A * s.o);
-        var scale = s.Size.scale;
-        Rectangle tmp = new()
-        {
-            X = (s.GetPositionOnScreen().X + rect.X) * 2 / source.X - 1,
-            Y = 1 - (s.GetPositionOnScreen().Y + rect.Y) * 2 / source.Y,
-            Width = rect.Width * 2 / source.X,
-            Height = rect.Height * 2 / source.Y,
-        };
+        RgbaFloat f = new(color.R, color.G, color.B, color.A);
+        Rectangle tmp = rect;
 
         //初步定位
-        Vector2 tl = new(0, tmp.Height);
-        Vector2 tr = new(tmp.Width, tmp.Height);
-        Vector2 bl = new(0, 0);
-        Vector2 br = new(tmp.Width, 0);
-        tl.Y -= tmp.Height;
-        tr.Y -= tmp.Height;
-        bl.Y -= tmp.Height;
-        br.Y -= tmp.Height;
-
-        //旋转
-        tl = new(tl.X * cos - tl.Y * sin, tl.Y * cos + tl.X * sin);
-        tr = new(tr.X * cos - tr.Y * sin, tr.Y * cos + tr.X * sin);
-        bl = new(bl.X * cos - bl.Y * sin, bl.Y * cos + bl.X * sin);
-        br = new(br.X * cos - br.Y * sin, br.Y * cos + br.X * sin);
-
-        //映射
-        var pos = new Vector2(tmp.X, tmp.Y);
-        tl = tl + pos;
-        tr = tr + pos;
-        bl = bl + pos;
-        br = br + pos;
+        Vector2 tl = new(0, 0);
+        Vector2 tr = new(tmp.Width, 0);
+        Vector2 bl = new(0, tmp.Height);
+        Vector2 br = new(tmp.Width, tmp.Height);
         RgbaFloat finalColor = f;
 
         //uv
@@ -137,8 +187,7 @@ void main()
         Vector2 uv_bl = new Vector2(0, 1);
         Vector2 uv_br = new Vector2(1, 1);
 
-        // 返回两个三角形共 6 个顶点
-        return
+        VertexPositionColor[] vert =
         [
             new VertexPositionColor(tl, finalColor, uv_tl),
             new VertexPositionColor(tr, finalColor, uv_tr),
@@ -147,6 +196,7 @@ void main()
             new VertexPositionColor(br, finalColor, uv_br),
             new VertexPositionColor(bl, finalColor, uv_bl),
         ];
+        return GetRectVertices(vert, source, s);
     }
 
     static List<UIWidget> trees(UIWidget root)
@@ -296,14 +346,7 @@ void main()
                 groups[_textureResourceSet] = defaultGroup;
                 foreach (var rect in collector.Rects)
                 {
-                    var verts = GetRectVertices(
-                        rect.Rect,
-                        rect.Color,
-                        rect.Rotation,
-                        rect.Anchor,
-                        screenSize,
-                        rect.Source
-                    );
+                    var verts = GetRectVertices(rect.Rect, rect.Color, screenSize, rect.Source);
                     defaultGroup.AddRange(verts);
                 }
             }
@@ -318,14 +361,7 @@ void main()
                     group = new List<VertexPositionColor>();
                     groups[texCmd.TextureResourceSet] = group;
                 }
-                var verts = GetRectVertices(
-                    texCmd.Rect,
-                    texCmd.Tint,
-                    texCmd.Rotation,
-                    texCmd.Anchor,
-                    screenSize,
-                    texCmd.Source
-                );
+                var verts = GetRectVertices(texCmd.Rect, texCmd.Tint, screenSize, texCmd.Source);
                 group.AddRange(verts);
             }
 
@@ -338,14 +374,7 @@ void main()
                     group = new List<VertexPositionColor>();
                     groups[texCmd.TextureResourceSet] = group;
                 }
-                var verts = GetRectVertices(
-                    texCmd.Rect,
-                    texCmd.Tint,
-                    texCmd.Rotation,
-                    texCmd.Anchor,
-                    screenSize,
-                    texCmd.Source
-                );
+                var verts = GetRectVertices(texCmd.Rect, texCmd.Tint, screenSize, texCmd.Source);
                 group.AddRange(verts);
             }
 
@@ -382,28 +411,14 @@ void main()
                 if (cmd is UIDrawCollector.DrawRectCommand rc)
                 {
                     rs = _textureResourceSet; // 默认白色纹理
-                    verts = GetRectVertices(
-                        rc.Rect,
-                        rc.Color,
-                        rc.Rotation,
-                        rc.Anchor,
-                        screenSize,
-                        rc.Source
-                    );
+                    verts = GetRectVertices(rc.Rect, rc.Color, screenSize, rc.Source);
                 }
                 else if (cmd is UIDrawCollector.DrawTextureCommand tc)
                 {
                     if (tc.TextureResourceSet == null)
                         continue;
                     rs = tc.TextureResourceSet;
-                    verts = GetRectVertices(
-                        tc.Rect,
-                        tc.Tint,
-                        tc.Rotation,
-                        tc.Anchor,
-                        screenSize,
-                        tc.Source
-                    );
+                    verts = GetRectVertices(tc.Rect, tc.Tint, screenSize, tc.Source);
                 }
                 else
                     continue;
@@ -462,14 +477,7 @@ void main()
     {
         // 使用默认白色纹理资源集
         var resourceSet = _textureResourceSet; // 全局默认资源集
-        var vertices = GetRectVertices(
-            cmd.Rect,
-            cmd.Color,
-            cmd.Rotation,
-            cmd.Anchor,
-            screenSize,
-            cmd.Source
-        );
+        var vertices = GetRectVertices(cmd.Rect, cmd.Color, screenSize, cmd.Source);
         UploadAndDraw(cl, gd, vertices, resourceSet);
     }
 
@@ -484,14 +492,7 @@ void main()
         var resourceSet = cmd.TextureResourceSet;
         if (resourceSet == null)
             return; // 安全起见
-        var vertices = GetRectVertices(
-            cmd.Rect,
-            cmd.Tint,
-            cmd.Rotation,
-            cmd.Anchor,
-            screenSize,
-            cmd.Source
-        );
+        var vertices = GetRectVertices(cmd.Rect, cmd.Tint, screenSize, cmd.Source);
         UploadAndDraw(cl, gd, vertices, resourceSet);
     }
 

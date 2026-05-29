@@ -13,7 +13,7 @@ Log.SetLogFile(null);
 Log.Info("日志系统启动完成");
 
 //新建窗口
-BaseWindow a = new BaseWindow(Backend: GraphicsBackend.OpenGLES);
+BaseWindow a = new BaseWindow(Backend: GraphicsBackend.OpenGL);
 a.FramePerSecond = 60;
 a.UpdatePerSecond = 120;
 a.TargetWindow.CursorVisible = false;
@@ -42,7 +42,7 @@ c.UpdateRoot();
 var d = new UIImage();
 d.parent = a.Root;
 d.Position = new(new(), new(0, 0));
-d.Size = new(new(40, 40), new(0, 0));
+d.Size = new(new(75, 75), new(0, 0));
 d.BackgroundColor = new(new(255f / 255f, 255f / 255f, 255f / 255f, 1f));
 d.Z = 1000;
 d.anchor = new(0.5f, 0.5f);
@@ -104,6 +104,7 @@ a.Input.MouseDown += (o) =>
             Z = 0,
             parent = d,
             BackgroundColor = new(new(255f / 255f, 255f / 255f, 255f / 255f, 1f)),
+            rotation=d.rotation,
         }
     );
     l[l.Count - 1].LoadTexture(a.Dev, a.RendererClass.TextureLayout, d.Texture);
@@ -111,6 +112,7 @@ a.Input.MouseDown += (o) =>
 
 a.OnRender += (o, p) =>
 {
+    d.rotation+=1;
     List<UIImage> Deleting = [];
     for (int i = 0; i < l.Count; i++)
     {

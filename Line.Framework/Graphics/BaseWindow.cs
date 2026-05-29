@@ -108,7 +108,23 @@ public class BaseWindow : IDisposable
             PreferStandardClipSpaceYDirection = true,
             SwapchainSrgbFormat = false,
         };
-        Dev = VeldridStartup.CreateGraphicsDevice(TargetWindow, Options, (GraphicsBackend)Backend);
+        try
+        {
+            Dev = VeldridStartup.CreateGraphicsDevice(
+                TargetWindow,
+                Options,
+                (GraphicsBackend)Backend
+            );
+        }
+        catch
+        {
+            Options.Debug = false;
+            Dev = VeldridStartup.CreateGraphicsDevice(
+                TargetWindow,
+                Options,
+                (GraphicsBackend)Backend
+            );
+        }
         //指令
         commandList = Dev.ResourceFactory.CreateCommandList();
         Collector = new();

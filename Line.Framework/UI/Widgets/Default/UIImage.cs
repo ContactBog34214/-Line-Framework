@@ -19,7 +19,6 @@ public class UIImage : UIWidget
             ResourceSet = gd.ResourceFactory.CreateResourceSet(
                 new ResourceSetDescription(rl, Texture)
             );
-            Log.Debug($"Loaded Image{path}");
         }
         catch (FileNotFoundException)
         {
@@ -39,7 +38,6 @@ public class UIImage : UIWidget
             ResourceSet = gd.ResourceFactory.CreateResourceSet(
                 new ResourceSetDescription(rl, Texture)
             );
-            Log.Debug($"[LoadTexture]Loaded Texture{t.Name}");
         }
         catch (Exception e)
         {
