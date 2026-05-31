@@ -42,7 +42,7 @@ public class UIBox : UIWidget
                 1
             );
             var tr = new WindowsRenderer.Vertex(
-                new((float)args.height, 0),
+                new((float)args.width, 0),
                 color,
                 new(new(), new(1, 0)),
                 null,
@@ -50,7 +50,7 @@ public class UIBox : UIWidget
                 1
             );
             var bl = new WindowsRenderer.Vertex(
-                new(0, (float)args.width),
+                new(0, (float)args.height),
                 color,
                 new(new(), new(0, 1)),
                 null,
@@ -58,7 +58,7 @@ public class UIBox : UIWidget
                 1
             );
             var br = new WindowsRenderer.Vertex(
-                new((float)args.height, (float)args.width),
+                new((float)args.width, (float)args.height),
                 color,
                 new(new(), new(1, 1)),
                 null,

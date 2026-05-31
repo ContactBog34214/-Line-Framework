@@ -612,7 +612,7 @@ void main()
             ResourceLayouts = new[] { _textureLayout },
             ShaderSet = new ShaderSetDescription(new[] { vertexLayout }, _shaders),
             Outputs = gd.SwapchainFramebuffer.OutputDescription,
-            BlendState = BlendStateDescription.SingleAlphaBlend,
+            BlendState = BlendStateDescription.SingleAlphaBlend
         };
 
         _pipeline = gd.ResourceFactory.CreateGraphicsPipeline(pipelineDescription);

@@ -1,4 +1,6 @@
-﻿using System.Numerics;
+﻿using System.Diagnostics;
+using System.Numerics;
+using System.Reflection;
 using Line.Framework;
 using Line.Framework.Audio;
 using Line.Framework.Graphics;
@@ -6,158 +8,64 @@ using Line.Framework.UI;
 using Line.Framework.UI.DefaultWidget;
 using TagLib.Riff;
 using Veldrid;
+using Veldrid.ImageSharp;
 
 Log.SetMinLevel(LogLevel.Debug);
 Log.EnableConsole(true);
 Log.SetLogFile(null);
-Log.Info("日志系统启动完成");
+Log.Info("Welcome to -Line-Framework");
+var assembly = Assembly.GetExecutingAssembly();
+
+var names = assembly.GetManifestResourceNames();
+foreach (var name in names) Log.Debug($"Asset:{name}");
 
 //新建窗口
 BaseWindow a = new BaseWindow(Backend: GraphicsBackend.OpenGL);
-a.FramePerSecond = 60;
+a.FramePerSecond = 144;
 a.UpdatePerSecond = 1000;
-a.TargetWindow.CursorVisible = false;
 
-//一个盒子
-var b = new UIBox();
-b.parent = a.Root;
-b.Position = new(new(), new(0.5f, 0.5f));
-b.Size = new(new(100, 100), new(0, 0));
-b.color = new(new(255f / 255f, 255f / 255f, 255f / 255f, 1f));
-b.anchor = new(0f, 0f);
-b.Z = 1;
-b.name = "box";
+//正方形底
+var rect = new UIButton();
+rect.parent = a.Root;
+rect.Position = new(new(), new(0.5f, 0.5f));
+rect.Size = new(new(350, 350), new());
+rect.color = new(0, 42f/255f, 125f/255f, 1);
+rect.rotation = 0;
+rect.anchor = new(0.5f, 0.5f);
 
-//可视化位置处理
-var h = new UIBox();
-h.parent = a.Root;
-h.Position = new(new(), new(0.5f, 0.5f));
-h.Size = new(new(2, 2), new(0, 0));
-h.color = new(new(0f / 255f, 255f / 255f, 0f / 255f, 1f));
-h.anchor = new(0.5f, 0.5f);
-h.Z = 1.5f;
-h.name = "box";
+//图标
+var icon = new UIImage();
+icon.parent = rect;
+icon.Position = new(new(), new(0.5f, 0.5f));
+icon.anchor = new(0.5f, 0.5f);
+icon.Size = new(new(0, 0), new(1, 1));
+icon.Color = new(1, 1, 1, 1);
+var stream = assembly.GetManifestResourceStream("SimpleGame.assets.-L-F.png");
+var image = new ImageSharpTexture(stream);
+Texture texture = image.CreateDeviceTexture(a.Dev, a.Dev.ResourceFactory);
+icon.LoadTexture(a.Dev, a.RendererClass.TextureLayout, texture);
+icon.Z=1;
 
-//一个按钮
-var c = new UIButton();
-c.parent = a.Root;
-c.Position = new(new(), new(0.5f, 0));
-c.Size = new(new(100, 100), new(0, 0));
-c.color = new(new(0f / 255f, 255f / 255f, 255f / 255f, 1f));
-c.anchor = new(0.5f, 0.5f);
-c.Z = 0;
-c.rotation = 290;
-c.UpdateRoot();
+//文字
+var text=new UIText(a.Dev,a.RendererClass.TextureLayout);
+text.parent=a.Root;
+text.Position=new(new(0,100),new(0.5f,0));
+text.anchor=new(0.5f,0.5f);
+text.FontSize=100;
+text.Text="WelcomeTo-Line-Framework";
+text.LoadFont(assembly.GetManifestResourceStream("SimpleGame.assets.Font.ttf"));
+text.Size=new(new(500,100),new());
+//text.Text="Welcome";
+text.Size=new(text.GetTextSize(text.Text),new());
+text.color=new(1,1,1,1);
 
-//一个指示鼠标的图片框
-var d = new UIImage();
-d.parent = b;
-d.Position = new(new(), new(0, 0));
-d.Size = new(new(75, 75), new(0, 0));
-d.Color = new(new(255f / 255f, 255f / 255f, 255f / 255f, 1f));
-d.Z = 10;
-d.anchor = new(0.5f, 0.5f);
-d.LoadImage(a.Dev, a.RendererClass.TextureLayout, "./assets/lazer.png");
-d.visible = !a.TargetWindow.CursorVisible;
-
-//特效列表
-List<UIImage> l = [];
-
-//绑定事件
-a.Input.MouseMove += (dx, dy) => {
-    /*
-    var pos = b.Position.offset;
-    pos.X += dx;
-    pos.Y += dy;
-    */
-    //b.Position = new Coord2(c.GetPositionOnScreen(), b.Position.scale);
-};
-
-a.TargetWindow.MouseWheel += (n) =>
-{
-    var pos = c.Position.offset;
-    pos.Y = a.Input.TotalMouseWheelDelta * 10;
-    c.Position = new(pos, c.Position.scale);
-};
-
-c.WhenClick += (o, p) =>
-{
-    Log.Debug("Click");
-};
-
-//判断
+//开转
+Stopwatch sw=new();
+sw.Start();
 a.OnUpdate += (o, p) =>
 {
-    if (c.HitTest(a.Input.TotalMouseDelta))
-    {
-        c.color = new(new(0f / 255f, 255f / 255f, 0f / 255f, 1f));
-    }
-    else
-    {
-        c.color = new(new(0f / 255f, 0f / 255f, 255f / 255f, 1f));
-    }
-    d.Position = new(a.Input.TotalMouseDelta, d.Position.scale);
-};
-
-a.Input.MouseDown += (o) =>
-{
-    l.Add(
-        new()
-        {
-            Position = new(a.Input.TotalMouseDelta, new()),
-            Size = new(d.Size.offset, new()),
-            Opacity = 1,
-            anchor = d.anchor,
-            Z = -1,
-            parent = d,
-            BackgroundColor = d.BackgroundColor,
-            rotation = d.rotation,
-            Color = d.Color,
-        }
-    );
-    l[l.Count - 1].LoadTexture(a.Dev, a.RendererClass.TextureLayout, d.Texture);
-};
-
-a.OnRender += (o, p) =>
-{
-    d.rotation += 1;
-    c.rotation += 0.5f;
-    h.Position = new(c.MousePosition(a.Input.TotalMouseDelta), h.Position.scale);
-    List<UIImage> Deleting = [];
-    for (int i = 0; i < l.Count; i++)
-    {
-        var t = l[i];
-        t.Opacity += (0 - t.Opacity) / 30;
-        var s = d.Size.offset;
-        t.Size = new(new(s.X * (4 - 3 * t.Opacity), s.Y * (4 - 3 * t.Opacity)), new());
-        if (t.Opacity < 0.02)
-        {
-            Deleting.Add(t);
-        }
-    }
-    foreach (var a in Deleting)
-    {
-        a.Dispose();
-        l.Remove(a);
-    }
-};
-
-var u = 0;
-
-for (int i = 0; i < 10; i++)
-{
-    var t = new UIBox();
-    u++;
-    t.parent = a.Root;
-    t.Size=new(new(1,1),new());
-}
-
-a.OnUpdate += (o, p) =>
-{
-    //Console.WriteLine($"Update Delay:{p.delay}ms,{u} objects");
-};
-
-a.OnRender += (o, p) =>
-{
-    //Console.WriteLine($"Renderer Delay:{p.delay}ms,{u} objects");
+    var r=sw.ElapsedMilliseconds/1000f%3f;
+    r=r/3f*360f;
+    rect.rotation=r;
+    icon.rotation=r;
 };

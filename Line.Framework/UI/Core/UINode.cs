@@ -2,7 +2,7 @@ namespace Line.Framework.UI;
 
 public class UINode : IDisposable
 {
-    public string name{get;set;}
+    public string name { get; set; }
 
     //对外的加点料
     private UINode _parent;
@@ -55,7 +55,8 @@ public class UINode : IDisposable
     {
         parent = null;
         //删除children
-        List<UINode> tmp = _children;
+        List<UINode> tmp = [];
+        tmp.AddRange(_children);
         foreach (UINode i in tmp)
         {
             i.Dispose();
@@ -63,5 +64,6 @@ public class UINode : IDisposable
         _children = null;
         DisposeHook?.Invoke();
     }
+
     public Action DisposeHook;
 }

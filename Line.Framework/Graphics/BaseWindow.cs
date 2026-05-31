@@ -12,7 +12,7 @@ namespace Line.Framework.Graphics;
 
 public class BaseWindow : IDisposable
 {
-    public WindowsRenderer RendererClass { get; init; }
+    public WindowsRenderer RendererClass { get; private set; }
     public Sdl2Window TargetWindow { get; init; }
     public InputManager Input { get; init; }
     public GraphicsDevice Dev { get; init; }
@@ -231,6 +231,7 @@ public class BaseWindow : IDisposable
             render();
             //Thread.Sleep(1);
         }
+        Dispose();
     }
 
     Thread UpdateThread;
@@ -251,6 +252,10 @@ public class BaseWindow : IDisposable
     public void Dispose()
     {
         MainThread.Interrupt();
+        RendererClass=null;
+        UpdateThread.Interrupt();
+        commandList.Dispose();
         TargetWindow.Close();
+        Root.Dispose();
     }
 }

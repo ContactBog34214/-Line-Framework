@@ -12,9 +12,19 @@ public class UIWidget : UINode
 
     public Vector2 GetPositionOnScreen()
     {
+        Vector2 si = new(0, 0);
+        if (parent != null || parent is UIWidget i)
+        {
+            i = parent as UIWidget;
+            si = i.GetSizeOnScreen() * i.anchor;
+        }
         return new(
-            s.X * Position.scale.X + Position.offset.X - GetSizeOnScreen().X * anchor.X,
-            s.Y * Position.scale.Y + Position.offset.Y - GetSizeOnScreen().Y * anchor.Y
+            s.X * Position.scale.X
+                + Position.offset.X
+                - GetSizeOnScreen().X * anchor.X
+                + p.X
+                - si.X,
+            s.Y * Position.scale.Y + Position.offset.Y - GetSizeOnScreen().Y * anchor.Y + p.Y - si.Y
         );
     }
 
