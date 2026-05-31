@@ -28,6 +28,11 @@ public class UIBox : UIWidget
                 this
             );
             */
+            var s = GetSizeOnScreen();
+            if (s.X <= 0 && s.Y <= 0)
+            {
+                return;
+            }
             var tl = new WindowsRenderer.Vertex(
                 new(0, 0),
                 color,

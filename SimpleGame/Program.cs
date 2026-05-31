@@ -15,18 +15,28 @@ Log.Info("日志系统启动完成");
 //新建窗口
 BaseWindow a = new BaseWindow(Backend: GraphicsBackend.OpenGL);
 a.FramePerSecond = 60;
-a.UpdatePerSecond = 120;
+a.UpdatePerSecond = 1000;
 a.TargetWindow.CursorVisible = false;
 
 //一个盒子
 var b = new UIBox();
 b.parent = a.Root;
-b.Position = new(new(), new(0.5f, 0));
-b.Size = new(new(10, 10), new(0, 0));
+b.Position = new(new(), new(0.5f, 0.5f));
+b.Size = new(new(100, 100), new(0, 0));
 b.color = new(new(255f / 255f, 255f / 255f, 255f / 255f, 1f));
 b.anchor = new(0f, 0f);
 b.Z = 1;
 b.name = "box";
+
+//可视化位置处理
+var h = new UIBox();
+h.parent = a.Root;
+h.Position = new(new(), new(0.5f, 0.5f));
+h.Size = new(new(2, 2), new(0, 0));
+h.color = new(new(0f / 255f, 255f / 255f, 0f / 255f, 1f));
+h.anchor = new(0.5f, 0.5f);
+h.Z = 1.5f;
+h.name = "box";
 
 //一个按钮
 var c = new UIButton();
@@ -36,24 +46,25 @@ c.Size = new(new(100, 100), new(0, 0));
 c.color = new(new(0f / 255f, 255f / 255f, 255f / 255f, 1f));
 c.anchor = new(0.5f, 0.5f);
 c.Z = 0;
+c.rotation = 290;
 c.UpdateRoot();
 
 //一个指示鼠标的图片框
 var d = new UIImage();
-d.parent = a.Root;
+d.parent = b;
 d.Position = new(new(), new(0, 0));
 d.Size = new(new(75, 75), new(0, 0));
 d.Color = new(new(255f / 255f, 255f / 255f, 255f / 255f, 1f));
 d.Z = 10;
 d.anchor = new(0.5f, 0.5f);
 d.LoadImage(a.Dev, a.RendererClass.TextureLayout, "./assets/lazer.png");
+d.visible = !a.TargetWindow.CursorVisible;
 
 //特效列表
 List<UIImage> l = [];
 
 //绑定事件
-a.Input.MouseMove += (dx, dy) =>
-{
+a.Input.MouseMove += (dx, dy) => {
     /*
     var pos = b.Position.offset;
     pos.X += dx;
@@ -65,7 +76,7 @@ a.Input.MouseMove += (dx, dy) =>
 a.TargetWindow.MouseWheel += (n) =>
 {
     var pos = c.Position.offset;
-    pos.Y = a.Input.TotalMouseWheelDelta;
+    pos.Y = a.Input.TotalMouseWheelDelta * 10;
     c.Position = new(pos, c.Position.scale);
 };
 
@@ -77,7 +88,7 @@ c.WhenClick += (o, p) =>
 //判断
 a.OnUpdate += (o, p) =>
 {
-    if (UIWidget.HitTest(c.GetPositionOnScreen(), c.GetSizeOnScreen(), a.Input.TotalMouseDelta))
+    if (c.HitTest(a.Input.TotalMouseDelta))
     {
         c.color = new(new(0f / 255f, 255f / 255f, 0f / 255f, 1f));
     }
@@ -86,7 +97,6 @@ a.OnUpdate += (o, p) =>
         c.color = new(new(0f / 255f, 0f / 255f, 255f / 255f, 1f));
     }
     d.Position = new(a.Input.TotalMouseDelta, d.Position.scale);
-    b.Position=new(new(0,a.Input.TotalMouseWheelDelta),b.Position.scale);
 };
 
 a.Input.MouseDown += (o) =>
@@ -101,8 +111,8 @@ a.Input.MouseDown += (o) =>
             Z = -1,
             parent = d,
             BackgroundColor = d.BackgroundColor,
-            rotation=d.rotation,
-            Color=d.Color
+            rotation = d.rotation,
+            Color = d.Color,
         }
     );
     l[l.Count - 1].LoadTexture(a.Dev, a.RendererClass.TextureLayout, d.Texture);
@@ -110,7 +120,9 @@ a.Input.MouseDown += (o) =>
 
 a.OnRender += (o, p) =>
 {
-    d.rotation+=1;
+    d.rotation += 1;
+    c.rotation += 0.5f;
+    h.Position = new(c.MousePosition(a.Input.TotalMouseDelta), h.Position.scale);
     List<UIImage> Deleting = [];
     for (int i = 0; i < l.Count; i++)
     {
@@ -128,4 +140,24 @@ a.OnRender += (o, p) =>
         a.Dispose();
         l.Remove(a);
     }
+};
+
+var u = 0;
+
+for (int i = 0; i < 10; i++)
+{
+    var t = new UIBox();
+    u++;
+    t.parent = a.Root;
+    t.Size=new(new(1,1),new());
+}
+
+a.OnUpdate += (o, p) =>
+{
+    //Console.WriteLine($"Update Delay:{p.delay}ms,{u} objects");
+};
+
+a.OnRender += (o, p) =>
+{
+    //Console.WriteLine($"Renderer Delay:{p.delay}ms,{u} objects");
 };

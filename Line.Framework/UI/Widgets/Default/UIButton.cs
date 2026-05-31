@@ -23,15 +23,7 @@ public class UIButton : UIWidget
     {
         Press = (a) =>
         {
-            if (
-                visible
-                && enabled
-                && HitTest(
-                    GetPositionOnScreen(),
-                    GetSizeOnScreen(),
-                    input.TotalMouseDelta
-                )
-            )
+            if (visible && enabled && HitTest(input.TotalMouseDelta))
             {
                 WhenPress?.Invoke(this, a);
                 clicking = true;
@@ -55,6 +47,11 @@ public class UIButton : UIWidget
         UpdateRoot();
         RendererContext = (RendererContextArgs args) =>
         {
+            var s = GetSizeOnScreen();
+            if (s.X <= 0 && s.Y <= 0)
+            {
+                return;
+            }
             var collector = args.Collector;
             collector.DrawRect(
                 new Rectangle

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Numerics;
 using System.Security.Cryptography;
@@ -8,8 +9,11 @@ using TagLib.Ape;
 using Veldrid;
 using Veldrid.SPIRV;
 using Veldrid.Utilities;
+using Vortice.Direct3D11;
 using Vortice.Direct3D11.Debug;
+using Vortice.DXCore;
 using Vulkan.Wayland;
+using BufferDescription = Veldrid.BufferDescription;
 using Rectangle = System.Drawing.RectangleF;
 
 namespace Line.Framework.Graphics;
@@ -221,22 +225,24 @@ void main()
             {
                 widgets.Add([]);
             }
-            node.oz = i+b;
+            node.oz = i + b;
             widgets[i].Add(node);
-            float c=0;
-            var d=node.children.OfType<UIWidget>().OrderBy(c => c.Z);
+            float c = 0;
+            List<UIWidget> d = [];
+            d.AddRange(node.children.OfType<UIWidget>());
+            d.OrderBy(c => c.Z);
             foreach (var child in d)
             {
                 if (!child.visible)
                     continue;
-                Collect(child, i + 1,c/d.Count());
+                Collect(child, i + 1, c / d.Count());
                 c++;
             }
         }
-        Collect(root, i,0);
-        for(int f = 0; f < widgets.Count; f++)
+        Collect(root, i, 0);
+        for (int f = 0; f < widgets.Count; f++)
         {
-            widgets[f].OrderBy(c=>c.Z);
+            widgets[f].OrderBy(c => c.Z);
         }
         return widgets;
     }
@@ -247,7 +253,7 @@ void main()
     {
         CreateShader(gd);
         CreatePipeline(gd);
-        UIRenderer = (BaseWindow window, UIDrawCollector collector) =>
+        UIRenderer = async (BaseWindow window, UIDrawCollector collector) =>
         {
             if (collector == null)
             {
@@ -266,57 +272,60 @@ void main()
             {
                 if (item is UIWidget target && target.RendererContext != null) // 添加 null 检查
                 {
-                    //同步渲染区大小
-                    try
+                    async void syncer()
                     {
-                        var t = target.parent as UIWidget;
-                        target.s = new(
-                            t.Size.offset.X + t.Size.scale.X * t.s.X,
-                            t.Size.offset.Y + t.Size.scale.Y * t.s.Y
-                        );
-                    }
-                    catch
-                    {
-                        target.s = new(window.TargetWindow.Width, window.TargetWindow.Height);
-                    }
-                    //同步移位
-                    try
-                    {
-                        var t = target.parent as UIWidget;
-                        if (t is UIScreen a)
+                        //同步渲染区大小
+                        try
                         {
-                            target.p = new(0, 0);
-                        }
-                        else
-                        {
-                            target.p = new(
-                                t.Position.offset.X + t.Position.scale.X * t.s.X + t.p.X,
-                                t.Position.offset.Y + t.Position.scale.Y * t.s.Y + t.p.Y
+                            var t = target.parent as UIWidget;
+                            target.s = new(
+                                t.Size.offset.X + t.Size.scale.X * t.s.X,
+                                t.Size.offset.Y + t.Size.scale.Y * t.s.Y
                             );
                         }
-                    }
-                    catch
-                    {
-                        target.s = new(0, 0);
-                    }
-                    //同步透明度
-                    try
-                    {
-                        var t = target.parent as UIWidget;
-                        if (t is UIScreen a)
+                        catch
+                        {
+                            target.s = new(window.TargetWindow.Width, window.TargetWindow.Height);
+                        }
+                        //同步移位
+                        try
+                        {
+                            var t = target.parent as UIWidget;
+                            if (t is UIScreen a)
+                            {
+                                target.p = new(0, 0);
+                            }
+                            else
+                            {
+                                target.p = new(
+                                    t.Position.offset.X + t.Position.scale.X * t.s.X + t.p.X,
+                                    t.Position.offset.Y + t.Position.scale.Y * t.s.Y + t.p.Y
+                                );
+                            }
+                        }
+                        catch
+                        {
+                            target.s = new(0, 0);
+                        }
+                        //同步透明度
+                        try
+                        {
+                            var t = target.parent as UIWidget;
+                            if (t is UIScreen a)
+                            {
+                                target.o = target.Opacity;
+                            }
+                            else
+                            {
+                                target.o = target.Opacity * t.o;
+                            }
+                        }
+                        catch
                         {
                             target.o = target.Opacity;
                         }
-                        else
-                        {
-                            target.o = target.Opacity * t.o;
-                        }
                     }
-                    catch
-                    {
-                        target.o = target.Opacity;
-                    }
-
+                    syncer();
                     var source = target.s;
                     target.RendererContext(
                         new RendererContextArgs
@@ -356,95 +365,154 @@ void main()
                 return;
 
             // 3.将所有commands转为顶点们
+            int totalVertexCount = 0;
+            ManualResetEventSlim CTVThreadWaiter = new ManualResetEventSlim(false);
             List<Vertex[]> v = [];
-            foreach (var i in commands)
+            List<Action> CTVThreadPool = [];
+            long CPThreadCount = 0;
+            long TotalThreadCount = commands.Count;
+            ConcurrentBag<(uint index, Vertex[] v)> values = new ConcurrentBag<(uint, Vertex[])>();
+
+            void CTV(UIDrawCollector.DrawCommand i, int idx)
             {
-                if (i is UIDrawCollector.DrawRectCommand r)
+                try
                 {
-                    //矩形处理
-                    var a = GetRectVertices(r.Rect, r.Color, screenSize, r.Source);
                     List<Vertex> tasks = [];
-                    foreach (var b in a)
+                    for (int y = 0; y < 1; y++)
                     {
-                        tasks.Add(
-                            new Vertex(
-                                b.Position,
-                                b.Color,
-                                new(new(), b.UV),
-                                null,
-                                _textureResourceSet,
-                                r.Source.o
-                            )
-                        );
+                        if (i.Source.GetSizeOnScreen() == new Vector2(0, 0))
+                            break;
+                        if (i is UIDrawCollector.DrawRectCommand r)
+                        {
+                            //矩形处理
+                            var a = GetRectVertices(r.Rect, r.Color, screenSize, r.Source);
+                            foreach (var b in a)
+                            {
+                                tasks.Add(
+                                    new Vertex(
+                                        b.Position,
+                                        b.Color,
+                                        new(new(), b.UV),
+                                        null,
+                                        _textureResourceSet,
+                                        r.Source.o
+                                    )
+                                );
+                            }
+                        }
+                        else if (i is UIDrawCollector.DrawTextureCommand t)
+                        {
+                            //带材质矩形处理
+                            var a = GetRectVertices(t.Rect, t.Tint, screenSize, t.Source);
+                            foreach (var b in a)
+                            {
+                                tasks.Add(
+                                    new Vertex(
+                                        b.Position,
+                                        b.Color,
+                                        new(new(), b.UV),
+                                        t.Texture,
+                                        t.TextureResourceSet,
+                                        t.Source.o
+                                    )
+                                );
+                            }
+                        }
+                        else if (i is UIDrawCollector.DrawVertCommand verts)
+                        {
+                            //顶点组处理
+                            List<Vertex> v = [];
+                            foreach (var c in verts.Vert)
+                            {
+                                var a = GetVertices(
+                                    [new(c.Position, c.Color, c.Export().UV)],
+                                    screenSize,
+                                    verts.Source
+                                )[0];
+                                tasks.Add(
+                                    new(
+                                        a.Position,
+                                        a.Color,
+                                        new(new(), a.UV),
+                                        c.Texture,
+                                        c?.ResourceSet ?? _textureResourceSet,
+                                        verts.Source.o
+                                    )
+                                );
+                            }
+                        }
+                        if (tasks.Count != 0)
+                        {
+                            values.Add(new((uint)idx, tasks.ToArray()));
+                        }
                     }
-                    v.Add(tasks.ToArray());
                 }
-                else if (i is UIDrawCollector.DrawTextureCommand t)
+                catch (Exception ex)
                 {
-                    //带材质矩形处理
-                    var a = GetRectVertices(t.Rect, t.Tint, screenSize, t.Source);
-                    List<Vertex> tasks = [];
-                    foreach (var b in a)
-                    {
-                        tasks.Add(
-                            new Vertex(
-                                b.Position,
-                                b.Color,
-                                new(new(), b.UV),
-                                t.Texture,
-                                t.TextureResourceSet,
-                                t.Source.o
-                            )
-                        );
-                    }
-                    v.Add(tasks.ToArray());
+                    Log.Error($"[Renderer] {ex}");
                 }
-                else if (i is UIDrawCollector.DrawVertCommand verts)
+                finally
                 {
-                    //顶点组处理
-                    List<Vertex> tasks = [];
-                    foreach (var c in verts.Vert)
+                    CPThreadCount += 1;
+                    if (CPThreadCount >= TotalThreadCount)
                     {
-                        var a = GetVertices(
-                            [new(c.Position, c.Color, c.Export().UV)],
-                            screenSize,
-                            verts.Source
-                        )[0];
-                        tasks.Add(
-                            new(
-                                a.Position,
-                                a.Color,
-                                new(new(), a.UV),
-                                c.Texture,
-                                c?.ResourceSet ?? _textureResourceSet,
-                                verts.Source.o
-                            )
-                        );
+                        CTVThreadWaiter.Set();
                     }
-                    v.Add(tasks.ToArray());
                 }
             }
-            ;
 
-            // 4. 第一遍遍历：计算总顶点数，以及转换一下
-            int totalVertexCount = 0;
+            Parallel.For(
+                0,
+                TotalThreadCount,
+                idx =>
+                {
+                    var i = commands[(int)idx];
+                    CTV(i, (int)idx);
+                }
+            );
+            //CTVThreadWaiter.Wait();
+
+            // 4. 第一遍遍历：转换一下，顺手上传
+            List<VertexPositionColor> vert = [];
             List<VertexTask[]> Tasks = [];
-            foreach (var i in v)
+            ResourceSet LastRs = null;
+            List<VertexTask> t = [];
+            foreach (var i1 in values.OrderBy(c => c.index).ToList())
             {
-                List<VertexTask> t = [];
+                var i = i1.v;
                 foreach (var a in i)
                 {
-                    t.Add(a.Export());
-                    totalVertexCount++;
+                    var idx = a.Export();
+                    totalVertexCount += 1;
+
+                    /*
+                     *如果资源集与上次不一样就上传重置
+                     *管它的，反正优化了
+                     */
+                    if (LastRs != a.ResourceSet)
+                    {
+                        if (t.Count != 0)
+                            Tasks.Add(t.ToArray());
+                        t.Clear();
+                        LastRs = a.ResourceSet;
+                    }
+
+                    t.Add(idx);
+                    var c = idx.Color;
+                    c = new(c.R, c.G, c.B, c.A * idx.Opacity);
+                    vert.Add(
+                        new()
+                        {
+                            Position = idx.Position,
+                            Color = c,
+                            UV = idx.UV,
+                        }
+                    );
                 }
-                if (t.Count != 0)
-                    Tasks.Add(t.ToArray());
             }
-
-            if (totalVertexCount == 0)
-                return;
-
-            // 5. 确保顶点缓冲区足够大
+            if (t.Count != 0)
+                Tasks.Add(t.ToArray());
+            //顶点缓冲区大小检查
             uint totalSize = (uint)(totalVertexCount * VertexPositionColor.SizeInBytes);
             if (_vertexBuffer == null || totalSize > _vertexBuffer.SizeInBytes)
             {
@@ -453,26 +521,10 @@ void main()
                     new BufferDescription(totalSize, BufferUsage.VertexBuffer | BufferUsage.Dynamic)
                 );
             }
+            gd.UpdateBuffer(_vertexBuffer, 0, vert.ToArray());
 
-            // 5. 将所有控件的顶点数据写入缓冲区（不同偏移）
-            List<VertexPositionColor> vert = [];
-            foreach (var t in Tasks)
-            {
-                foreach (var i in t)
-                {
-                    var c = i.Color;
-                    c = new(c.R, c.G, c.B, c.A*i.Opacity);
-                    vert.Add(
-                        new()
-                        {
-                            Position = i.Position,
-                            Color = c,
-                            UV = i.UV,
-                        }
-                    );
-                }
-                gd.UpdateBuffer(_vertexBuffer, 0, vert.ToArray());
-            }
+            if (totalVertexCount == 0)
+                return;
 
             // 6. 开始命令录制
             cl.Begin();

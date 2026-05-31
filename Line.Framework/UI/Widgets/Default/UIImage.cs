@@ -1,5 +1,5 @@
-using Veldrid;
 using Line.Framework.Graphics;
+using Veldrid;
 using Veldrid.ImageSharp;
 using Rectangle = System.Drawing.RectangleF;
 
@@ -49,13 +49,15 @@ public class UIImage : UIWidget
 
     public UIImage()
     {
+        DisposeHook = () => ResourceSet.Dispose();
         RendererContext = (RendererContextArgs args) =>
         {
+            var s = GetSizeOnScreen();
+            if (s.X <= 0 && s.Y <= 0)
+            {
+                return;
+            }
             var collector = args.Collector;
-            if (Texture == null)
-                return;
-            if (ResourceSet == null)
-                return;
 
             //背景
             var tl = new WindowsRenderer.Vertex(
@@ -94,6 +96,12 @@ public class UIImage : UIWidget
             collector.DrawVertex([tr, bl, br], this);
 
             //纹理
+
+            if (Texture == null)
+                return;
+            if (ResourceSet == null)
+                return;
+
             var ttl = new WindowsRenderer.Vertex(
                 new(0, 0),
                 Color,

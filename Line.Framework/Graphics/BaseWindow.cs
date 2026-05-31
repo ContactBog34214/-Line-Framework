@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using FontStashSharp;
 using Line.Framework.Input;
 using Line.Framework.UI;
 using SharpGen.Runtime;
@@ -9,14 +8,11 @@ using Veldrid.Sdl2;
 using Veldrid.StartupUtilities;
 using UIScreen = Line.Framework.UI.UIScreen;
 
-#nullable enable
-
 namespace Line.Framework.Graphics;
 
 public class BaseWindow : IDisposable
 {
     public WindowsRenderer RendererClass { get; init; }
-    public FontSystem FontSystem { get; private set; }
     public Sdl2Window TargetWindow { get; init; }
     public InputManager Input { get; init; }
     public GraphicsDevice Dev { get; init; }
@@ -33,14 +29,14 @@ public class BaseWindow : IDisposable
         public double delay;
     }
 
-    public event EventHandler<OnRenderArgs>? OnRender;
+    public event EventHandler<OnRenderArgs> OnRender;
 
     public class OnUpdateArgs : EventArgs
     {
         public double delay;
     }
 
-    public event EventHandler<OnUpdateArgs>? OnUpdate;
+    public event EventHandler<OnUpdateArgs> OnUpdate;
 
     public static GraphicsBackend BackendSelector()
     {
@@ -137,10 +133,6 @@ public class BaseWindow : IDisposable
         Root = new(this, 0, 0);
         Root.UpdateScreenSize(TargetWindow.Width, TargetWindow.Height);
 
-        //字
-        FontSystem = new FontSystem();
-        FontSystem.AddFont(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Font.ttf")));
-
         //输入器
         Input = new(TargetWindow);
         MainThread = new Thread(UpdateWindow);
@@ -154,30 +146,56 @@ public class BaseWindow : IDisposable
         long tick = sw.ElapsedTicks;
         double milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
         double RenderMs = 0;
-        double UpdateMs = 0;
         //开始考试
         while (TargetWindow.Exists)
         {
             tick = sw.ElapsedTicks;
             milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
-            //防止冻结
-            if (UpdatePerSecond <= 0)
-            {
-                UpdatePerSecond = 1;
-            }
-            if (FramePerSecond <= 0)
-            {
-                FramePerSecond = 1;
-            }
 
             //输入更新
-            while (milliseconds - UpdateMs >= 1000d / UpdatePerSecond)
+            void update()
             {
-                var args = new OnUpdateArgs { delay = milliseconds - UpdateMs };
-                OnUpdate?.Invoke(this, args);
-                UpdateMs += 1000d / UpdatePerSecond;
-                TargetWindow.PumpEvents();
+                var sw = new Stopwatch();
+                sw.Start();
+                long tick = sw.ElapsedTicks;
+                double milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
+                double UpdateMs = 0;
+                while (TargetWindow.Exists)
+                {
+                    tick = sw.ElapsedTicks;
+                    milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
+                    //防止冻结
+                    if (UpdatePerSecond <= 0)
+                    {
+                        UpdatePerSecond = 1;
+                    }
+                    try
+                    {
+                        while (milliseconds - UpdateMs >= 1000d / UpdatePerSecond)
+                        {
+                            var args = new OnUpdateArgs { delay = milliseconds - UpdateMs };
+                            TargetWindow.PumpEvents();
+                            OnUpdate?.Invoke(this, args);
+                            //UpdateMs += 1000d / UpdatePerSecond;
+                            UpdateMs = milliseconds;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error($"[Update]{ex}");
+                    }
+                }
             }
+            //开更新线程
+            if (
+                UpdateThread == null
+                || UpdateThread.ThreadState != System.Threading.ThreadState.Running
+            )
+            {
+                UpdateThread = new(update);
+                UpdateThread.Start();
+            }
+
             //处理大小更新
             if (_resizePending)
             {
@@ -186,25 +204,36 @@ public class BaseWindow : IDisposable
             }
 
             //正式渲染
-            try
+            void render()
             {
-                while (milliseconds - RenderMs >= 1000d / FramePerSecond)
+                if (FramePerSecond <= 0)
                 {
-                    var args = new OnRenderArgs { delay = milliseconds - RenderMs };
-                    OnRender?.Invoke(this, args);
-                    RenderMs += 1000d / FramePerSecond;
-                    RendererContext();
-                    Dev.SwapBuffers();
+                    FramePerSecond = 1;
                 }
+                try
+                {
+                    while (milliseconds - RenderMs >= 1000d / FramePerSecond)
+                    {
+                        var args = new OnRenderArgs { delay = milliseconds - RenderMs };
+                        OnRender?.Invoke(this, args);
+                        //RenderMs += 1000d / FramePerSecond;
+                        RenderMs = milliseconds;
+                        RendererContext();
+                        Dev.SwapBuffers();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error($"[Renderer]{ex}");
+                }
+                Thread.Sleep(1);
             }
-            catch (Exception ex)
-            {
-                Log.Error($"[Renderer]{ex}");
-            }
-            Thread.Sleep(1);
+            render();
+            //Thread.Sleep(1);
         }
     }
 
+    Thread UpdateThread;
     private bool _resizePending = false;
     private uint _newWidth,
         _newHeight;

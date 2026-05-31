@@ -33,10 +33,30 @@ public class UIWidget : UINode
     public float o { get; set; } = 1;
     public Vector2 Scale { get; set; } = new(1, 1);
 
-    public static bool HitTest(Vector2 position, Vector2 Size, Vector2 mousePixel)
+    public Vector2 MousePosition(Vector2 mousePixel)
     {
-        var tmp = mousePixel - position;
-        return 0 <= tmp.X && 0 <= tmp.Y && tmp.X <= Size.X && tmp.Y <= Size.Y;
+        var S = GetSizeOnScreen();
+        var P = GetPositionOnScreen();
+        //到相对
+        var tmp = mousePixel - P - anchor * S;
+
+        //旋转
+        double r = (double)rotation % 360d;
+        r = 180d - r;
+        double cos = Math.Cos(r * Math.PI / 180f);
+        double sin = Math.Sin(r * Math.PI / 180f);
+        tmp = new((float)(tmp.X * cos - tmp.Y * sin), (float)(tmp.Y * cos + tmp.X * sin));
+
+        tmp += anchor * S;
+        return tmp;
+    }
+
+    public bool HitTest(Vector2 mousePixel)
+    {
+        var tmp = MousePosition(mousePixel);
+        var S = GetSizeOnScreen();
+        var P = GetPositionOnScreen();
+        return 0 <= tmp.X && 0 <= tmp.Y && tmp.X <= S.X && tmp.Y <= S.Y;
     }
 }
 

@@ -61,5 +61,7 @@ public class UINode : IDisposable
             i.Dispose();
         }
         _children = null;
+        DisposeHook?.Invoke();
     }
+    public Action DisposeHook;
 }
