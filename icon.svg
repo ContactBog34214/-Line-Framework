@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" xmlns:bx="https://boxy-svg.com">
+  <defs>
+    <bx:export>
+      <bx:file format="png"/>
+    </bx:export>
+  </defs>
   <ellipse style="fill: rgb(45, 44, 83); fill-rule: nonzero; paint-order: fill; stroke: rgb(94, 105, 136); stroke-dasharray: 165; stroke-dashoffset: -85px; stroke-linecap: round; stroke-linejoin: round; stroke-opacity: 0.95; stroke-width: 50px;" cx="250" cy="250" rx="210" ry="210"/>
   <ellipse style="fill-rule: nonzero; paint-order: fill; stroke-dashoffset: -85px; stroke-linecap: round; stroke-linejoin: round; stroke-width: 15px; stroke: rgb(33, 34, 79); fill: rgb(49, 47, 99);" cx="250" cy="250" rx="175" ry="175"/>
   <text style="fill: rgb(45, 52, 85); font-family: &quot;SN Pro&quot;; font-size: 175.4px; font-weight: 500; text-anchor: middle; white-space: pre;" x="241.285" y="265.961">F</text>

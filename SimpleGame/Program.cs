@@ -52,7 +52,7 @@ text.parent=a.Root;
 text.Position=new(new(0,100),new(0.5f,0));
 text.anchor=new(0.5f,0.5f);
 text.FontSize=100;
-text.Text="WelcomeTo-Line-Framework";
+text.Text="Welcome To -Line-Framework";
 text.LoadFont(assembly.GetManifestResourceStream("SimpleGame.assets.Font.ttf"));
 text.Size=new(new(500,100),new());
 //text.Text="Welcome";

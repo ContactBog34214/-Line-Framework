@@ -45,6 +45,8 @@ public class UIText : UIWidget
     {
         try
         {
+            if (manager == null)
+                return;
             manager.SetFontSize(_size);
 
             //清除之前的
@@ -60,6 +62,12 @@ public class UIText : UIWidget
             }
             void RenderAText(char c)
             {
+                if (c == ' ')
+                {
+                    FontTexture.Add(null);
+                    rs.Add(null);
+                    return;
+                }
                 var (grayPixels, width, height) = manager.GetTextPixels(c.ToString());
                 FontTexture.Add(CreateColoredTexture(grayPixels, width, height, color));
                 rs.Add(
@@ -173,6 +181,8 @@ public class UIText : UIWidget
                     rs,
                     1
                 );
+                if (FT == null || rs == null)
+                    return;
                 collector.DrawVertex([tl, tr, bl], this);
                 collector.DrawVertex([tr, bl, br], this);
             }
@@ -185,7 +195,7 @@ public class UIText : UIWidget
                     thisSize.Y / totSize.Y * (float)args.height
                 );
                 renderAText(
-                    new(offset, ((float)args.height-RenderSize.Y)/2),
+                    new(offset, ((float)args.height - RenderSize.Y) / 2),
                     RenderSize,
                     FontTexture[i],
                     rs[i]
@@ -255,11 +265,13 @@ public class UIText : UIWidget
 
     public Vector2 GetTextSize(char s)
     {
-        if(' ' == s)
+        if (' ' == s)
         {
-            return(new(FontSize/4,1));
+            return (new(FontSize * SpaceWidth, 1));
         }
         var a = manager.GetTextSize(s.ToString(), FontSize);
         return new(a.width, a.height);
     }
+
+    public float SpaceWidth = 0.4f;
 }
