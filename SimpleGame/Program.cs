@@ -17,7 +17,8 @@ Log.Info("Welcome to -Line-Framework");
 var assembly = Assembly.GetExecutingAssembly();
 
 var names = assembly.GetManifestResourceNames();
-foreach (var name in names) Log.Debug($"Asset:{name}");
+foreach (var name in names)
+    Log.Debug($"Asset:{name}");
 
 //新建窗口
 BaseWindow a = new BaseWindow(Backend: GraphicsBackend.OpenGL);
@@ -29,9 +30,10 @@ var rect = new UIButton();
 rect.parent = a.Root;
 rect.Position = new(new(), new(0.5f, 0.5f));
 rect.Size = new(new(350, 350), new());
-rect.color = new(0, 42f/255f, 125f/255f, 1);
+rect.color = new(0, 42f / 255f, 125f / 255f, 1);
 rect.rotation = 0;
 rect.anchor = new(0.5f, 0.5f);
+rect.Z = -1;
 
 //图标
 var icon = new UIImage();
@@ -44,28 +46,37 @@ var stream = assembly.GetManifestResourceStream("SimpleGame.assets.-L-F.png");
 var image = new ImageSharpTexture(stream);
 Texture texture = image.CreateDeviceTexture(a.Dev, a.Dev.ResourceFactory);
 icon.LoadTexture(a.Dev, a.RendererClass.TextureLayout, texture);
-icon.Z=1;
+icon.Z = 1;
 
 //文字
-var text=new UIText(a.Dev,a.RendererClass.TextureLayout);
-text.parent=a.Root;
-text.Position=new(new(0,100),new(0.5f,0));
-text.anchor=new(0.5f,0.5f);
-text.FontSize=100;
-text.Text="Welcome To -Line-Framework";
+var text = new UIText(a.Dev, a.RendererClass.TextureLayout);
+text.parent = a.Root;
+text.Position = new(new(0, 0), new(0.5f, 0.5f));
+text.anchor = new(0.5f, 0.5f);
+text.FontSize = 100;
+text.Text = "Welcome To -Line-Framework\nIt's just a simple Game Framework";
 text.LoadFont(assembly.GetManifestResourceStream("SimpleGame.assets.Font.ttf"));
-text.Size=new(new(500,100),new());
+text.Size = new(new(500, 100), new());
+text.Z = 1000;
+
 //text.Text="Welcome";
-text.Size=new(text.GetTextSize(text.Text),new());
-text.color=new(1,1,1,1);
+text.Size = new(text.GetTextSize(text.Text) / new Vector2(1f, 1f), new());
+text.color = new(1, 1, 1, 1);
+
+//可视化区域
+var textBox = new UIBox();
+textBox.parent = text;
+textBox.Position = new(new(0, 0), new(0, 0));
+textBox.Size = new(new(), new(1, 1));
+textBox.color = new(1, 1, 1, 0.2f);
 
 //开转
-Stopwatch sw=new();
+Stopwatch sw = new();
 sw.Start();
 a.OnUpdate += (o, p) =>
 {
-    var r=sw.ElapsedMilliseconds/1000f%3f;
-    r=r/3f*360f;
-    rect.rotation=r;
-    icon.rotation=r;
+    var r = sw.ElapsedMilliseconds / 1000f % 3f;
+    r = r / 3f * 360f;
+    rect.rotation = r;
+    icon.rotation = r;
 };

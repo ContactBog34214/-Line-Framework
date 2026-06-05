@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.IO.Compression;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Text;
@@ -235,11 +236,11 @@ void main()
             {
                 if (!child.visible)
                     continue;
-                Collect(child, i + 1, c / d.Count());
+                Collect(child, i + 1, child.Z * (c / d.Count));
                 c++;
             }
         }
-        Collect(root, i, 0);
+        Collect(root, i, 1);
         for (int f = 0; f < widgets.Count; f++)
         {
             widgets[f].OrderBy(c => c.Z);
@@ -266,6 +267,7 @@ void main()
             {
                 ws.AddRange(item);
             }
+            ws.OrderBy(c => c.oz);
 
             //各种同步然后请求渲染内容
             foreach (var item in ws)
@@ -612,7 +614,7 @@ void main()
             ResourceLayouts = new[] { _textureLayout },
             ShaderSet = new ShaderSetDescription(new[] { vertexLayout }, _shaders),
             Outputs = gd.SwapchainFramebuffer.OutputDescription,
-            BlendState = BlendStateDescription.SingleAlphaBlend
+            BlendState = BlendStateDescription.SingleAlphaBlend,
         };
 
         _pipeline = gd.ResourceFactory.CreateGraphicsPipeline(pipelineDescription);
