@@ -1,5 +1,6 @@
 using System.Numerics;
 using Line.Framework.Graphics;
+using TagLib.IFD.Entries;
 using Veldrid;
 using Veldrid.SPIRV;
 
@@ -204,6 +205,7 @@ public class UIText : UIWidget
 
         RendererContext = (args) =>
         {
+            if (manager == null) return;
             var collector = args.Collector;
             void renderAText(Vector2 StartPosition, Vector2 Size, Texture FT, ResourceSet rs)
             {
@@ -250,12 +252,27 @@ public class UIText : UIWidget
 
             float ascender = manager?.Ascender ?? _size * 0.8f;
             float lineHeight = _size;
-            int totalLines = _text.Split('\n').Length;
+            var Lines = _text.Split('\n');
+            int totalLines = Lines.Length;
             float scaleY = (float)args.height / (lineHeight * totalLines);
             float scaleX = (float)args.width / totSize.X;
 
-            float offset = 0; // 屏幕 X 坐标（已缩放）
+            float offset = 0;
+            void ResetOffset(string Line)
+            {
+                offset = 0;
+                if (XAlignment == Alignment.Center)
+                {
+                    offset = ((float)args.width - GetTextSize(Line).X * scaleX) / 2f;
+                }
+                else if (XAlignment == Alignment.Right)
+                {
+                    offset = (float)args.width - GetTextSize(Line).X * scaleX;
+                }
+            }
+
             int line = 0;
+            ResetOffset(Lines[0]);
 
             for (int i = 0; i < FontTexture.Count; i++)
             {
@@ -271,7 +288,7 @@ public class UIText : UIWidget
                 if (c == '\n')
                 {
                     line++;
-                    offset = 0;
+                    ResetOffset(Lines[line]);
                     continue;
                 }
                 // 其他控制字符（如 \r, \t）可选择忽略
@@ -389,27 +406,26 @@ public class UIText : UIWidget
 
     public Vector2 GetTextSize(string s)
     {
+        if (string.IsNullOrEmpty(s))
+            return Vector2.Zero;
+
         float ThisLineWidth = 0;
         float MaximumWidth = 0;
-        foreach (var i in s.ToCharArray())
+        foreach (var i in s)
         {
-            if ('\n' == i)
+            if (i == '\n')
             {
                 if (ThisLineWidth > MaximumWidth)
-                {
                     MaximumWidth = ThisLineWidth;
-                }
                 ThisLineWidth = 0;
                 continue;
             }
-            var tmp = GetTextSize(i);
-            ThisLineWidth += tmp.X*LetterSpacing;
+            var tmp = GetTextSize(i); // 现在内部有了降级处理
+            ThisLineWidth += tmp.X;
         }
         if (ThisLineWidth > MaximumWidth)
-        {
             MaximumWidth = ThisLineWidth;
-        }
-        return new(MaximumWidth, _size * s.Split('\n').Length);
+        return new(MaximumWidth * LetterSpacing, _size * s.Split('\n').Length);
     }
 
     public Vector2 GetTextSize(char s)
@@ -423,16 +439,22 @@ public class UIText : UIWidget
             return new(0, 0);
         }
 
+        // 确保字体管理器存在且字符已缓存
+        if (manager == null)
+        {
+            // 降级：返回一个基于字体大小的估算宽度（约 0.6 倍字号）
+            return new(_size * 0.6f * LetterSpacing, _size);
+        }
+
         try
         {
             if (_charCache.TryGetValue(s, out var cache))
             {
-                // 使用缓存的度量（位图宽高，与原逻辑一致）
                 return new(cache.Width * LetterSpacing, cache.Height);
             }
             else
             {
-                // 如果尚未缓存（理论上不会发生，因为 RenderText 已预先生成所有字符）
+                // 如果尚未缓存，直接通过 FreeType 获取度量（避免渲染纹理）
                 manager.GetCharMetrics(s, out uint w, out uint h, out _, out _, out _);
                 return new(w * LetterSpacing, h);
             }
@@ -440,10 +462,19 @@ public class UIText : UIWidget
         catch (Exception ex)
         {
             Log.Error($"[TextRenderer] [Getting size of {s}] {ex}");
-            return Vector2.Zero;
+            return new(_size * 0.6f * LetterSpacing, _size); // 估算尺寸
         }
     }
 
     public float SpaceWidth { get; set; } = 0.25f;
     public float LetterSpacing { get; set; } = 1.1f;
+    public string XAlignment { get; set; } = Alignment.Left;
+    public string YAlignment { get; set; } = Alignment.Left;
+}
+
+public static class Alignment
+{
+    public static readonly string Left = "Left";
+    public static readonly string Center = "Center";
+    public static readonly string Right = "Right";
 }
