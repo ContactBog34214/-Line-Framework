@@ -1,3 +1,4 @@
+using Line.Framework.Graphics;
 using Veldrid;
 using Rectangle = System.Drawing.RectangleF;
 
@@ -12,6 +13,7 @@ public class UIBox : UIWidget
         RendererContext = (RendererContextArgs args) =>
         {
             var collector = args.Collector;
+            /*
             collector.DrawRect(
                 new Rectangle
                 {
@@ -25,6 +27,46 @@ public class UIBox : UIWidget
                 color,
                 this
             );
+            */
+            var s = GetSizeOnScreen();
+            if (s.X <= 0 && s.Y <= 0)
+            {
+                return;
+            }
+            var tl = new WindowsRenderer.Vertex(
+                new(0, 0),
+                color,
+                new(new(), new(0, 0)),
+                null,
+                null,
+                1
+            );
+            var tr = new WindowsRenderer.Vertex(
+                new((float)args.width, 0),
+                color,
+                new(new(), new(1, 0)),
+                null,
+                null,
+                1
+            );
+            var bl = new WindowsRenderer.Vertex(
+                new(0, (float)args.height),
+                color,
+                new(new(), new(0, 1)),
+                null,
+                null,
+                1
+            );
+            var br = new WindowsRenderer.Vertex(
+                new((float)args.width, (float)args.height),
+                color,
+                new(new(), new(1, 1)),
+                null,
+                null,
+                1
+            );
+            collector.DrawVertex([tl, tr, bl], this);
+            collector.DrawVertex([tr, bl, br], this);
         };
     }
 }

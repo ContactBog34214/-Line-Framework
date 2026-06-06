@@ -4,16 +4,25 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
     <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Nullable>disable</Nullable>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageId>Line.Framework</PackageId>
+    <Version>1.0.1</Version>
+    <Authors>SmellyFish</Authors>
+    <Description>A Game Framework</Description>
+    <PackageOutputPath>./nupkg</PackageOutputPath>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="FontStashSharp" Version="1.3.10" />
     <PackageReference Include="FreeTypeSharp" Version="3.1.0" />
+    <PackageReference Include="JAJ.Packages.FreeTypeSharp" Version="3.0.6" />
     <PackageReference Include="ManagedBass" Version="4.0.2" />
     <PackageReference Include="ppy.osu.Framework.NativeLibs" Version="1.0.0" />
     <PackageReference Include="sdl2" Version="2.0.5" />
     <PackageReference Include="SDL2-CS" Version="2.0.0" />
+    <PackageReference Include="SharpFont" Version="4.0.1" />
     <PackageReference Include="SharpText.Core" Version="0.3.1" />
     <PackageReference Include="SharpText.Veldrid" Version="0.3.1" />
     <PackageReference Include="StbImageSharp" Version="2.30.15" />

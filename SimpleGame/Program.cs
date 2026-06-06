@@ -1,4 +1,6 @@
-﻿using System.Numerics;
+﻿using System.Diagnostics;
+using System.Numerics;
+using System.Reflection;
 using Line.Framework;
 using Line.Framework.Audio;
 using Line.Framework.Graphics;
@@ -6,126 +8,114 @@ using Line.Framework.UI;
 using Line.Framework.UI.DefaultWidget;
 using TagLib.Riff;
 using Veldrid;
+using Veldrid.ImageSharp;
 
 Log.SetMinLevel(LogLevel.Debug);
 Log.EnableConsole(true);
 Log.SetLogFile(null);
-Log.Info("日志系统启动完成");
+Log.Info("Welcome to -Line-Framework");
+var assembly = Assembly.GetExecutingAssembly();
+
+var names = assembly.GetManifestResourceNames();
+foreach (var name in names)
+    Log.Debug($"Asset:{name}");
 
 //新建窗口
-BaseWindow a = new BaseWindow(Backend: GraphicsBackend.OpenGLES);
-a.FramePerSecond = 60;
-a.UpdatePerSecond = 120;
-a.TargetWindow.CursorVisible = false;
+BaseWindow a = new BaseWindow(Backend: GraphicsBackend.OpenGL);
+a.FramePerSecond = 1000;
+a.UpdatePerSecond = 1000;
 
-//一个盒子
-var b = new UIBox();
-b.parent = a.Root;
-b.Position = new(new(), new(0, 0));
-b.Size = new(new(10, 10), new(0, 0));
-b.color = new(new(255f / 255f, 255f / 255f, 255f / 255f, 0.8f));
-b.anchor = new(0f, 0f);
-b.Z = 1;
-b.name = "box";
+//正方形底
+var rect = new UIButton();
+rect.parent = a.Root;
+rect.Position = new(new(), new(0.5f, 0.5f));
+rect.Size = new(new(350, 350), new());
+rect.color = new(0, 42f / 255f, 125f / 255f, 1);
+rect.rotation = 0;
+rect.anchor = new(0.5f, 0.5f);
+rect.Z = -1;
 
-//一个按钮
-var c = new UIButton();
-c.parent = a.Root;
-c.Position = new(new(), new(0.5f, 0));
-c.Size = new(new(100, 100), new(0, 0));
-c.color = new(new(0f / 255f, 255f / 255f, 255f / 255f, 0.8f));
-c.anchor = new(0.5f, 0.5f);
-c.Z = 2;
-c.UpdateRoot();
+//图标
+var icon = new UIImage();
+icon.parent = rect;
+icon.Position = new(new(), new(0.5f, 0.5f));
+icon.anchor = new(0.5f, 0.5f);
+icon.Size = new(new(0, 0), new(1, 1));
+icon.Color = new(1, 1, 1, 1);
+var stream = assembly.GetManifestResourceStream("SimpleGame.assets.-L-F.png");
+var image = new ImageSharpTexture(stream);
+Texture texture = image.CreateDeviceTexture(a.Dev, a.Dev.ResourceFactory);
+icon.LoadTexture(a.Dev, a.RendererClass.TextureLayout, texture);
+icon.Z = 1;
 
-//一个指示鼠标的图片框
-var d = new UIImage();
-d.parent = a.Root;
-d.Position = new(new(), new(0, 0));
-d.Size = new(new(40, 40), new(0, 0));
-d.BackgroundColor = new(new(255f / 255f, 255f / 255f, 255f / 255f, 1f));
-d.Z = 1000;
-d.anchor = new(0.5f, 0.5f);
-d.LoadImage(a.Dev, a.RendererClass.TextureLayout, "./assets/lazer.png");
+//文字
+var text = new UIText(a.Dev, a.RendererClass.TextureLayout);
+text.parent = a.Root;
+text.Position = new(new(0, 120), new(0.5f, 0));
+text.anchor = new(0.5f, 0.5f);
+text.FontSize = 100;
+text.Text = "Welcome To -Line-Framework\nIt's just a simple Game Framework";
+text.LoadFont(assembly.GetManifestResourceStream("SimpleGame.assets.Font.ttf"));
+text.Size = new(new(500, 100), new());
+text.Z = 1000;
+text.XAlignment = Alignment.Center;
 
-//特效列表
-List<UIImage> l = [];
+//text.Text="Welcome";
+text.Size = new(text.GetTextSize(text.Text) / new Vector2(1f, 1f), new());
+text.color = new(1, 1, 1, 1);
 
-//绑定事件
-a.Input.MouseMove += (dx, dy) =>
-{
-    /*
-    var pos = b.Position.offset;
-    pos.X += dx;
-    pos.Y += dy;
-    */
-    b.Position = new Coord2(c.GetPositionOnScreen(), b.Position.scale);
-};
+//可视化区域
+var textBox = new UIBox();
+textBox.parent = text;
+textBox.Position = new(new(0, 0), new(0, 0));
+textBox.Size = new(new(), new(1, 1));
+textBox.color = new(1, 1, 1, 0.2f);
 
-a.TargetWindow.MouseWheel += (n) =>
-{
-    var pos = c.Position.offset;
-    pos.Y = a.Input.TotalMouseWheelDelta;
-    c.Position = new(pos, c.Position.scale);
-};
+//调试性息
+var Per = new UIBox();
+Per.parent = a.Root;
+Per.color = new(1, 1, 1, 0.5f);
+Per.anchor = new(1, 0);
+Per.Position = new(new(-100, -100), new(1, 1));
+Per.Size = new(new(150, 50), new());
+Per.Z = 65536;
 
-c.WhenClick += (o, p) =>
-{
-    Log.Debug("Click");
-};
+//性息文本
+var PerT = new UIText(a.Dev, a.RendererClass.TextureLayout);
+PerT.anchor = new(0.5f, 0.5f);
+PerT.Position = new(new(), new(0.5f, 0.5f));
+PerT.Size = new(new(), new(1, 1));
+PerT.XAlignment = Alignment.Center;
+PerT.color = new(1, 1, 1, 1);
+PerT.parent = Per;
+PerT.LoadFont(assembly.GetManifestResourceStream("SimpleGame.assets.CascadiaMono.ttf"));
+PerT.FontSize = 80;
+PerT.Text = $"0FPS";
 
-a.Input.MouseMove += (x, y) =>
-{
-    d.Position = new(a.Input.TotalMouseDelta, d.Position.scale);
-};
+double updD = 0;
 
-//判断
+//开转
+Stopwatch sw = new();
+sw.Start();
 a.OnUpdate += (o, p) =>
 {
-    if (UIWidget.HitTest(c.GetPositionOnScreen(), c.GetSizeOnScreen(), a.Input.TotalMouseDelta))
-    {
-        c.color = new(new(0f / 255f, 255f / 255f, 0f / 255f, 0.8f));
-    }
-    else
-    {
-        c.color = new(new(0f / 255f, 0f / 255f, 255f / 255f, 0.8f));
-    }
+    var r = sw.ElapsedMilliseconds / 1000f % 3f;
+    r = r / 3f * 360f;
+    rect.rotation = r;
+    icon.rotation = r;
+    updD = p.delay;
 };
 
-a.Input.MouseDown += (o) =>
-{
-    l.Add(
-        new()
-        {
-            Position = new(a.Input.TotalMouseDelta, new()),
-            Size = new(d.Size.offset, new()),
-            Opacity = 1,
-            anchor = d.anchor,
-            Z = 0,
-            parent = d,
-            BackgroundColor = new(new(255f / 255f, 255f / 255f, 255f / 255f, 1f)),
-        }
-    );
-    l[l.Count - 1].LoadTexture(a.Dev, a.RendererClass.TextureLayout, d.Texture);
-};
+Stopwatch updateTime = new();
+updateTime.Start();
 
 a.OnRender += (o, p) =>
 {
-    List<UIImage> Deleting = [];
-    for (int i = 0; i < l.Count; i++)
+    if (updateTime.ElapsedMilliseconds >= 500)
     {
-        var t = l[i];
-        t.Opacity += (0 - t.Opacity) / 30;
-        var s = d.Size.offset;
-        t.Size = new(new(s.X * (4 - 3 * t.Opacity), s.Y * (4 - 3 * t.Opacity)), new());
-        if (t.Opacity < 0.02)
-        {
-            Deleting.Add(t);
-        }
-    }
-    foreach (var a in Deleting)
-    {
-        a.Dispose();
-        l.Remove(a);
+        updateTime.Reset();
+        updateTime.Start();
+        PerT.Text = $"{(uint)(1f / p.delay * 10000) / 10f} FPS";
+        Per.Size = new(PerT.GetTextSize(PerT.Text) / new Vector2(2f, 2f), new());
     }
 };
