@@ -4,9 +4,8 @@ using System.Reflection;
 using Line.Framework;
 using Line.Framework.Audio;
 using Line.Framework.Graphics;
-using Line.Framework.UI;
+using Line.Framework.Resource.Graphic;
 using Line.Framework.UI.DefaultWidget;
-using TagLib.Riff;
 using Veldrid;
 using Veldrid.ImageSharp;
 
@@ -22,8 +21,11 @@ foreach (var name in names)
 
 //新建窗口
 BaseWindow a = new BaseWindow(Backend: GraphicsBackend.OpenGL);
-a.FramePerSecond = 1000;
+a.FramePerSecond = 10000;
 a.UpdatePerSecond = 1000;
+
+//初始化音频
+var audio = new AudioManager();
 
 //正方形底
 var rect = new UIButton();
@@ -36,29 +38,31 @@ rect.anchor = new(0.5f, 0.5f);
 rect.Z = -1;
 
 //图标
-var icon = new UIImage();
+var icon = new UIImage(a.Resource);
 icon.parent = rect;
 icon.Position = new(new(), new(0.5f, 0.5f));
 icon.anchor = new(0.5f, 0.5f);
 icon.Size = new(new(0, 0), new(1, 1));
 icon.Color = new(1, 1, 1, 1);
 var stream = assembly.GetManifestResourceStream("SimpleGame.assets.-L-F.png");
-var image = new ImageSharpTexture(stream);
-Texture texture = image.CreateDeviceTexture(a.Dev, a.Dev.ResourceFactory);
-icon.LoadTexture(a.Dev, a.RendererClass.TextureLayout, texture);
+a.Resource.Create("Image", "SimpleGame.assets.-L-F.png", stream);
+icon.TextureId = "SimpleGame.assets.-L-F.png";
 icon.Z = 1;
 
 //文字
-var text = new UIText(a.Dev, a.RendererClass.TextureLayout);
+var fs = assembly.GetManifestResourceStream("SimpleGame.assets.Font.ttf");
+a.Resource.Create("Font", "Font.SN Pro", fs);
+var f = a.Resource.GetResource("Font.SN Pro") as Font;
+f?.Size = 100;
+var text = new UIText(a.Resource);
 text.parent = a.Root;
 text.Position = new(new(0, 120), new(0.5f, 0));
 text.anchor = new(0.5f, 0.5f);
-text.FontSize = 100;
 text.Text = "Welcome To -Line-Framework\nIt's just a simple Game Framework";
-text.LoadFont(assembly.GetManifestResourceStream("SimpleGame.assets.Font.ttf"));
 text.Size = new(new(500, 100), new());
 text.Z = 1000;
 text.XAlignment = Alignment.Center;
+text.FontId="Font.SN Pro";
 
 //text.Text="Welcome";
 text.Size = new(text.GetTextSize(text.Text) / new Vector2(1f, 1f), new());
@@ -81,16 +85,19 @@ Per.Size = new(new(150, 50), new());
 Per.Z = 65536;
 
 //性息文本
-var PerT = new UIText(a.Dev, a.RendererClass.TextureLayout);
+var fs1 = assembly.GetManifestResourceStream("SimpleGame.assets.CascadiaMono.ttf");
+a.Resource.Create("Font", "Font.CascadiaMono", fs1);
+var f1 = a.Resource.GetResource("Font.CascadiaMono") as Font;
+f1?.Size = 80;
+var PerT = new UIText(a.Resource);
 PerT.anchor = new(0.5f, 0.5f);
 PerT.Position = new(new(), new(0.5f, 0.5f));
 PerT.Size = new(new(), new(1, 1));
 PerT.XAlignment = Alignment.Center;
 PerT.color = new(1, 1, 1, 1);
 PerT.parent = Per;
-PerT.LoadFont(assembly.GetManifestResourceStream("SimpleGame.assets.CascadiaMono.ttf"));
-PerT.FontSize = 80;
 PerT.Text = $"0FPS";
+PerT.FontId="Font.CascadiaMono";
 
 double updD = 0;
 
