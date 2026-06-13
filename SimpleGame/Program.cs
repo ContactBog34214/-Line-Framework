@@ -7,7 +7,6 @@ using Line.Framework.Graphics;
 using Line.Framework.Resource.Graphic;
 using Line.Framework.UI.DefaultWidget;
 using Veldrid;
-using Veldrid.ImageSharp;
 
 Log.SetMinLevel(LogLevel.Debug);
 Log.EnableConsole(true);
@@ -56,16 +55,18 @@ var f = a.Resource.GetResource("Font.SN Pro") as Font;
 f?.Size = 100;
 var text = new UIText(a.Resource);
 text.parent = a.Root;
-text.Position = new(new(0, 120), new(0.5f, 0));
+text.Position = new(new(0, 200), new(0.5f, 0));
 text.anchor = new(0.5f, 0.5f);
-text.Text = "Welcome To -Line-Framework\nIt's just a simple Game Framework";
+text.Text = "Welcome To -Line-Framework\nIt's just a simple Game Framework"; //Welcome To -Line-Framework\nIt's just a simple Game Framework
 text.Size = new(new(500, 100), new());
-text.Z = 1000;
-text.XAlignment = Alignment.Center;
-text.FontId="Font.SN Pro";
+text.Z = 20;
+text.XAlignment = Alignment.Left;
+text.YAlignment = Alignment.Right;
+text.FontId = "Font.SN Pro";
+text.FontScale = 1f;
 
 //text.Text="Welcome";
-text.Size = new(text.GetTextSize(text.Text) / new Vector2(1f, 1f), new());
+text.Size = new(text.GetTextSize(text.Text) / new Vector2(1f, 0.8f), new());
 text.color = new(1, 1, 1, 1);
 
 //可视化区域
@@ -94,10 +95,11 @@ PerT.anchor = new(0.5f, 0.5f);
 PerT.Position = new(new(), new(0.5f, 0.5f));
 PerT.Size = new(new(), new(1, 1));
 PerT.XAlignment = Alignment.Center;
-PerT.color = new(1, 1, 1, 1);
+PerT.color = new(0, 1, 0, 1);
 PerT.parent = Per;
 PerT.Text = $"0FPS";
-PerT.FontId="Font.CascadiaMono";
+PerT.FontId = "Font.CascadiaMono";
+PerT.FontScale = 0.5f;
 
 double updD = 0;
 
@@ -118,11 +120,17 @@ updateTime.Start();
 
 a.OnRender += (o, p) =>
 {
-    if (updateTime.ElapsedMilliseconds >= 500)
+    if (updateTime.ElapsedMilliseconds >= 1)
     {
         updateTime.Reset();
         updateTime.Start();
-        PerT.Text = $"{(uint)(1f / p.delay * 10000) / 10f} FPS";
-        Per.Size = new(PerT.GetTextSize(PerT.Text) / new Vector2(2f, 2f), new());
+        PerT.Text = $"{(uint)(1000f / p.delay) / 1f} FPS";
+        Per.Size = new(PerT.GetTextSize(PerT.Text) / new Vector2(1, 1), new());
     }
 };
+
+for (int i = 0; i < 1000; i++)
+{
+    var tmp = new UIBox();
+    tmp.parent = a.Root;
+}

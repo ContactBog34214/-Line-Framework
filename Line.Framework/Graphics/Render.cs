@@ -214,38 +214,32 @@ void main()
         return GetVertices(vert, source, s);
     }
 
-    static List<List<UIWidget>> trees(UIWidget root)
+    static List<UIWidget> trees(UIWidget root)
     {
-        List<List<UIWidget>> widgets = [];
-        var i = 0;
-        void Collect(UIWidget node, int i, float b)
+        List<UIWidget> widgets = [];
+        int i = 0;
+
+        void Collect(UIWidget node)
         {
             if (!node.visible)
                 return;
-            if (widgets.Count <= i)
+            node.oz = i++;
+            widgets.Add(node);
+
+            var sortedChildren = node
+                .children.ToArray()
+                .OfType<UIWidget>()
+                .Where(c => c.visible)
+                .OrderBy(c => c.Z);
+
+            foreach (var i in sortedChildren)
             {
-                widgets.Add([]);
-            }
-            node.oz = i + b;
-            widgets[i].Add(node);
-            float c = 0;
-            List<UIWidget> d = [];
-            d.AddRange(node.children.OfType<UIWidget>());
-            d.OrderBy(c => c.Z);
-            foreach (var child in d)
-            {
-                if (!child.visible)
-                    continue;
-                Collect(child, i + 1, child.Z * (c / d.Count));
-                c++;
+                Collect(i);
             }
         }
-        Collect(root, i, 1);
-        for (int f = 0; f < widgets.Count; f++)
-        {
-            widgets[f].OrderBy(c => c.Z);
-        }
-        return widgets;
+
+        Collect(root);
+        return [.. widgets.OrderBy(c => c.oz)];
     }
 
     public Action<BaseWindow, UIDrawCollector> UIRenderer { get; }
@@ -261,13 +255,8 @@ void main()
                 collector = new();
             }
             collector.Clear();
-            List<List<UIWidget>> widgets = trees(window.Root);
             List<UIWidget> ws = [];
-            foreach (var item in widgets)
-            {
-                ws.AddRange(item);
-            }
-            ws.OrderBy(c => c.oz);
+            ws.AddRange(trees(window.Root));
 
             //各种同步然后请求渲染内容
             foreach (var item in ws)
