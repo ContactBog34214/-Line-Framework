@@ -126,6 +126,15 @@ public class ResourceManager : IDisposable
         Types.TryAdd(id, t);
     }
 
+    public ResourceType GetResourceType(string id)
+    {
+        if (Types.TryGetValue(id, out var obj))
+        {
+            return obj;
+        }
+        return null;
+    }
+
     public List<string> GetAllTypeId()
     {
         List<string> a = [];
