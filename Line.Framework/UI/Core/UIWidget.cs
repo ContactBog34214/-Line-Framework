@@ -3,7 +3,7 @@ using System.Reflection.Metadata.Ecma335;
 
 namespace Line.Framework.UI;
 
-public class UIWidget : UINode
+public abstract class UIWidget : UINode
 {
     public Coord2 Position { get; set; } = new();
     public Coord2 Size { get; set; } = new();

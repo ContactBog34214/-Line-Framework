@@ -1,4 +1,6 @@
 using Line.Framework.Graphics;
+using Line.Framework.Resource;
+using Line.Framework.Resource.Graphic;
 using Veldrid;
 using Veldrid.ImageSharp;
 using Rectangle = System.Drawing.RectangleF;
@@ -9,47 +11,12 @@ public class UIImage : UIWidget
 {
     public RgbaFloat BackgroundColor { get; set; } = new(0, 0, 0, 0);
     public RgbaFloat Color { get; set; } = new(1, 1, 1, 1);
-    public Texture Texture { get; set; }
-    ResourceSet ResourceSet;
+    public string TextureId { get; set; }
+    internal ResourceManager Manager;
 
-    public void LoadImage(GraphicsDevice gd, ResourceLayout rl, string path)
+    public UIImage(ResourceManager manager)
     {
-        try
-        {
-            var image = new ImageSharpTexture(path);
-            Texture = image.CreateDeviceTexture(gd, gd.ResourceFactory);
-            ResourceSet = gd.ResourceFactory.CreateResourceSet(
-                new ResourceSetDescription(rl, Texture)
-            );
-        }
-        catch (FileNotFoundException)
-        {
-            Log.Warning($"[LoadImage]Could not find file {path}");
-        }
-        catch (Exception e)
-        {
-            Log.Error($"[LoadImage]{e}");
-        }
-    }
-
-    public void LoadTexture(GraphicsDevice gd, ResourceLayout rl, Texture t)
-    {
-        try
-        {
-            Texture = t;
-            ResourceSet = gd.ResourceFactory.CreateResourceSet(
-                new ResourceSetDescription(rl, Texture)
-            );
-        }
-        catch (Exception e)
-        {
-            Log.Error($"[LoadTexture]{e}");
-        }
-    }
-
-    public UIImage()
-    {
-        DisposeHook = () => ResourceSet.Dispose();
+        Manager = manager;
         RendererContext = (RendererContextArgs args) =>
         {
             var s = GetSizeOnScreen();
@@ -96,9 +63,11 @@ public class UIImage : UIWidget
             collector.DrawVertex([tr, bl, br], this);
 
             //纹理
-
-            if (Texture == null)
+            var Resource = Manager.GetResource(TextureId) as ResourceSetArg;
+            if (Resource == null)
                 return;
+            var ResourceSet = Resource.ResourceSet;
+            var Texture = Resource.Texture;
             if (ResourceSet == null)
                 return;
 

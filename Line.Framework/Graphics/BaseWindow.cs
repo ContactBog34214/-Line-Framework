@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using Line.Framework.Input;
+using Line.Framework.Resource;
+using Line.Framework.Resource.Graphic;
 using Line.Framework.UI;
 using SharpGen.Runtime;
 using Veldrid;
@@ -18,8 +20,8 @@ public class BaseWindow : IDisposable
     public GraphicsDevice Dev { get; init; }
     public UIScreen Root { get; init; }
     private Thread MainThread;
-    public float FramePerSecond = 10;
-    public float UpdatePerSecond = 1000;
+    public float FramePerSecond { get; set; } = 10;
+    public float UpdatePerSecond { get; set; } = 1000;
     public CommandList commandList { get; init; }
     public UIDrawCollector Collector { get; init; } = new();
 
@@ -133,6 +135,10 @@ public class BaseWindow : IDisposable
         Root = new(this, 0, 0);
         Root.UpdateScreenSize(TargetWindow.Width, TargetWindow.Height);
 
+        //资源管理器
+        Resource = new();
+        Resource.AddType("Image", new TResourceSet(Resource, Dev, RendererClass.TextureLayout));
+        Resource.AddType("Font", new TFont(Resource, Dev, RendererClass.TextureLayout));
         //输入器
         Input = new(TargetWindow);
         MainThread = new Thread(UpdateWindow);
@@ -236,6 +242,7 @@ public class BaseWindow : IDisposable
 
     Thread UpdateThread;
     private bool _resizePending = false;
+    public ResourceManager Resource { get; init; }
     private uint _newWidth,
         _newHeight;
 
@@ -252,10 +259,11 @@ public class BaseWindow : IDisposable
     public void Dispose()
     {
         MainThread.Interrupt();
-        RendererClass=null;
+        RendererClass = null;
         UpdateThread.Interrupt();
         commandList.Dispose();
         TargetWindow.Close();
         Root.Dispose();
+        Resource.Dispose();
     }
 }
