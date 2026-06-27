@@ -90,15 +90,21 @@ public class ResourceManager : IDisposable
                 ulong Time = (ulong)sw.ElapsedMilliseconds - rsi.LastGetTime;
                 if (Time > 120000 || Time > rsi.NumGet * 300)
                 {
+                    rsi.LastGetTime = (ulong)sw.ElapsedMilliseconds;
                     Resources[i].Release();
+                    if (Resources[i].IsLoaded)
+                        rsi.LastGetTime += 1000 * 30;
                 }
                 else
                 {
                     rsi.NumGet = (ulong)(rsi.NumGet / 1.1);
-                    Rs[i] = rsi;
                 }
+                Rs[i] = rsi;
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Log.Error($" [ResourceManager]Release faild:{ex}");
+            }
         }
     }
 

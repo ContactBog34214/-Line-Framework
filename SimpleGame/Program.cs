@@ -2,8 +2,8 @@
 using System.Numerics;
 using System.Reflection;
 using Line.Framework;
-using Line.Framework.Audio;
 using Line.Framework.Graphics;
+using Line.Framework.Resource.Audio;
 using Line.Framework.Resource.Graphic;
 using Line.Framework.UI.DefaultWidget;
 using Veldrid;
@@ -20,11 +20,18 @@ foreach (var name in names)
 
 //新建窗口
 BaseWindow a = new BaseWindow(Backend: GraphicsBackend.OpenGL);
-a.FramePerSecond = 10000;
-a.UpdatePerSecond = 1000;
+a.FramePerSecond = 60;
+a.UpdatePerSecond = 10000;
 
-//初始化音频
-var audio = new AudioManager();
+//音频
+a.Audio.Create("MainTrack",assembly.GetManifestResourceStream("SimpleGame.assets.The Decisive Hour.mp3"));
+var Audio=a.Resource.GetResource("MainTrack") as IAudioController;
+
+Audio.Play();
+Audio.Speed=1f;
+
+
+Audio.Volume=0.3f;
 
 //正方形底
 var rect = new UIButton();
@@ -49,7 +56,7 @@ icon.TextureId = "SimpleGame.assets.-L-F.png";
 icon.Z = 1;
 
 //文字
-var fs = assembly.GetManifestResourceStream("SimpleGame.assets.Font.ttf");
+var fs = assembly.GetManifestResourceStream("SimpleGame.assets.GenJyuuGothic-Normal-2.ttf");
 a.Resource.Create("Font", "Font.SN Pro", fs);
 var f = a.Resource.GetResource("Font.SN Pro") as Font;
 f?.Size = 100;
@@ -57,16 +64,16 @@ var text = new UIText(a.Resource);
 text.parent = a.Root;
 text.Position = new(new(0, 200), new(0.5f, 0));
 text.anchor = new(0.5f, 0.5f);
-text.Text = "Welcome To -Line-Framework\nIt's just a simple Game Framework"; //Welcome To -Line-Framework\nIt's just a simple Game Framework
+text.Text = "Welcome To -Line-Framework\nIt's just a simple Game Framework\n思源柔黑牛逼"; //Welcome To -Line-Framework\nIt's just a simple Game Framework
 text.Size = new(new(500, 100), new());
 text.Z = 20;
-text.XAlignment = Alignment.Left;
+text.XAlignment = Alignment.Center;
 text.YAlignment = Alignment.Right;
 text.FontId = "Font.SN Pro";
 text.FontScale = 1f;
 
 //text.Text="Welcome";
-text.Size = new(text.GetTextSize(text.Text) / new Vector2(1f, 0.8f), new());
+text.Size = new(text.GetTextSize(text.Text) / new Vector2(1f, 1f), new());
 text.color = new(1, 1, 1, 1);
 
 //可视化区域
@@ -74,7 +81,7 @@ var textBox = new UIBox();
 textBox.parent = text;
 textBox.Position = new(new(0, 0), new(0, 0));
 textBox.Size = new(new(), new(1, 1));
-textBox.color = new(1, 1, 1, 0.2f);
+textBox.color = new(1, 1, 1, 0.1f);
 
 //调试性息
 var Per = new UIBox();
@@ -91,10 +98,11 @@ a.Resource.Create("Font", "Font.CascadiaMono", fs1);
 var f1 = a.Resource.GetResource("Font.CascadiaMono") as Font;
 f1?.Size = 80;
 var PerT = new UIText(a.Resource);
-PerT.anchor = new(0.5f, 0.5f);
-PerT.Position = new(new(), new(0.5f, 0.5f));
+PerT.anchor = new(0, 0);
+PerT.Position = new(new(), new(0, 0));
 PerT.Size = new(new(), new(1, 1));
 PerT.XAlignment = Alignment.Center;
+PerT.YAlignment = Alignment.Right;
 PerT.color = new(0, 1, 0, 1);
 PerT.parent = Per;
 PerT.Text = $"0FPS";
@@ -113,24 +121,39 @@ a.OnUpdate += (o, p) =>
     rect.rotation = r;
     icon.rotation = r;
     updD = p.delay;
+    if (a.TargetWindow.Focused)
+    {
+        a.FramePerSecond = 1000;
+    }
+    else
+    {
+        a.FramePerSecond = 10;
+    }
+};
+
+a.OnUpdate += (o, p) =>
+{
+    updD=p.delay;
 };
 
 Stopwatch updateTime = new();
 updateTime.Start();
 
+double Fr = 0;
+
 a.OnRender += (o, p) =>
 {
-    if (updateTime.ElapsedMilliseconds >= 1)
-    {
-        updateTime.Reset();
-        updateTime.Start();
-        PerT.Text = $"{(uint)(1000f / p.delay) / 1f} FPS";
-        Per.Size = new(PerT.GetTextSize(PerT.Text) / new Vector2(1, 1), new());
-    }
+    int f=(int)(1000/p.delay);
+    Fr += (f - Fr) / 40;
+
+    PerT.Text = $"{(uint)Fr} FPS";
+    Per.Size = new(PerT.GetTextSize(PerT.Text) / new Vector2(1, 1), new());
 };
 
-for (int i = 0; i < 1000; i++)
+/*
+for (int i = 0; i < 2000; i++)
 {
     var tmp = new UIBox();
     tmp.parent = a.Root;
 }
+*/
