@@ -24,11 +24,17 @@ a.FramePerSecond = 60;
 a.UpdatePerSecond = 10000;
 
 //音频
-a.Audio.Create("MainTrack",assembly.GetManifestResourceStream("SimpleGame.assets.The Decisive Hour.mp3"));
-var Audio=a.Resource.GetResource("MainTrack") as IAudioController;
-
+a.Audio.Create("MainTrack",assembly.GetManifestResourceStream("SimpleGame.assets.Example.mp3"));
+var Audio=a.Resource.GetResource("MainTrack") as AudioResource;
+var A=Audio.IsLoaded;
+Console.WriteLine(A);
 Audio.Play();
-Audio.Speed=1f;
+Audio.SetNaturalSpeed(1.2f);
+var l=TAudio.Device.GetAllDevices();
+for(int i = 0; i < l.Count; i++)
+{
+    Log.Debug($"{i}:{l[i].Name}");
+}
 
 
 Audio.Volume=0.3f;

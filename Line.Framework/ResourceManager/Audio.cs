@@ -11,6 +11,9 @@ using Line.Framework.Resource;
 
 namespace Line.Framework.Resource.Audio
 {
+    /// <summary>
+    /// 音频控制器接口（对应单个音频资源）
+    /// </summary>
     public interface IAudioController
     {
         void Play();
@@ -32,23 +35,61 @@ namespace Line.Framework.Resource.Audio
         bool IsLoaded { get; }
     }
 
+    /// <summary>
+    /// Bass 全局管理器（支持多设备初始化）
+    /// </summary>
     internal static class BassManager
     {
         private static readonly object _lock = new object();
         private static bool _initialized = false;
-        private static int _currentDevice = -1;
+        private static readonly HashSet<int> _initializedDevices = new HashSet<int>(); // 已初始化的设备索引
         private static readonly List<WeakReference<TAudio>> _audioInstances = new();
 
+        /// <summary>
+        /// 初始化默认设备（索引 -1）
+        /// </summary>
         public static void Init()
         {
             lock (_lock)
             {
                 if (_initialized) return;
                 if (!Bass.Init())
-                    throw new InvalidOperationException($"Bass 初始化失败，错误码: {Bass.LastError}");
-                _currentDevice = -1;
+                    throw new InvalidOperationException($"Bass 默认设备初始化失败，错误码: {Bass.LastError}");
+                _initializedDevices.Add(-1);
                 _initialized = true;
-                Log.Debug("[BassManager] Bass 初始化成功");
+                Log.Debug("[BassManager] Bass 默认设备初始化成功");
+            }
+        }
+
+        /// <summary>
+        /// 确保指定设备已初始化
+        /// </summary>
+        public static void EnsureDeviceInitialized(int deviceIndex)
+        {
+            lock (_lock)
+            {
+                if (_initializedDevices.Contains(deviceIndex))
+                    return;
+
+                // 如果设备索引不是 -1，需要单独初始化
+                if (deviceIndex == -1)
+                {
+                    // 默认设备应该在 Init() 中已初始化
+                    if (!_initialized)
+                        Init();
+                    return;
+                }
+
+                // 检查设备是否存在
+                if (!Bass.GetDeviceInfo(deviceIndex, out var info) || !info.IsEnabled)
+                    throw new InvalidOperationException($"设备 {deviceIndex} 不存在或不可用");
+
+                // 尝试初始化该设备
+                if (!Bass.Init(deviceIndex))
+                    throw new InvalidOperationException($"初始化设备 {deviceIndex} 失败，错误码: {Bass.LastError}");
+
+                _initializedDevices.Add(deviceIndex);
+                Log.Debug($"[BassManager] 设备 {deviceIndex} 初始化成功");
             }
         }
 
@@ -73,39 +114,9 @@ namespace Line.Framework.Resource.Audio
             }
         }
 
-        public static void SwitchDevice(int deviceIndex)
-        {
-            lock (_lock)
-            {
-                if (!_initialized) throw new InvalidOperationException("Bass 未初始化");
-                if (deviceIndex == _currentDevice) return;
-
-                Log.Info($"[BassManager] 切换设备从 {_currentDevice} 到 {deviceIndex}");
-
-                var instances = new List<TAudio>();
-                _audioInstances.RemoveAll(wr => !wr.TryGetTarget(out _));
-                foreach (var wr in _audioInstances)
-                    if (wr.TryGetTarget(out var inst))
-                        instances.Add(inst);
-
-                foreach (var inst in instances)
-                    inst.SaveStateAndRelease();
-
-                Bass.Free();
-
-                if (!Bass.Init(deviceIndex))
-                    throw new InvalidOperationException($"Bass 重新初始化失败（设备 {deviceIndex}），错误码: {Bass.LastError}");
-                _currentDevice = deviceIndex;
-
-                foreach (var inst in instances)
-                    inst.RestoreStateAndLoad();
-
-                Log.Info("[BassManager] 设备切换完成");
-            }
-        }
-
-        public static int GetCurrentDevice() => Bass.CurrentDevice;
-
+        /// <summary>
+        /// 释放 Bass（在所有 TAudio 实例释放后调用）
+        /// </summary>
         public static void Free()
         {
             lock (_lock)
@@ -121,48 +132,65 @@ namespace Line.Framework.Resource.Audio
 
                 _audioInstances.Clear();
                 Bass.Free();
+                _initializedDevices.Clear();
                 _initialized = false;
                 Log.Debug("[BassManager] Bass 已释放");
             }
         }
     }
 
+    /// <summary>
+    /// 音频设备查询辅助
+    /// </summary>
     public static class AudioDevices
     {
         public static List<DeviceInfo> GetAllDevices()
         {
             var devices = new List<DeviceInfo>();
-            for (int i = 1; ; i++)
+            if (Bass.GetDeviceInfo(-1, out var defaultInfo))
+                devices.Add(defaultInfo);
+            for (int i = 0; ; i++)
             {
                 if (Bass.GetDeviceInfo(i, out var info))
-                    devices.Add(info);
+                {
+                    if (i != -1)
+                        devices.Add(info);
+                }
                 else
                     break;
             }
             return devices;
         }
 
-        public static DeviceInfo? GetDeviceInfo(int deviceIndex)
+        public static DeviceInfo GetDeviceInfo(int deviceIndex)
         {
-            if (deviceIndex <= 0) return null;
             if (Bass.GetDeviceInfo(deviceIndex, out var info))
                 return info;
-            return null;
+            return default;
         }
     }
 
+    /// <summary>
+    /// 音频资源类型，管理一组音频资源并提供全局属性和独立设备
+    /// </summary>
     public class TAudio : ResourceType, IDisposable
     {
         private readonly Dictionary<string, AudioResource> _resources = new();
         private readonly object _lock = new object();
         private float _masterVolume = 1.0f;
+        private float _masterSpeed = 1.0f;
+        private float _masterPitch = 0f;
+        private int _deviceIndex = -1;
         private bool _disposed = false;
 
-        public TAudio(ResourceManager manager) : base(manager)
+        public TAudio(ResourceManager manager, int deviceIndex = -1) : base(manager)
         {
             BassManager.Init();
             BassManager.Register(this);
-            Log.Debug("[TAudio] 实例已创建");
+            _deviceIndex = deviceIndex;
+            // 确保初始设备已初始化
+            BassManager.EnsureDeviceInitialized(_deviceIndex);
+            Log.Debug($"[TAudio] 实例已创建，设备: {_deviceIndex}");
         }
 
         public float MasterVolume
@@ -174,7 +202,53 @@ namespace Line.Framework.Resource.Audio
                 {
                     _masterVolume = Math.Clamp(value, 0f, 1f);
                     foreach (var res in _resources.Values)
-                        res.ApplyVolume();
+                        res.ApplyAllAttributes();
+                }
+            }
+        }
+
+        public float MasterSpeed
+        {
+            get => _masterSpeed;
+            set
+            {
+                lock (_lock)
+                {
+                    _masterSpeed = value > 0 ? value : 0.1f;
+                    foreach (var res in _resources.Values)
+                        res.ApplyAllAttributes();
+                }
+            }
+        }
+
+        public float MasterPitch
+        {
+            get => _masterPitch;
+            set
+            {
+                lock (_lock)
+                {
+                    _masterPitch = value;
+                    foreach (var res in _resources.Values)
+                        res.ApplyAllAttributes();
+                }
+            }
+        }
+
+        public int DeviceIndex
+        {
+            get => _deviceIndex;
+            set
+            {
+                lock (_lock)
+                {
+                    if (_deviceIndex == value) return;
+                    // 确保目标设备已初始化
+                    BassManager.EnsureDeviceInitialized(value);
+                    _deviceIndex = value;
+                    foreach (var res in _resources.Values)
+                        res.ApplyDevice();
+                    Log.Debug($"[TAudio] 切换设备至 {_deviceIndex}");
                 }
             }
         }
@@ -215,37 +289,9 @@ namespace Line.Framework.Resource.Audio
             {
                 foreach (var res in _resources.Values)
                     res.Load();
-                Log.Debug("[TAudio] 重新加载所有资源");
-            }
-        }
-
-        internal Dictionary<AudioResource, bool> CaptureAllStates()
-        {
-            lock (_lock)
-            {
-                var dict = new Dictionary<AudioResource, bool>();
                 foreach (var res in _resources.Values)
-                    dict[res] = res.IsPlaying;
-                return dict;
-            }
-        }
-
-        internal void RestorePlayStates(Dictionary<AudioResource, bool> states)
-        {
-            lock (_lock)
-            {
-                foreach (var kvp in states)
-                {
-                    var res = kvp.Key;
-                    bool wasPlaying = kvp.Value;
-                    if (wasPlaying && res.IsLoaded)
-                    {
-                        int handle = (int)res.GetHandle();
-                        if (handle != 0)
-                            Bass.ChannelPlay(handle);
-                    }
-                }
-                Log.Debug("[TAudio] 恢复播放状态");
+                    res.ApplyAllAttributes();
+                Log.Debug("[TAudio] 重新加载所有资源并应用属性");
             }
         }
 
@@ -263,14 +309,24 @@ namespace Line.Framework.Resource.Audio
             }
             GC.SuppressFinalize(this);
         }
+
+        public static class Device
+        {
+            public static List<DeviceInfo> GetAllDevices() => AudioDevices.GetAllDevices();
+            public static DeviceInfo GetDeviceInfo(int deviceIndex) => AudioDevices.GetDeviceInfo(deviceIndex);
+            public static void EnsureInit() => BassManager.Init();
+        }
     }
 
+    /// <summary>
+    /// 单个音频资源
+    /// </summary>
     public class AudioResource : IResource, IAudioController
     {
         private readonly TAudio _owner;
         private string _tempFilePath;
-        private int _sourceStream;   // 解码源流（BassFlags.Decode）
-        private int _tempoStream;    // Tempo 流（可播放，不加 Decode）
+        private int _sourceStream;
+        private int _tempoStream;
         private long _savedPosition = 0;
         private float _volume = 1.0f;
         private float _speed = 1.0f;
@@ -299,7 +355,7 @@ namespace Line.Framework.Resource.Audio
                 lock (_lock)
                 {
                     _volume = Math.Clamp(value, 0f, 1f);
-                    if (_loaded) ApplyVolume();
+                    if (_loaded) ApplyAllAttributes();
                 }
             }
         }
@@ -311,14 +367,8 @@ namespace Line.Framework.Resource.Audio
             {
                 lock (_lock)
                 {
-                    float newSpeed = Math.Clamp(value, 0.1f, 10.0f);
-                    if (Math.Abs(_speed - newSpeed) < 0.001f) return;
-                    _speed = newSpeed;
-                    if (_loaded && _tempoStream != 0)
-                    {
-                        if (!Bass.ChannelSetAttribute(_tempoStream, ChannelAttribute.Tempo, _speed))
-                            Log.Warning($"[AudioResource] 设置速度失败，错误码: {Bass.LastError}");
-                    }
+                    _speed = value > 0 ? value : 0.1f;
+                    if (_loaded) ApplyAllAttributes();
                 }
             }
         }
@@ -330,14 +380,8 @@ namespace Line.Framework.Resource.Audio
             {
                 lock (_lock)
                 {
-                    float newPitch = Math.Clamp(value, -12f, 12f);
-                    if (Math.Abs(_pitch - newPitch) < 0.001f) return;
-                    _pitch = newPitch;
-                    if (_loaded && _tempoStream != 0)
-                    {
-                        if (!Bass.ChannelSetAttribute(_tempoStream, ChannelAttribute.Pitch, _pitch))
-                            Log.Warning($"[AudioResource] 设置音高失败，错误码: {Bass.LastError}");
-                    }
+                    _pitch = value;
+                    if (_loaded) ApplyAllAttributes();
                 }
             }
         }
@@ -459,8 +503,6 @@ namespace Line.Framework.Resource.Audio
             _tempFilePath = Path.GetTempFileName() + ext;
             using (var file = File.Create(_tempFilePath))
                 inputStream.CopyTo(file);
-
-            //Log.Debug($"[AudioResource] 创建临时文件: {_tempFilePath}");
         }
 
         public void Play()
@@ -506,7 +548,6 @@ namespace Line.Framework.Resource.Audio
                 if (string.IsNullOrEmpty(_tempFilePath) || !File.Exists(_tempFilePath))
                     throw new InvalidOperationException("临时文件不存在");
 
-                // 1. 创建解码源流（必须加 BassFlags.Decode）
                 _sourceStream = Bass.CreateStream(_tempFilePath, 0, 0, BassFlags.Decode);
                 if (_sourceStream == 0)
                 {
@@ -514,7 +555,6 @@ namespace Line.Framework.Resource.Audio
                     throw new InvalidOperationException($"创建解码流失败，错误码: {Bass.LastError}");
                 }
 
-                // 2. 创建 Tempo 流（不加 Decode，不加 FxFreeSource，独立管理）
                 _tempoStream = BassFx.TempoCreate(_sourceStream, BassFlags.Default);
                 if (_tempoStream == 0)
                 {
@@ -524,17 +564,14 @@ namespace Line.Framework.Resource.Audio
                     throw new InvalidOperationException($"创建 Tempo 流失败，错误码: {Bass.LastError}");
                 }
 
-                // 3. 应用当前速度/音高
-                if (!Bass.ChannelSetAttribute(_tempoStream, ChannelAttribute.Tempo, _speed))
-                    Log.Warning($"[AudioResource] 初始设置速度失败，错误码: {Bass.LastError}");
-                if (!Bass.ChannelSetAttribute(_tempoStream, ChannelAttribute.Pitch, _pitch))
-                    Log.Warning($"[AudioResource] 初始设置音高失败，错误码: {Bass.LastError}");
-
-                // 4. 恢复位置
                 if (_savedPosition > 0)
                     Bass.ChannelSetPosition(_tempoStream, _savedPosition);
 
-                ApplyVolume();
+                // 应用设备
+                ApplyDevice();
+
+                ApplyAllAttributes();
+
                 _loaded = true;
                 Log.Debug($"[AudioResource] 加载成功，Tempo 句柄: {_tempoStream}");
             }
@@ -550,20 +587,17 @@ namespace Line.Framework.Resource.Audio
             lock (_lock)
             {
                 if (!_loaded) return;
-                if (IsPlaying) return; // 播放中不释放
+                if (IsPlaying) return;
 
-                // 保存位置
                 long pos = Bass.ChannelGetPosition(_tempoStream);
                 if (pos >= 0)
                     _savedPosition = pos;
 
-                // 释放 Tempo 流（不释放源流）
                 if (_tempoStream != 0)
                 {
                     Bass.StreamFree(_tempoStream);
                     _tempoStream = 0;
                 }
-                // 释放源流
                 if (_sourceStream != 0)
                 {
                     Bass.StreamFree(_sourceStream);
@@ -578,21 +612,23 @@ namespace Line.Framework.Resource.Audio
         {
             lock (_lock)
             {
-                if (!_loaded) return;
-                long pos = Bass.ChannelGetPosition(_tempoStream);
-                if (pos >= 0) _savedPosition = pos;
+                if (_loaded)
+                {
+                    long pos = Bass.ChannelGetPosition(_tempoStream);
+                    if (pos >= 0) _savedPosition = pos;
 
-                if (_tempoStream != 0)
-                {
-                    Bass.StreamFree(_tempoStream);
-                    _tempoStream = 0;
+                    if (_tempoStream != 0)
+                    {
+                        Bass.StreamFree(_tempoStream);
+                        _tempoStream = 0;
+                    }
+                    if (_sourceStream != 0)
+                    {
+                        Bass.StreamFree(_sourceStream);
+                        _sourceStream = 0;
+                    }
+                    _loaded = false;
                 }
-                if (_sourceStream != 0)
-                {
-                    Bass.StreamFree(_sourceStream);
-                    _sourceStream = 0;
-                }
-                _loaded = false;
 
                 if (!string.IsNullOrEmpty(_tempFilePath) && File.Exists(_tempFilePath))
                 {
@@ -605,12 +641,67 @@ namespace Line.Framework.Resource.Audio
             GC.SuppressFinalize(this);
         }
 
-        internal void ApplyVolume()
+        /// <summary>
+        /// 应用设备（确保设备已初始化，然后设置通道设备）
+        /// </summary>
+        internal void ApplyDevice()
         {
             if (!_loaded || _tempoStream == 0) return;
+            int targetDevice = _owner.DeviceIndex;
+            // 确保目标设备已初始化（BassManager 会处理）
+            BassManager.EnsureDeviceInitialized(targetDevice);
+            if (!Bass.ChannelSetDevice(_tempoStream, targetDevice))
+                Log.Warning($"[AudioResource] 设置设备 {targetDevice} 失败，错误码: {Bass.LastError}");
+        }
+
+        /// <summary>
+        /// 应用所有属性（音量、速度、音高）
+        /// </summary>
+        internal void ApplyAllAttributes()
+        {
+            if (!_loaded || _tempoStream == 0) return;
+
             float finalVol = _owner.MasterVolume * _volume;
             Bass.ChannelSetAttribute(_tempoStream, ChannelAttribute.Volume, finalVol);
+
+            float finalSpeed = _owner.MasterSpeed * _speed;
+            float tempoPercent = (finalSpeed - 1f) * 100f;
+            Bass.ChannelSetAttribute(_tempoStream, ChannelAttribute.Tempo, tempoPercent);
+
+            float finalPitch = _owner.MasterPitch + _pitch;
+            Bass.ChannelSetAttribute(_tempoStream, ChannelAttribute.Pitch, finalPitch);
+
+            // 确保设备设置（可能在属性变化后设备被重置，但一般无需重复调用）
+            // 但为了保证一致性，仍调用一次（但可能影响性能，可选择性调用）
+            // 此处不重复调用 ApplyDevice，因为设备一般不随属性变化。
         }
+        // ----- 自然倍速辅助（静态方法） -----
+/// <summary>
+/// 根据速度倍率计算自然音高（半音），公式：Pitch = 12 * log2(Speed)
+/// </summary>
+public static float SpeedToPitch(float speed)
+{
+    if (speed <= 0) return 0;
+    return 12f * (float)Math.Log2(speed);
+}
+
+/// <summary>
+/// 根据音高（半音）反推速度倍率，公式：Speed = 2^(Pitch/12)
+/// </summary>
+public static float PitchToSpeed(float pitch)
+{
+    return (float)Math.Pow(2.0, pitch / 12.0);
+}
+
+/// <summary>
+/// 实例方法：设置自然倍速，同时调整音高到对应的自然音高
+/// </summary>
+public void SetNaturalSpeed(float speed)
+{
+    if (speed <= 0) speed = 0.1f; // 避免无效值
+    this.Speed = speed;
+    this.Pitch = SpeedToPitch(speed);
+}
     }
 
     public static class ResourceManagerAudioExtensions
