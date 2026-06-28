@@ -5,6 +5,7 @@ using Line.Framework;
 using Line.Framework.Graphics;
 using Line.Framework.Resource.Audio;
 using Line.Framework.Resource.Graphic;
+using Line.Framework.UI;
 using Line.Framework.UI.DefaultWidget;
 using Veldrid;
 
@@ -45,9 +46,9 @@ rect.parent = a.Root;
 rect.Position = new(new(), new(0.5f, 0.5f));
 rect.Size = new(new(350, 350), new());
 rect.color = new(0, 42f / 255f, 125f / 255f, 1);
-rect.rotation = 0;
+rect.Rotation = 0;
 rect.anchor = new(0.5f, 0.5f);
-rect.Z = -1;
+rect.Z = 5;
 
 //图标
 var icon = new UIImage(a.Resource);
@@ -82,13 +83,6 @@ text.FontScale = 1f;
 text.Size = new(text.GetTextSize(text.Text) / new Vector2(1f, 1f), new());
 text.color = new(1, 1, 1, 1);
 
-//可视化区域
-var textBox = new UIBox();
-textBox.parent = text;
-textBox.Position = new(new(0, 0), new(0, 0));
-textBox.Size = new(new(), new(1, 1));
-textBox.color = new(1, 1, 1, 0.1f);
-
 //调试性息
 var Per = new UIBox();
 Per.parent = a.Root;
@@ -96,7 +90,7 @@ Per.color = new(1, 1, 1, 0.5f);
 Per.anchor = new(1, 0);
 Per.Position = new(new(-100, -100), new(1, 1));
 Per.Size = new(new(150, 50), new());
-Per.Z = 65536;
+Per.Z = 0;
 
 //性息文本
 var fs1 = assembly.GetManifestResourceStream("SimpleGame.assets.CascadiaMono.ttf");
@@ -124,12 +118,12 @@ a.OnUpdate += (o, p) =>
 {
     var r = sw.ElapsedMilliseconds / 1000f % 3f;
     r = r / 3f * 360f;
-    rect.rotation = r;
-    icon.rotation = r;
+    rect.Rotation = r;
+    icon.Rotation = r;
     updD = p.delay;
     if (a.TargetWindow.Focused)
     {
-        a.FramePerSecond = 1000;
+        a.FramePerSecond = 6000;
     }
     else
     {
@@ -157,7 +151,7 @@ a.OnRender += (o, p) =>
 };
 
 /*
-for (int i = 0; i < 2000; i++)
+for (int i = 0; i < 20000; i++)
 {
     var tmp = new UIBox();
     tmp.parent = a.Root;

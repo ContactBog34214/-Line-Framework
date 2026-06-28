@@ -146,6 +146,7 @@ public class BaseWindow : IDisposable
         Input = new(TargetWindow);
         MainThread = new Thread(UpdateWindow);
         MainThread.Start();
+        MainThread.Name="Renderer";
     }
 
     public TAudio Audio{get;private set;}
