@@ -13,11 +13,19 @@ public class UIImage : UIWidget
     public RgbaFloat Color { get; set; } = new(1, 1, 1, 1);
     public string TextureId { get; set; }
     internal ResourceManager Manager;
+    Action<RendererContextArgs> RenderAction;
+
+    public override void RendererContext(RendererContextArgs args)
+    {
+        if (RenderAction == null)
+            return;
+        RenderAction(args);
+    }
 
     public UIImage(ResourceManager manager)
     {
         Manager = manager;
-        RendererContext = (RendererContextArgs args) =>
+        RenderAction = (RendererContextArgs args) =>
         {
             var s = GetSizeOnScreen();
             if (s.X <= 0 && s.Y <= 0)

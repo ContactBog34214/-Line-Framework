@@ -1,19 +1,9 @@
 using System.Collections.Concurrent;
-using System.Diagnostics;
-using System.IO.Compression;
 using System.Numerics;
-using System.Security.Cryptography;
 using System.Text;
 using Line.Framework.UI;
-using SharpText.Core;
-using TagLib.Ape;
 using Veldrid;
 using Veldrid.SPIRV;
-using Veldrid.Utilities;
-using Vortice.Direct3D11;
-using Vortice.Direct3D11.Debug;
-using Vortice.DXCore;
-using Vulkan.Wayland;
 using BufferDescription = Veldrid.BufferDescription;
 using Rectangle = System.Drawing.RectangleF;
 
@@ -221,25 +211,23 @@ void main()
 
         void Collect(UIWidget node)
         {
+            if (node == null)
+                return;
             if (!node.visible)
                 return;
             node.oz = i++;
             widgets.Add(node);
 
-            var sortedChildren = node
-                .children.ToArray()
-                .OfType<UIWidget>()
-                .Where(c => c.visible)
-                .OrderBy(c => c.Z);
+            var sortedChildren = node.children.ToArray().OrderBy(c => c.Z);
 
             foreach (var i in sortedChildren)
             {
-                Collect(i);
+                Collect(i as UIWidget);
             }
         }
 
         Collect(root);
-        return [.. widgets.OrderBy(c => c.oz)];
+        return widgets;
     }
 
     public Action<BaseWindow, UIDrawCollector> UIRenderer { get; }
@@ -269,6 +257,7 @@ void main()
                         try
                         {
                             var t = target.parent as UIWidget;
+                            if(t==null)return;
                             target.s = new(
                                 t.Size.offset.X + t.Size.scale.X * t.s.X,
                                 t.Size.offset.Y + t.Size.scale.Y * t.s.Y

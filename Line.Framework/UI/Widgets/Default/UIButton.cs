@@ -18,6 +18,14 @@ public class UIButton : UIWidget
     public bool clicking { get; private set; } = false;
     public bool enabled { get; set; } = true;
     private InputManager input;
+    Action<RendererContextArgs> RenderAction;
+
+    public override void RendererContext(RendererContextArgs args)
+    {
+        if (RenderAction == null)
+            return;
+        RenderAction(args);
+    }
 
     public UIButton()
     {
@@ -45,7 +53,7 @@ public class UIButton : UIWidget
             }
         };
         UpdateRoot();
-        RendererContext = (RendererContextArgs args) =>
+        RenderAction = (RendererContextArgs args) =>
         {
             var s = GetSizeOnScreen();
             if (s.X <= 0 && s.Y <= 0)
@@ -98,22 +106,12 @@ public class UIButton : UIWidget
         }
     }
 
+    public override void SetParent(UINode value)
+    {
+        base.SetParent(value);
+        UpdateRoot();
+    }
+
     Action<MouseButton> Press { get; init; }
     Action<MouseButton> Release { get; init; }
-
-    public static UINode FindRoot(UINode widget)
-    {
-        if (widget.parent != null)
-        {
-            return FindRoot(widget.parent);
-        }
-        else if (widget is UIScreen)
-        {
-            return widget as UINode;
-        }
-        else
-        {
-            return null;
-        }
-    }
 }

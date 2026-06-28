@@ -1,10 +1,5 @@
-using System.ComponentModel;
-using System.Diagnostics;
-using System.Drawing;
 using System.Numerics;
-using FreeTypeSharp;
 using Line.Framework.Graphics;
-using TagLib.Riff;
 using Veldrid;
 using Rectangle = System.Drawing.RectangleF;
 

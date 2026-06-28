@@ -32,6 +32,12 @@ public sealed class UIText : UIWidget
 
     private Dictionary<char, FontTexture> _charCache = new();
 
+    public override void RendererContext(RendererContextArgs args)
+    {
+        if(RenderAction==null)return;
+        RenderAction(args);
+    }
+
     void SetText(string s)
     {
         if (s == _text)
@@ -44,11 +50,12 @@ public sealed class UIText : UIWidget
         _charCache.Clear();
     }
 
+    Action<RendererContextArgs> RenderAction;
     public UIText(ResourceManager manager)
     {
         rm = manager;
 
-        RendererContext = (args) =>
+        RenderAction = (args) =>
         {
             var originalOut = Console.Out;
             try
@@ -70,19 +77,19 @@ public sealed class UIText : UIWidget
                 Vector2 baselinePos = new Vector2(0, 0);
                 var s = _text.Split('\n');
 
-                baselinePos.Y = (float)args.height - (s.Length - 1) * lineHeight;
+                baselinePos.Y = -font.Ascender;
                 if (YAlignment == Alignment.Center)
-                    baselinePos.Y -= ((float)args.height - s.Length * lineHeight) / 2;
+                    baselinePos.Y += ((float)args.height - s.Length * lineHeight) / 2;
                 if (YAlignment == Alignment.Right)
-                    baselinePos.Y += ((float)args.height - (s.Length + 1) * lineHeight) / 2;
+                    baselinePos.Y += ((float)args.height - (s.Length) * lineHeight);
                 void ResetOffset(string str)
                 {
                     if (XAlignment == Alignment.Left)
                         baselinePos.X = 0;
                     if (XAlignment == Alignment.Center)
-                        baselinePos.X = ((float)args.width - GetTextSize(str).X * 1) * FontScale;
+                        baselinePos.X = ((float)args.width - GetTextSize(str).X) * FontScale / 2;
                     if (XAlignment == Alignment.Right)
-                        baselinePos.X = ((float)args.width - GetTextSize(str).X) * FontScale * 2;
+                        baselinePos.X = ((float)args.width - GetTextSize(str).X) * FontScale;
                 }
                 uint i = 0;
                 ResetOffset(s[i]);

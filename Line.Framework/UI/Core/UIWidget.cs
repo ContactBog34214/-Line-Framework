@@ -33,8 +33,7 @@ public abstract class UIWidget : UINode
         return new(s.X * Size.scale.X + Size.offset.X, s.Y * Size.scale.Y + Size.offset.Y);
     }
 
-    public Action<RendererContextArgs> RendererContext;
-    public float Z { get; set; } = 0;
+    public virtual void RendererContext(RendererContextArgs args){}
     public float oz = 0;
     public float rotation { get; set; } = 0;
     public float Opacity { get; set; } = 1;
@@ -61,7 +60,7 @@ public abstract class UIWidget : UINode
         return tmp;
     }
 
-    public bool HitTest(Vector2 mousePixel)
+    public virtual bool HitTest(Vector2 mousePixel)
     {
         var tmp = MousePosition(mousePixel);
         var S = GetSizeOnScreen();
