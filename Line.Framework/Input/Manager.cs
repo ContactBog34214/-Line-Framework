@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Numerics;
 using Veldrid;
@@ -9,9 +10,9 @@ namespace Line.Framework.Input
     public class InputManager
     {
         private readonly Sdl2Window _window;
-        private readonly Dictionary<Key, bool> _keyStates = new Dictionary<Key, bool>();
-        private readonly Dictionary<MouseButton, bool> _mouseStates =
-            new Dictionary<MouseButton, bool>();
+        private readonly ConcurrentDictionary<Key, bool> _keyStates = new ConcurrentDictionary<Key, bool>();
+        private readonly ConcurrentDictionary<MouseButton, bool> _mouseStates =
+            new ConcurrentDictionary<MouseButton, bool>();
 
         // 对外只读累计值（不重置）
         public Vector2 TotalMouseDelta { get; private set; } = Vector2.Zero;
