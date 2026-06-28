@@ -30,6 +30,11 @@ public class UIScreen : UIWidget
         Size = new Coord2 { scale = Vector2.Zero, offset = new Vector2(width, height) };
     }
 
+    public override bool HitTest(Vector2 mousePixel)
+    {
+        return visible;
+    }
+
     // 可选：提供屏幕尺寸属性供子控件进行百分比布局计算
     public int ScreenWidth => _screenWidth;
     public int ScreenHeight => _screenHeight;

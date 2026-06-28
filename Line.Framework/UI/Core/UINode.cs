@@ -1,6 +1,6 @@
 namespace Line.Framework.UI;
 
-public class UINode : IDisposable
+public abstract class UINode : IDisposable
 {
     public string name { get; set; }
 
@@ -9,17 +9,17 @@ public class UINode : IDisposable
     public UINode parent
     {
         get => _parent;
-        set => ParentSetter(value);
+        set => SetParent(value);
     }
 
     //对外的只读
-    private protected List<UINode> _children = [];
+    private protected  readonly List<UINode> _children = [];
     public List<UINode> children
     {
         get => _children;
     }
 
-    private void ParentSetter(UINode value)
+    public virtual void SetParent(UINode value)
     {
         if (value == _parent)
         {
@@ -51,7 +51,7 @@ public class UINode : IDisposable
         return tmp;
     }
 
-    public void Dispose()
+    public virtual void Dispose()
     {
         parent = null;
         //删除children
@@ -61,9 +61,39 @@ public class UINode : IDisposable
         {
             i.Dispose();
         }
-        _children = null;
         DisposeHook?.Invoke();
     }
 
     public Action DisposeHook;
+    public float Z { get; set; } = 0;
+    public UINode FindRoot()
+    {
+        if (this.parent != null)
+        {
+            return FindRoot(this.parent);
+        }
+        else if (this.parent is UIScreen)
+        {
+            return this.parent;
+        }
+        else
+        {
+            return null;
+        }
+    }
+    public static UINode FindRoot(UINode widget)
+    {
+        if (widget.parent != null)
+        {
+            return FindRoot(widget.parent);
+        }
+        else if (widget is UIScreen)
+        {
+            return widget;
+        }
+        else
+        {
+            return null;
+        }
+    }
 }

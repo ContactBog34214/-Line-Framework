@@ -33,14 +33,55 @@ public abstract class UIWidget : UINode
         return new(s.X * Size.scale.X + Size.offset.X, s.Y * Size.scale.Y + Size.offset.Y);
     }
 
-    public Action<RendererContextArgs> RendererContext;
-    public float Z { get; set; } = 0;
-    public float oz = 0;
-    public float rotation { get; set; } = 0;
+    public Vector2[] GetClipArea(Vector2 source)
+    {
+        var p = GetPositionOnScreen();
+        var s = GetSizeOnScreen();
+        Vector2[] vert =
+        [
+            new(-anchor.X * s.X, -anchor.Y * s.Y),
+            new(-anchor.X * s.X, (1 - anchor.Y) * s.Y),
+            new((1 - anchor.X) * s.X, (1 - anchor.Y) * s.Y),
+            new((1 - anchor.X) * s.X, -anchor.Y * s.Y),
+        ];
+
+        for (int i = 0; i < vert.Length; i++)
+        {
+            float cos = (float)Math.Cos(Rotation * Math.PI / 180f);
+            float sin = (float)Math.Sin(Rotation * Math.PI / 180f);
+
+            var target = vert[i];
+            //旋转
+            var pos = target;
+            target.X = pos.X * cos - pos.Y * sin;
+            target.Y = pos.Y * cos + pos.X * sin;
+
+            //缩放
+            target *= Scale;
+
+            //映射回前面
+            target += anchor * s;
+
+            //到绝对
+            target += p;
+
+            //跑回NDC
+            target.X = 2 * target.X / source.X - 1;
+            target.Y = 1 - 2 * target.Y / source.Y;
+            vert[i] = target;
+        }
+        return vert;
+    }
+
+    public virtual void RendererContext(RendererContextArgs args) { }
+
+    internal float oz = 0;
+    public float Rotation { get; set; } = 0;
     public float Opacity { get; set; } = 1;
-    public Vector2 s { get; set; } = new(0, 0);
-    public Vector2 p { get; set; } = new(0, 0);
-    public float o { get; set; } = 1;
+    internal Vector2 s { get; set; } = new(0, 0);
+    internal Vector2 p { get; set; } = new(0, 0);
+    internal float o { get; set; } = 1;
+    internal List<Vector2[]> ClipList=[];
     public Vector2 Scale { get; set; } = new(1, 1);
 
     public Vector2 MousePosition(Vector2 mousePixel)
@@ -51,7 +92,7 @@ public abstract class UIWidget : UINode
         var tmp = mousePixel - P - anchor * S;
 
         //旋转
-        double r = (double)rotation % 360d;
+        double r = (double)Rotation % 360d;
         r = 180d - r;
         double cos = Math.Cos(r * Math.PI / 180f);
         double sin = Math.Sin(r * Math.PI / 180f);
@@ -61,12 +102,27 @@ public abstract class UIWidget : UINode
         return tmp;
     }
 
-    public bool HitTest(Vector2 mousePixel)
+    public virtual bool HitTest(Vector2 mousePixel)
     {
         var tmp = MousePosition(mousePixel);
         var S = GetSizeOnScreen();
         var P = GetPositionOnScreen();
         return 0 <= tmp.X && 0 <= tmp.Y && tmp.X <= S.X && tmp.Y <= S.Y;
+    }
+
+    public static UIWidget FindWidgetPointTouched(UIWidget w,Vector2 Point)
+    {
+            UIWidget[] Children= w.children.OfType<UIWidget>().OrderBy(c => c.Z).ToArray();
+            for(int i = Children.Length;;)
+            {
+                i--;
+                if(i<0)break;
+                if (Children[i].HitTest(Point))
+                {
+                    return FindWidgetPointTouched(Children[i],Point);
+                }
+            }
+            return w;
     }
 }
 

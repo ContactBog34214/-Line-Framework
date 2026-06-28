@@ -1,19 +1,9 @@
 using System.Collections.Concurrent;
-using System.Diagnostics;
-using System.IO.Compression;
 using System.Numerics;
-using System.Security.Cryptography;
 using System.Text;
 using Line.Framework.UI;
-using SharpText.Core;
-using TagLib.Ape;
 using Veldrid;
 using Veldrid.SPIRV;
-using Veldrid.Utilities;
-using Vortice.Direct3D11;
-using Vortice.Direct3D11.Debug;
-using Vortice.DXCore;
-using Vulkan.Wayland;
 using BufferDescription = Veldrid.BufferDescription;
 using Rectangle = System.Drawing.RectangleF;
 
@@ -96,6 +86,7 @@ void main()
         public Texture Texture { get; set; }
         public ResourceSet ResourceSet { get; set; }
         public float Opacity { get; set; }
+        public List<Vector2[]> Clips { get; set; } = new();
 
         public Vertex(Vector2 p, RgbaFloat c, Coord2 u, Texture t, ResourceSet rs, float o)
         {
@@ -140,8 +131,8 @@ void main()
 
     VertexPositionColor[] GetVertices(VertexPositionColor[] vertex, Vector2 source, UIWidget s)
     {
-        float cos = (float)Math.Cos(s.rotation * Math.PI / 180f);
-        float sin = (float)Math.Sin(s.rotation * Math.PI / 180f);
+        float cos = (float)Math.Cos(s.Rotation * Math.PI / 180f);
+        float sin = (float)Math.Sin(s.Rotation * Math.PI / 180f);
         var tmp = vertex;
 
         for (var i = 0; i < tmp.Length; i++)
@@ -221,25 +212,23 @@ void main()
 
         void Collect(UIWidget node)
         {
+            if (node == null)
+                return;
             if (!node.visible)
                 return;
             node.oz = i++;
             widgets.Add(node);
 
-            var sortedChildren = node
-                .children.ToArray()
-                .OfType<UIWidget>()
-                .Where(c => c.visible)
-                .OrderBy(c => c.Z);
+            var sortedChildren = node.children.ToArray().OrderBy(c => c.Z);
 
             foreach (var i in sortedChildren)
             {
-                Collect(i);
+                Collect(i as UIWidget);
             }
         }
 
         Collect(root);
-        return [.. widgets.OrderBy(c => c.oz)];
+        return widgets;
     }
 
     public Action<BaseWindow, UIDrawCollector> UIRenderer { get; }
@@ -250,6 +239,9 @@ void main()
         CreatePipeline(gd);
         UIRenderer = async (BaseWindow window, UIDrawCollector collector) =>
         {
+            var gd = window.Dev;
+            var cl = window.commandList;
+            var screenSize = new Vector2(window.TargetWindow.Width, window.TargetWindow.Height);
             if (collector == null)
             {
                 collector = new();
@@ -259,16 +251,19 @@ void main()
             ws.AddRange(trees(window.Root));
 
             //各种同步然后请求渲染内容
-            foreach (var item in ws)
+            for (int i = ws.Count-1;i>0;i--)
             {
+                var item=ws[i];
                 if (item is UIWidget target && target.RendererContext != null) // 添加 null 检查
                 {
-                    async void syncer()
+                    void syncer()
                     {
                         //同步渲染区大小
                         try
                         {
                             var t = target.parent as UIWidget;
+                            if (t == null)
+                                return;
                             target.s = new(
                                 t.Size.offset.X + t.Size.scale.X * t.s.X,
                                 t.Size.offset.Y + t.Size.scale.Y * t.s.Y
@@ -315,6 +310,19 @@ void main()
                         {
                             target.o = target.Opacity;
                         }
+                        //同步剪切链
+                        try
+                        {
+                            target.ClipList.Clear();
+                            var t = target.parent as UIWidget;
+                            target.ClipList.AddRange(t.ClipList);
+                            if (t != null)
+                                target.ClipList.Add(t.GetClipArea(screenSize));
+                        }
+                        catch
+                        {
+                            target.ClipList.Clear();
+                        }
                     }
                     syncer();
                     var source = target.s;
@@ -336,9 +344,6 @@ void main()
                     );
                 }
             }
-            var gd = window.Dev;
-            var cl = window.commandList;
-            var screenSize = new Vector2(window.TargetWindow.Width, window.TargetWindow.Height);
 
             //开始正式渲染
             // 1. 确保 Pipeline 已创建
@@ -388,6 +393,9 @@ void main()
                                         _textureResourceSet,
                                         r.Source.o
                                     )
+                                    {
+                                        Clips = i.Source.ClipList,
+                                    }
                                 );
                             }
                         }
@@ -406,6 +414,9 @@ void main()
                                         t.TextureResourceSet,
                                         t.Source.o
                                     )
+                                    {
+                                        Clips = i.Source.ClipList,
+                                    }
                                 );
                             }
                         }
@@ -429,12 +440,85 @@ void main()
                                         c?.ResourceSet ?? _textureResourceSet,
                                         verts.Source.o
                                     )
+                                    {
+                                        Clips = i.Source.ClipList,
+                                    }
                                 );
                             }
                         }
                         if (tasks.Count != 0)
                         {
-                            values.Add(new((uint)idx, tasks.ToArray()));
+                            for (int v = 0; v < tasks.Count; v += 3)
+                            {
+                                if (v + 2 >= tasks.Count)
+                                    break;
+                                List<Vertex[]> tmp = [];
+                                VertexPositionColor[] VertToVPC(Vertex[] vertices)
+                                {
+                                    var ctmp = new List<VertexPositionColor> { };
+
+                                    for (int vr = 0; vr < vertices.Length; vr++)
+                                    {
+                                        var tg = vertices[vr];
+                                        ctmp.Add(
+                                            new()
+                                            {
+                                                Position = tg.Position,
+                                                UV = tg.Export().UV,
+                                                Color = tg.Color,
+                                            }
+                                        );
+                                    }
+                                    return ctmp.ToArray();
+                                }
+
+                                tmp.Add([tasks[v + 0], tasks[v + 1], tasks[v + 2]]);
+                                var st = tasks[v];
+                                for (int clip = 0; clip < st.Clips.Count; clip++)
+                                {
+                                    var p = st.Clips[clip];
+                                    VertexPositionColor[] quad =
+                                    [
+                                        new(p[0], RgbaFloat.White, new(0, 0)),
+                                        new(p[1], RgbaFloat.White, new(0, 0)),
+                                        new(p[2], RgbaFloat.White, new(0, 0)),
+                                        new(p[3], RgbaFloat.White, new(0, 0)),
+                                    ];
+                                    List<Vertex[]> tmp2 = [];
+                                    for (int ptr = 0; ptr < tmp.Count; ptr++)
+                                    {
+                                        foreach (
+                                            var item in GeometryClipper.ClipTriangleByQuad(
+                                                VertToVPC(tmp[ptr]),
+                                                quad
+                                            )
+                                        )
+                                        {
+                                            List<Vertex> vertices = [];
+                                            foreach (var item2 in item)
+                                            {
+                                                vertices.Add(
+                                                    new(
+                                                        item2.Position,
+                                                        item2.Color,
+                                                        new(new(), item2.UV),
+                                                        st.Texture,
+                                                        st.ResourceSet,
+                                                        st.Opacity
+                                                    )
+                                                );
+                                            }
+                                            tmp2.Add(vertices.ToArray());
+                                        }
+                                    }
+                                    tmp.Clear();
+                                    tmp.AddRange(tmp2);
+                                }
+                                foreach (var item in tmp)
+                                {
+                                    values.Add(new((uint)idx, item));
+                                }
+                            }
                         }
                     }
                 }

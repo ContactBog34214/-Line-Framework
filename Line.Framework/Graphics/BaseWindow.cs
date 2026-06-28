@@ -1,9 +1,9 @@
 using System.Diagnostics;
 using Line.Framework.Input;
 using Line.Framework.Resource;
+using Line.Framework.Resource.Audio;
 using Line.Framework.Resource.Graphic;
 using Line.Framework.UI;
-using SharpGen.Runtime;
 using Veldrid;
 using Veldrid.MetalBindings;
 using Veldrid.Sdl2;
@@ -43,7 +43,7 @@ public class BaseWindow : IDisposable
     public static GraphicsBackend BackendSelector()
     {
         //建个队列（简单的不会搞）😭
-        GraphicsBackend[] queue = new[]
+        GraphicsBackend[] queue =
         {
             GraphicsBackend.Metal,
             GraphicsBackend.Vulkan,
@@ -105,6 +105,7 @@ public class BaseWindow : IDisposable
             Debug = Debugger.IsAttached,
             PreferStandardClipSpaceYDirection = true,
             SwapchainSrgbFormat = false,
+            SyncToVerticalBlank = false,
         };
         try
         {
@@ -139,11 +140,16 @@ public class BaseWindow : IDisposable
         Resource = new();
         Resource.AddType("Image", new TResourceSet(Resource, Dev, RendererClass.TextureLayout));
         Resource.AddType("Font", new TFont(Resource, Dev, RendererClass.TextureLayout));
+        Audio=new TAudio(Resource);
+        Resource.AddType("Audio", Audio);
         //输入器
         Input = new(TargetWindow);
         MainThread = new Thread(UpdateWindow);
         MainThread.Start();
+        MainThread.Name="Renderer";
     }
+
+    public TAudio Audio{get;private set;}
 
     private void UpdateWindow()
     {
@@ -161,15 +167,12 @@ public class BaseWindow : IDisposable
             //输入更新
             void update()
             {
-                var sw = new Stopwatch();
-                sw.Start();
                 long tick = sw.ElapsedTicks;
                 double milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
                 double UpdateMs = 0;
                 while (TargetWindow.Exists)
                 {
                     tick = sw.ElapsedTicks;
-                    milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
                     //防止冻结
                     if (UpdatePerSecond <= 0)
                     {
@@ -177,12 +180,29 @@ public class BaseWindow : IDisposable
                     }
                     try
                     {
-                        while (milliseconds - UpdateMs >= 1000d / UpdatePerSecond)
+                        tick = sw.ElapsedTicks;
+                        milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
+                        double delay = milliseconds - UpdateMs;
+                        double wait = 1000d / UpdatePerSecond;
+                        if (delay < wait)
                         {
-                            var args = new OnUpdateArgs { delay = milliseconds - UpdateMs };
+                            if (wait - delay > 4)
+                            {
+                                Thread.Sleep((int)(wait - delay));
+                            }
+                            else
+                            {
+                                Thread.SpinWait((int)(wait - delay));
+                            }
+                            tick = sw.ElapsedTicks;
+                            milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
+                            delay = milliseconds - UpdateMs;
+                        }
+                        if (delay >= wait)
+                        {
+                            var args = new OnUpdateArgs { delay = delay };
                             TargetWindow.PumpEvents();
                             OnUpdate?.Invoke(this, args);
-                            //UpdateMs += 1000d / UpdatePerSecond;
                             UpdateMs = milliseconds;
                         }
                     }
@@ -195,9 +215,10 @@ public class BaseWindow : IDisposable
             //开更新线程
             if (
                 UpdateThread == null
-                || UpdateThread.ThreadState != System.Threading.ThreadState.Running
+                || UpdateThread.ThreadState == System.Threading.ThreadState.Stopped
             )
             {
+                UpdateThread?.Interrupt();
                 UpdateThread = new(update);
                 UpdateThread.Start();
             }
@@ -218,11 +239,28 @@ public class BaseWindow : IDisposable
                 }
                 try
                 {
-                    while (milliseconds - RenderMs >= 1000d / FramePerSecond)
+                    tick = sw.ElapsedTicks;
+                    milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
+                    double delay = milliseconds - RenderMs;
+                    double wait = 1000d / FramePerSecond;
+                    if (delay < wait)
                     {
-                        var args = new OnRenderArgs { delay = milliseconds - RenderMs };
+                        if (wait - delay > 4)
+                        {
+                            Thread.Sleep((int)(wait - delay));
+                        }
+                        else
+                        {
+                            Thread.SpinWait((int)(wait - delay));
+                        }
+                        tick = sw.ElapsedTicks;
+                        milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
+                        delay = milliseconds - RenderMs;
+                    }
+                    if (delay >= wait)
+                    {
+                        var args = new OnRenderArgs { delay = delay };
                         OnRender?.Invoke(this, args);
-                        //RenderMs += 1000d / FramePerSecond;
                         RenderMs = milliseconds;
                         RendererContext();
                         Dev.SwapBuffers();
@@ -232,7 +270,7 @@ public class BaseWindow : IDisposable
                 {
                     Log.Error($"[Renderer]{ex}");
                 }
-                Thread.Sleep(1);
+                //Thread.Sleep(1);
             }
             render();
             //Thread.Sleep(1);
@@ -258,12 +296,20 @@ public class BaseWindow : IDisposable
 
     public void Dispose()
     {
-        MainThread.Interrupt();
+        MainThread?.Interrupt();
         RendererClass = null;
-        UpdateThread.Interrupt();
-        commandList.Dispose();
-        TargetWindow.Close();
-        Root.Dispose();
-        Resource.Dispose();
+        TargetWindow?.Close();
+        UpdateThread?.Interrupt();
+        commandList?.Dispose();
+        try
+        {
+            Dev?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning($"{ex.Message}");
+        }
+        Root?.Dispose();
+        Resource?.Dispose();
     }
 }

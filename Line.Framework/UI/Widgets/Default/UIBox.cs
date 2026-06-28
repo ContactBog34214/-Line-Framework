@@ -7,10 +7,18 @@ namespace Line.Framework.UI.DefaultWidget;
 public class UIBox : UIWidget
 {
     public RgbaFloat color { get; set; } = new(0, 0, 0, 1);
+    Action<RendererContextArgs> RenderAction;
+
+    public override void RendererContext(RendererContextArgs args)
+    {
+        if (RenderAction == null)
+            return;
+        RenderAction(args);
+    }
 
     public UIBox()
     {
-        RendererContext = (RendererContextArgs args) =>
+        RenderAction = (RendererContextArgs args) =>
         {
             var collector = args.Collector;
             /*
