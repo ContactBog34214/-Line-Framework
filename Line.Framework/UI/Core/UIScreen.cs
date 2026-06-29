@@ -17,7 +17,7 @@ public class UIScreen : UIWidget
         // 设置大小为屏幕像素尺寸
         UpdateScreenSize(screenWidth, screenHeight);
         // 锚点设为左上角 (0,0)
-        anchor = Vector2.Zero;
+        Anchor = Vector2.Zero;
         visible = true;
         Z = 0;
     }

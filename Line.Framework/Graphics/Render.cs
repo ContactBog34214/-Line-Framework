@@ -59,7 +59,7 @@ void main()
     ResourceLayout _textureLayout;
     ResourceSet _textureResourceSet;
     DeviceBuffer _vertexBuffer;
-    private const uint INITIAL_BUFFER_SIZE = 1024 * 1024;
+    const uint INITIAL_BUFFER_SIZE = 1024 * 1024;
     public ResourceLayout TextureLayout => _textureLayout;
 
     public struct VertexPositionColor
@@ -122,14 +122,11 @@ void main()
         public float Opacity { get; set; }
     }
 
-    Vector2 r(Vector2 a, float b)
-    {
-        var c = (float)Math.Cos(b);
-        var s = (float)Math.Sin(b);
-        return new Vector2(a.X * c + a.Y * s, a.Y * c + a.X * s);
-    }
-
-    VertexPositionColor[] GetVertices(VertexPositionColor[] vertex, Vector2 source, UIWidget s)
+    static VertexPositionColor[] GetVertices(
+        VertexPositionColor[] vertex,
+        Vector2 source,
+        UIWidget s
+    )
     {
         float cos = (float)Math.Cos(s.Rotation * Math.PI / 180f);
         float sin = (float)Math.Sin(s.Rotation * Math.PI / 180f);
@@ -146,7 +143,7 @@ void main()
 
             //从绝对映射到相对锚点
             var size = s.GetSizeOnScreen();
-            target.Position -= s.anchor * size;
+            target.Position -= s.Anchor * size;
 
             //旋转
             var pos = target.Position;
@@ -157,7 +154,7 @@ void main()
             target.Position *= s.Scale;
 
             //映射回前面
-            target.Position += s.anchor * size;
+            target.Position += s.Anchor * size;
 
             //到绝对
             target.Position += s.GetPositionOnScreen();
@@ -251,9 +248,9 @@ void main()
             ws.AddRange(trees(window.Root));
 
             //各种同步然后请求渲染内容
-            for (int i = ws.Count-1;i>0;i--)
+            for (int i = 0; i < ws.Count; i++)
             {
-                var item=ws[i];
+                var item = ws[i];
                 if (item is UIWidget target && target.RendererContext != null) // 添加 null 检查
                 {
                     void syncer()
@@ -316,8 +313,7 @@ void main()
                             target.ClipList.Clear();
                             var t = target.parent as UIWidget;
                             target.ClipList.AddRange(t.ClipList);
-                            if (t != null)
-                                target.ClipList.Add(t.GetClipArea(screenSize));
+                            target.ClipList.Add(target.GetClipArea(screenSize));
                         }
                         catch
                         {
@@ -363,8 +359,6 @@ void main()
             // 3.将所有commands转为顶点们
             int totalVertexCount = 0;
             ManualResetEventSlim CTVThreadWaiter = new ManualResetEventSlim(false);
-            List<Vertex[]> v = [];
-            List<Action> CTVThreadPool = [];
             long CPThreadCount = 0;
             long TotalThreadCount = commands.Count;
             ConcurrentBag<(uint index, Vertex[] v)> values = new ConcurrentBag<(uint, Vertex[])>();
@@ -545,14 +539,13 @@ void main()
                     CTV(i, (int)idx);
                 }
             );
-            //CTVThreadWaiter.Wait();
 
             // 4. 第一遍遍历：转换一下，顺手上传
             List<VertexPositionColor> vert = [];
             List<VertexTask[]> Tasks = [];
             ResourceSet LastRs = null;
             List<VertexTask> t = [];
-            foreach (var i1 in values.OrderBy(c => c.index).ToList())
+            foreach (var i1 in values.OrderBy(c => c.index))
             {
                 var i = i1.v;
                 foreach (var a in i)

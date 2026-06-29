@@ -7,7 +7,7 @@ public abstract class UIWidget : UINode
 {
     public Coord2 Position { get; set; } = new();
     public Coord2 Size { get; set; } = new();
-    public Vector2 anchor { get; set; } = new(0, 0);
+    public Vector2 Anchor { get; set; } = new(0, 0);
     public bool visible { get; set; } = true;
 
     public Vector2 GetPositionOnScreen()
@@ -16,15 +16,15 @@ public abstract class UIWidget : UINode
         if (parent != null || parent is UIWidget i)
         {
             i = parent as UIWidget;
-            si = i.GetSizeOnScreen() * i.anchor;
+            si = i.GetSizeOnScreen() * i.Anchor;
         }
         return new(
             s.X * Position.scale.X
                 + Position.offset.X
-                - GetSizeOnScreen().X * anchor.X
+                - GetSizeOnScreen().X * Anchor.X
                 + p.X
                 - si.X,
-            s.Y * Position.scale.Y + Position.offset.Y - GetSizeOnScreen().Y * anchor.Y + p.Y - si.Y
+            s.Y * Position.scale.Y + Position.offset.Y - GetSizeOnScreen().Y * Anchor.Y + p.Y - si.Y
         );
     }
 
@@ -39,10 +39,10 @@ public abstract class UIWidget : UINode
         var s = GetSizeOnScreen();
         Vector2[] vert =
         [
-            new(-anchor.X * s.X, -anchor.Y * s.Y),
-            new(-anchor.X * s.X, (1 - anchor.Y) * s.Y),
-            new((1 - anchor.X) * s.X, (1 - anchor.Y) * s.Y),
-            new((1 - anchor.X) * s.X, -anchor.Y * s.Y),
+            new(-Anchor.X * s.X, -Anchor.Y * s.Y),
+            new(-Anchor.X * s.X, (1 - Anchor.Y) * s.Y),
+            new((1 - Anchor.X) * s.X, (1 - Anchor.Y) * s.Y),
+            new((1 - Anchor.X) * s.X, -Anchor.Y * s.Y),
         ];
 
         for (int i = 0; i < vert.Length; i++)
@@ -60,7 +60,7 @@ public abstract class UIWidget : UINode
             target *= Scale;
 
             //映射回前面
-            target += anchor * s;
+            target += Anchor * s;
 
             //到绝对
             target += p;
@@ -89,7 +89,7 @@ public abstract class UIWidget : UINode
         var S = GetSizeOnScreen();
         var P = GetPositionOnScreen();
         //到相对
-        var tmp = mousePixel - P - anchor * S;
+        var tmp = mousePixel - P - Anchor * S;
 
         //旋转
         double r = (double)Rotation % 360d;
@@ -98,7 +98,7 @@ public abstract class UIWidget : UINode
         double sin = Math.Sin(r * Math.PI / 180f);
         tmp = new((float)(tmp.X * cos - tmp.Y * sin), (float)(tmp.Y * cos + tmp.X * sin));
 
-        tmp += anchor * S;
+        tmp += Anchor * S;
         return tmp;
     }
 

@@ -5,7 +5,6 @@ using Line.Framework.Resource.Audio;
 using Line.Framework.Resource.Graphic;
 using Line.Framework.UI;
 using Veldrid;
-using Veldrid.MetalBindings;
 using Veldrid.Sdl2;
 using Veldrid.StartupUtilities;
 using UIScreen = Line.Framework.UI.UIScreen;
@@ -19,26 +18,15 @@ public class BaseWindow : IDisposable
     public InputManager Input { get; init; }
     public GraphicsDevice Dev { get; init; }
     public UIScreen Root { get; init; }
-    private Thread MainThread;
-    public float FramePerSecond { get; set; } = 10;
+    private readonly Thread MainThread;
+    public float FramePerSecond { get; set; } = 240;
     public float UpdatePerSecond { get; set; } = 1000;
     public CommandList commandList { get; init; }
-    public UIDrawCollector Collector { get; init; } = new();
+    public UIDrawCollector Collector { get; init; }
 
-    //更新事件💩
-    public class OnRenderArgs : EventArgs
-    {
-        public double delay;
-    }
+    public event EventHandler<double> OnRender;
 
-    public event EventHandler<OnRenderArgs> OnRender;
-
-    public class OnUpdateArgs : EventArgs
-    {
-        public double delay;
-    }
-
-    public event EventHandler<OnUpdateArgs> OnUpdate;
+    public event EventHandler<double> OnUpdate;
 
     public static GraphicsBackend BackendSelector()
     {
@@ -102,7 +90,7 @@ public class BaseWindow : IDisposable
         GraphicsDeviceOptions Options = new GraphicsDeviceOptions
         {
             //自动otto
-            Debug = Debugger.IsAttached,
+            Debug = false,
             PreferStandardClipSpaceYDirection = true,
             SwapchainSrgbFormat = false,
             SyncToVerticalBlank = false,
@@ -140,16 +128,16 @@ public class BaseWindow : IDisposable
         Resource = new();
         Resource.AddType("Image", new TResourceSet(Resource, Dev, RendererClass.TextureLayout));
         Resource.AddType("Font", new TFont(Resource, Dev, RendererClass.TextureLayout));
-        Audio=new TAudio(Resource);
+        Audio = new TAudio(Resource);
         Resource.AddType("Audio", Audio);
         //输入器
         Input = new(TargetWindow);
         MainThread = new Thread(UpdateWindow);
         MainThread.Start();
-        MainThread.Name="Renderer";
+        MainThread.Name = "Renderer";
     }
 
-    public TAudio Audio{get;private set;}
+    public TAudio Audio { get; private set; }
 
     private void UpdateWindow()
     {
@@ -167,12 +155,9 @@ public class BaseWindow : IDisposable
             //输入更新
             void update()
             {
-                long tick = sw.ElapsedTicks;
-                double milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
                 double UpdateMs = 0;
                 while (TargetWindow.Exists)
                 {
-                    tick = sw.ElapsedTicks;
                     //防止冻结
                     if (UpdatePerSecond <= 0)
                     {
@@ -188,11 +173,11 @@ public class BaseWindow : IDisposable
                         {
                             if (wait - delay > 4)
                             {
-                                Thread.Sleep((int)(wait - delay));
+                                Thread.Sleep((int)(wait - delay) - 2);
                             }
                             else
                             {
-                                Thread.SpinWait((int)(wait - delay));
+                                Thread.SpinWait((int)(wait - delay) / 2);
                             }
                             tick = sw.ElapsedTicks;
                             milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
@@ -200,9 +185,8 @@ public class BaseWindow : IDisposable
                         }
                         if (delay >= wait)
                         {
-                            var args = new OnUpdateArgs { delay = delay };
                             TargetWindow.PumpEvents();
-                            OnUpdate?.Invoke(this, args);
+                            OnUpdate?.Invoke(this, delay);
                             UpdateMs = milliseconds;
                         }
                     }
@@ -247,11 +231,11 @@ public class BaseWindow : IDisposable
                     {
                         if (wait - delay > 4)
                         {
-                            Thread.Sleep((int)(wait - delay));
+                            Thread.Sleep((int)(wait - delay) - 2);
                         }
                         else
                         {
-                            Thread.SpinWait((int)(wait - delay));
+                            Thread.SpinWait((int)(wait - delay) / 2);
                         }
                         tick = sw.ElapsedTicks;
                         milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
@@ -259,8 +243,7 @@ public class BaseWindow : IDisposable
                     }
                     if (delay >= wait)
                     {
-                        var args = new OnRenderArgs { delay = delay };
-                        OnRender?.Invoke(this, args);
+                        OnRender?.Invoke(this, delay);
                         RenderMs = milliseconds;
                         RendererContext();
                         Dev.SwapBuffers();
@@ -270,10 +253,8 @@ public class BaseWindow : IDisposable
                 {
                     Log.Error($"[Renderer]{ex}");
                 }
-                //Thread.Sleep(1);
             }
             render();
-            //Thread.Sleep(1);
         }
         Dispose();
     }
@@ -292,7 +273,7 @@ public class BaseWindow : IDisposable
         Root.UpdateScreenSize(TargetWindow.Width, TargetWindow.Height);
     }
 
-    public Action RendererContext { get; init; } = () => { };
+    public Action RendererContext { get; init; }
 
     public void Dispose()
     {

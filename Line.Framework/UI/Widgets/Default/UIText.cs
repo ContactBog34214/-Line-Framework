@@ -13,10 +13,6 @@ public sealed class UIText : UIWidget
 {
     public List<Texture> FontTexture { get; private set; } = [];
     public string FontId { get; set; }
-    private GraphicsDevice graphic;
-    private ResourceLayout resl;
-    private List<ResourceSet> rs = [];
-    private List<char> Chars = [];
     public List<char> NullChar
     {
         get => (rm.GetResource(FontId) as Font)?.NullChar ?? [];
@@ -30,11 +26,12 @@ public sealed class UIText : UIWidget
     string _text = "";
     public float FontScale { get; set; } = 1;
 
-    private Dictionary<char, FontTexture> _charCache = new();
+    private readonly Dictionary<char, FontTexture> _charCache = new();
 
     public override void RendererContext(RendererContextArgs args)
     {
-        if(RenderAction==null)return;
+        if (RenderAction == null)
+            return;
         RenderAction(args);
     }
 
@@ -45,12 +42,8 @@ public sealed class UIText : UIWidget
         _text = s;
     }
 
-    void ClearCharCache()
-    {
-        _charCache.Clear();
-    }
+    readonly Action<RendererContextArgs> RenderAction;
 
-    Action<RendererContextArgs> RenderAction;
     public UIText(ResourceManager manager)
     {
         rm = manager;
@@ -73,23 +66,23 @@ public sealed class UIText : UIWidget
                 // 如果屏幕 Y 轴向下为正（左上角原点），设为 true；Y 轴向上为正（左下角原点），设为 false
 
                 // 基线起始位置（屏幕坐标）
-                float lineHeight = font.Size / 1.5f;
+                float lineHeight = font.Size / 1.4f;
                 Vector2 baselinePos = new Vector2(0, 0);
                 var s = _text.Split('\n');
 
-                baselinePos.Y = -font.Ascender;
+                baselinePos.Y = -font.Ascender * FontScale;
                 if (YAlignment == Alignment.Center)
-                    baselinePos.Y += ((float)args.height - s.Length * lineHeight) / 2;
+                    baselinePos.Y += ((float)args.height - s.Length * lineHeight * FontScale) / 2f;
                 if (YAlignment == Alignment.Right)
-                    baselinePos.Y += ((float)args.height - (s.Length) * lineHeight);
+                    baselinePos.Y += (float)args.height - s.Length * lineHeight * FontScale;
                 void ResetOffset(string str)
                 {
                     if (XAlignment == Alignment.Left)
                         baselinePos.X = 0;
                     if (XAlignment == Alignment.Center)
-                        baselinePos.X = ((float)args.width - GetTextSize(str).X) * FontScale / 2;
+                        baselinePos.X = ((float)args.width - GetTextSize(str).X) / 2;
                     if (XAlignment == Alignment.Right)
-                        baselinePos.X = ((float)args.width - GetTextSize(str).X) * FontScale;
+                        baselinePos.X = (float)args.width - GetTextSize(str).X;
                 }
                 uint i = 0;
                 ResetOffset(s[i]);
@@ -187,9 +180,7 @@ public sealed class UIText : UIWidget
         collector.DrawVertex([tr, bl, br], this);
     }
 
-    ResourceManager rm;
-
-    private Vector2 totSize = new();
+    readonly ResourceManager rm;
 
     public Vector2 GetTextSize(string s)
     {
@@ -199,10 +190,10 @@ public sealed class UIText : UIWidget
         if (string.IsNullOrEmpty(s))
             return Vector2.Zero;
 
-        float lineHeight = font.Size * FontScale / 1.5f;
+        float lineHeight = font.Size / 1.4f * FontScale;
         float maxWidth = 0;
         float currentWidth = 0;
-        int lineCount = 1;
+        int lineCount = s.Split('\n').Length;
 
         foreach (char c in s)
         {
@@ -210,7 +201,6 @@ public sealed class UIText : UIWidget
             {
                 maxWidth = Math.Max(maxWidth, currentWidth);
                 currentWidth = 0;
-                lineCount++;
                 continue;
             }
 
