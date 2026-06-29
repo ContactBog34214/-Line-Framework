@@ -70,7 +70,7 @@ public class UIButton : UIWidget
                     Width = (float)args.width,
                 },
                 0,
-                anchor,
+                Anchor,
                 color,
                 this
             );
