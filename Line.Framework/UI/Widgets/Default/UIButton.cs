@@ -1,7 +1,7 @@
 using System.Diagnostics;
-using System.Numerics;
 using Line.Framework.Input;
 using Veldrid;
+using static SDL3.SDL;
 using Rectangle = System.Drawing.RectangleF;
 
 namespace Line.Framework.UI.DefaultWidget;
@@ -9,12 +9,12 @@ namespace Line.Framework.UI.DefaultWidget;
 public class UIButton : UIWidget
 {
     public RgbaFloat color { get; set; } = new(0, 0, 0, 0);
-    public event EventHandler<UIButton, MouseButton> WhenPress;
-    public event EventHandler<UIButton, MouseButton> WhenClick;
+    public event EventHandler<UIButton, byte> WhenPress;
+    public event EventHandler<UIButton, byte> WhenClick;
     public int ClickMaximumTime { get; set; } = 200;
     Stopwatch ClickSw = new();
 
-    public event EventHandler<UIButton, MouseButton> WhenRelease;
+    public event EventHandler<UIButton, byte> WhenRelease;
     public bool clicking { get; private set; } = false;
     public bool enabled { get; set; } = true;
     private InputManager input;
@@ -83,11 +83,11 @@ public class UIButton : UIWidget
         {
             input.MouseDown -= (a) =>
             {
-                Press(a);
+                Press(a.Button);
             };
             input.MouseUp -= (a) =>
             {
-                Release(a);
+                Release(a.Button);
             };
         }
         var a = FindRoot(this);
@@ -97,11 +97,11 @@ public class UIButton : UIWidget
             input = b.window.Input;
             input.MouseDown += (a) =>
             {
-                Press(a);
+                Press(a.Button);
             };
             input.MouseUp += (a) =>
             {
-                Release(a);
+                Release(a.Button);
             };
         }
     }
@@ -112,6 +112,6 @@ public class UIButton : UIWidget
         UpdateRoot();
     }
 
-    Action<MouseButton> Press { get; init; }
-    Action<MouseButton> Release { get; init; }
+    Action<byte> Press { get; init; }
+    Action<byte> Release { get; init; }
 }

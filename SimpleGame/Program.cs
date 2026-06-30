@@ -6,9 +6,12 @@ using Line.Framework.Graphics;
 using Line.Framework.Resource.Graphic;
 using Line.Framework.UI.DefaultWidget;
 using Veldrid;
+using SDL3;
+#pragma warning disable CS8618
 
 namespace SG;
-public static class SimpleGame
+
+public static unsafe class SimpleGame
 {
     static BaseWindow Host;
     static Stopwatch sw = new();
@@ -20,7 +23,7 @@ public static class SimpleGame
     public static void Main(string[] args)
     {
         sw.Start();
-        Log.SetMinLevel(LogLevel.Info);
+        Log.SetMinLevel(LogLevel.Debug);
         Log.EnableConsole(true);
         Log.SetLogFile(null);
         Log.Info("Welcome to -Line-Framework");
@@ -30,15 +33,18 @@ public static class SimpleGame
         foreach (var name in names)
             Log.Debug($"Asset:{name}");
 
-        Host = new(Backend:GraphicsBackend.OpenGLES);
-        Host.TargetWindow.Title = "-Line-Framework example";
-        Host.UpdatePerSecond=10000;
+        Host = new(Backend: GraphicsBackend.OpenGLES);
+        Host.Title = "-Line-Framework example";
+        Host.UpdatePerSecond = 10000;
 
         Host.Resource.Create(
             "Font",
             "Font",
             assembly.GetManifestResourceStream("SimpleGame.assets.GenJyuuGothic-Normal-2.ttf")
         );
+
+        //Exp
+        float ptr=0.2f;
         Log.Debug("Loaded Font");
         font = Host.Resource.GetResource("Font") as Font;
         font?.Size = FontSize;
@@ -99,13 +105,13 @@ public static class SimpleGame
         };
         title.Size = new(title.GetTextSize(title.Text) / new Vector2(1, 1), new());
 
-        Host.TargetWindow.FocusGained += () =>
+        Host.FocusGained += () =>
         {
-            Host.FramePerSecond=720;
+            Host.FramePerSecond = 720;
         };
-        Host.TargetWindow.FocusLost += () =>
+        Host.FocusLost += () =>
         {
-            Host.FramePerSecond=50;
+            Host.FramePerSecond = 50;
         };
 
         FPSPrinter();
@@ -119,25 +125,26 @@ public static class SimpleGame
             Position = new(new(), new(1)),
             Anchor = new(1),
             parent = Host.Root,
-            XAlignment=Alignment.Right,
-            YAlignment=Alignment.Right,
-            color = new(0,0, 1, 1),
-            FontId="Font",
-            Z=65536,
-            FontScale=0.5f,
+            XAlignment = Alignment.Right,
+            YAlignment = Alignment.Right,
+            color = new(0, 0, 1, 1),
+            FontId = "Font",
+            Z = 65536,
+            FontScale = 0.5f,
         };
 
-        float Renderfps=0;
-        float UpdateMs=0;
+        float Renderfps = 0;
+        float UpdateMs = 0;
         Host.OnRender += (a, b) =>
         {
-            Renderfps+=(1000f/(float)b-Renderfps)/100f;
+            Renderfps += (1000f / (float)b - Renderfps) / 100f;
         };
         Host.OnUpdate += (a, b) =>
         {
-            UpdateMs+=((float)b-UpdateMs)/100f;
-            perText.Text=$"{(int)Renderfps}/{Host.FramePerSecond}FPS\n{(int)(UpdateMs*100f)/100f}/{(int)(1000f/Host.UpdatePerSecond*100f)/100f}Ms";
-            perText.Size=new(perText.GetTextSize(perText.Text),new());
+            UpdateMs += ((float)b - UpdateMs) / 100f;
+            perText.Text =
+                $"{(int)Renderfps}/{Host.FramePerSecond}FPS\n{(int)(UpdateMs * 100f) / 100f}/{(int)(1000f / Host.UpdatePerSecond * 100f) / 100f}Ms";
+            perText.Size = new(perText.GetTextSize(perText.Text), new());
         };
     }
 }

@@ -238,7 +238,7 @@ void main()
         {
             var gd = window.Dev;
             var cl = window.commandList;
-            var screenSize = new Vector2(window.TargetWindow.Width, window.TargetWindow.Height);
+            var screenSize = new Vector2(window.Size.X, window.Size.Y);
             if (collector == null)
             {
                 collector = new();
@@ -268,7 +268,7 @@ void main()
                         }
                         catch
                         {
-                            target.s = new(window.TargetWindow.Width, window.TargetWindow.Height);
+                            target.s = new(window.Size.X, window.Size.Y);
                         }
                         //同步移位
                         try
@@ -596,7 +596,7 @@ void main()
 
             // 6. 开始命令录制
             cl.Begin();
-            cl.SetFramebuffer(gd.SwapchainFramebuffer);
+            cl.SetFramebuffer(gd.MainSwapchain.Framebuffer);
             cl.ClearColorTarget(0, RgbaFloat.Black);
             cl.SetPipeline(_pipeline);
             cl.SetVertexBuffer(0, _vertexBuffer);
@@ -641,7 +641,7 @@ void main()
             )
         );
         // 填充白色像素数据
-        byte[] whitePixel = new byte[] { 255, 255, 255, 255 };
+        byte[] whitePixel = [255, 255, 255, 255];
         gd.UpdateTexture(whiteTexture, whitePixel, 0, 0, 0, 1, 1, 1, 0, 0);
 
         // 3. 创建资源集 (ResourceSet)
@@ -677,8 +677,8 @@ void main()
             ),
             PrimitiveTopology = PrimitiveTopology.TriangleList,
             //ResourceLayouts = Array.Empty<ResourceLayout>(),
-            ResourceLayouts = new[] { _textureLayout },
-            ShaderSet = new ShaderSetDescription(new[] { vertexLayout }, _shaders),
+            ResourceLayouts = [_textureLayout],
+            ShaderSet = new ShaderSetDescription([vertexLayout], _shaders),
             Outputs = gd.SwapchainFramebuffer.OutputDescription,
             BlendState = BlendStateDescription.SingleAlphaBlend,
         };

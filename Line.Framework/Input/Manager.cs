@@ -1,33 +1,36 @@
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Numerics;
 using Veldrid;
-using Veldrid.Sdl2;
+using static SDL3.SDL;
+using Line.Framework.Graphics;
 
 namespace Line.Framework.Input
 {
     public class InputManager
     {
-        private readonly Sdl2Window _window;
-        private readonly ConcurrentDictionary<Key, bool> _keyStates = new ConcurrentDictionary<Key, bool>();
-        private readonly ConcurrentDictionary<MouseButton, bool> _mouseStates =
-            new ConcurrentDictionary<MouseButton, bool>();
+        private readonly BaseWindow _window;
+        private readonly ConcurrentDictionary<Keycode, bool> _keyStates = new();
+        private readonly ConcurrentDictionary<byte, bool> _mouseStates = new();
+
+        private readonly ConcurrentDictionary<MouseButton, Vector2> _touchStates = new();
 
         // 对外只读累计值（不重置）
         public Vector2 TotalMouseDelta { get; private set; } = Vector2.Zero;
-        public float TotalMouseWheelDelta { get; private set; } = 0f;
+        public Vector2 TotalMouseWheelDelta { get; private set; } = new();
         Vector2 LastMousePosition { get; set; } = new();
 
         // 事件
-        public event Action<Key> KeyDown;
-        public event Action<Key> KeyUp;
-        public event Action<MouseButton> MouseDown;
-        public event Action<MouseButton> MouseUp;
-        public event Action<float> MouseWheel; // 滚动增量（正值向下/右）
+        public event Action<Keycode> KeyDown;
+        public event Action<Keycode> KeyUp;
+        public event Action<MouseButtonEvent> MouseDown;
+        public event Action<MouseButtonEvent> MouseUp;
+        public event Action<Vector2> MouseWheel; // 滚动增量（正值向下/右）
         public event Action<float, float> MouseMove; // dx, dy 增量
 
-        public InputManager(Sdl2Window window)
+        public string GetClipBoardText() => GetClipboardText();
+
+        public unsafe InputManager(BaseWindow window)
         {
             _window = window;
             SubscribeEvents();
@@ -35,58 +38,58 @@ namespace Line.Framework.Input
 
         private void SubscribeEvents()
         {
-            _window.KeyDown += OnKeyDown;
-            _window.KeyUp += OnKeyUp;
-            _window.MouseDown += OnMouseDown;
-            _window.MouseUp += OnMouseUp;
-            _window.MouseWheel += OnMouseWheel;
-            _window.MouseMove += OnMouseMove;
+            _window.EventPool.TryAdd(EventType.KeyDown, OnKeyDown);
+            _window.EventPool.TryAdd(EventType.KeyUp, OnKeyUp);
+            _window.EventPool.TryAdd(EventType.MouseButtonDown, OnMouseDown);
+            _window.EventPool.TryAdd(EventType.MouseButtonUp, OnMouseUp);
+            _window.EventPool.TryAdd(EventType.MouseWheel, OnMouseWheel);
+            _window.EventPool.TryAdd(EventType.MouseWheel, OnMouseWheel);
         }
 
-        private void OnKeyDown(KeyEvent evt)
+        private void OnKeyDown(Event evt)
         {
-            _keyStates[evt.Key] = true;
-            KeyDown?.Invoke(evt.Key);
+            _keyStates[evt.Key.Key] = true;
+            KeyDown?.Invoke(evt.Key.Key);
         }
 
-        private void OnKeyUp(KeyEvent evt)
+        private void OnKeyUp(Event evt)
         {
-            _keyStates[evt.Key] = false;
-            KeyUp?.Invoke(evt.Key);
+            _keyStates[evt.Key.Key] = false;
+            KeyDown?.Invoke(evt.Key.Key);
         }
 
-        private void OnMouseDown(MouseEvent evt)
+        private void OnMouseDown(Event evt)
         {
-            _mouseStates[evt.MouseButton] = true;
-            MouseDown?.Invoke(evt.MouseButton);
+            _mouseStates[evt.Button.Button] = true;
+            MouseDown?.Invoke(evt.Button);
         }
 
-        private void OnMouseUp(MouseEvent evt)
+        private void OnMouseUp(Event evt)
         {
-            _mouseStates[evt.MouseButton] = false;
-            MouseUp?.Invoke(evt.MouseButton);
+            _mouseStates[evt.Button.Button] = false;
+            MouseUp?.Invoke(evt.Button);
         }
 
-        private void OnMouseWheel(MouseWheelEventArgs evt)
+        private void OnMouseWheel(Event evt)
         {
-            float delta = evt.WheelDelta;
+            Vector2 delta = new(evt.Wheel.X,evt.Wheel.Y);
             TotalMouseWheelDelta += delta;
             MouseWheel?.Invoke(delta);
         }
 
-        private void OnMouseMove(MouseMoveEventArgs evt)
+        private void OnMouseMove(Event evt)
         {
-            float dx = evt.MousePosition.X - LastMousePosition.X;
-            float dy = evt.MousePosition.Y - LastMousePosition.Y;
-            LastMousePosition = evt.MousePosition;
+            float dx = evt.Button.X - LastMousePosition.X;
+            float dy = evt.Button.Y - LastMousePosition.Y;
+            LastMousePosition = new(dx,dy);
             TotalMouseDelta += new Vector2(dx, dy);
             MouseMove?.Invoke(dx, dy);
         }
 
         // 状态查询
-        public bool IsKeyDown(Key key) => _keyStates.TryGetValue(key, out bool down) && down;
+        public bool IsKeyDown(Keycode key) => _keyStates.TryGetValue(key, out bool down) && down;
 
-        public bool IsMouseButtonDown(MouseButton button) =>
+        public bool IsMouseButtonDown(byte button) =>
             _mouseStates.TryGetValue(button, out bool down) && down;
     }
 }

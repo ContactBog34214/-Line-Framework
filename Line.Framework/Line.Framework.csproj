@@ -20,6 +20,7 @@
     <PackageReference Include="ManagedBass.Fx" Version="4.0.2" />
     <PackageReference Include="ppy.osu.Framework.NativeLibs" Version="1.0.0" />
     <PackageReference Include="sdl2" Version="2.0.5" />
+    <PackageReference Include="SDL3-CS" Version="3.4.10.5" />
     <PackageReference Include="TagLibSharp" Version="2.3.0" />
     <PackageReference Include="Veldrid" Version="4.9.0" />
     <PackageReference Include="Veldrid.ImageSharp" Version="4.9.0" />

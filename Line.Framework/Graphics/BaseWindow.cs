@@ -1,12 +1,18 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Numerics;
+using System.Runtime.InteropServices;
 using Line.Framework.Input;
 using Line.Framework.Resource;
 using Line.Framework.Resource.Audio;
 using Line.Framework.Resource.Graphic;
 using Line.Framework.UI;
+using SDL3;
 using Veldrid;
 using Veldrid.Sdl2;
 using Veldrid.StartupUtilities;
+using Vulkan;
+using Vulkan.Wayland;
 using UIScreen = Line.Framework.UI.UIScreen;
 
 namespace Line.Framework.Graphics;
@@ -14,9 +20,35 @@ namespace Line.Framework.Graphics;
 public class BaseWindow : IDisposable
 {
     public WindowsRenderer RendererClass { get; private set; }
-    public Sdl2Window TargetWindow { get; init; }
+    public nint WindowHandle { get; init; }
     public InputManager Input { get; init; }
     public GraphicsDevice Dev { get; init; }
+    public Vector2 Size
+    {
+        get
+        {
+            try
+            {
+                SDL.GetWindowSize(WindowHandle, out int w, out int h);
+                return new(w, h);
+            }
+            catch
+            {
+                return new(0);
+            }
+        }
+        set
+        {
+            try
+            {
+                SDL.SetWindowSize(WindowHandle, (int)value.X, (int)value.Y);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[Window] {ex}");
+            }
+        }
+    }
     public UIScreen Root { get; init; }
     private readonly Thread MainThread;
     public float FramePerSecond { get; set; } = 240;
@@ -86,7 +118,12 @@ public class BaseWindow : IDisposable
         }
         WindowCreateInfo CreateInfo = new WindowCreateInfo(X, Y, Width, Height, State, Title);
         //一个窗口
-        TargetWindow = VeldridStartup.CreateWindow(CreateInfo);
+        SDL.Init(SDL.InitFlags.Video);
+        SDL.WindowFlags flags = SDL.WindowFlags.Vulkan | SDL.WindowFlags.Resizable;
+        WindowHandle = SDL.CreateWindow(Title, Width, Height, flags);
+        SDL.SetHint("SDL_HINT_TOUCH_MOUSE_EVENTS", "0");
+        WindowID = SDL.GetWindowID(WindowHandle);
+        SwapchainDescription sc=new();
         GraphicsDeviceOptions Options = new GraphicsDeviceOptions
         {
             //自动otto
@@ -95,24 +132,14 @@ public class BaseWindow : IDisposable
             SwapchainSrgbFormat = false,
             SyncToVerticalBlank = false,
         };
-        try
-        {
-            Dev = VeldridStartup.CreateGraphicsDevice(
-                TargetWindow,
-                Options,
-                (GraphicsBackend)Backend
-            );
-        }
-        catch
-        {
-            Options.Debug = false;
-            Dev = VeldridStartup.CreateGraphicsDevice(
-                TargetWindow,
-                Options,
-                (GraphicsBackend)Backend
-            );
-        }
+        Dev = GraphicsDevice.CreateVulkan(Options,sc);
         //指令
+        if (Dev == null)
+        {
+            Dispose();
+            return;
+        }
+
         commandList = Dev.ResourceFactory.CreateCommandList();
         Collector = new();
         RendererClass = new(Dev);
@@ -120,9 +147,7 @@ public class BaseWindow : IDisposable
         {
             RendererClass.UIRenderer(this, Collector);
         };
-        TargetWindow.Resized += OnWindowResized;
         Root = new(this, 0, 0);
-        Root.UpdateScreenSize(TargetWindow.Width, TargetWindow.Height);
 
         //资源管理器
         Resource = new();
@@ -131,13 +156,38 @@ public class BaseWindow : IDisposable
         Audio = new TAudio(Resource);
         Resource.AddType("Audio", Audio);
         //输入器
-        Input = new(TargetWindow);
+        Input = new(this);
         MainThread = new Thread(UpdateWindow);
         MainThread.Start();
         MainThread.Name = "Renderer";
+
+        //绑定事件
     }
 
     public TAudio Audio { get; private set; }
+    public uint WindowID { get; init; }
+    internal ConcurrentDictionary<SDL.EventType, Action<SDL.Event>> EventPool { get; } = new();
+    public event Action FocusGained;
+    public event Action FocusLost;
+    public bool Exists
+    {
+        get => SDL.GetWindowID(WindowHandle) != 0;
+    }
+    public string Title
+    {
+        get => SDL.GetWindowTitle(WindowHandle) ?? "";
+        set
+        {
+            try
+            {
+                SDL.SetWindowTitle(WindowHandle, value);
+            }
+            catch (NullReferenceException ex)
+            {
+                Log.Warning($"[Window] {ex.Message}");
+            }
+        }
+    }
 
     private void UpdateWindow()
     {
@@ -147,16 +197,16 @@ public class BaseWindow : IDisposable
         double milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
         double RenderMs = 0;
         //开始考试
-        while (TargetWindow.Exists)
+        while (Exists)
         {
             tick = sw.ElapsedTicks;
             milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
 
             //输入更新
-            void update()
+            unsafe void update()
             {
                 double UpdateMs = 0;
-                while (TargetWindow.Exists)
+                while (Exists)
                 {
                     //防止冻结
                     if (UpdatePerSecond <= 0)
@@ -185,9 +235,30 @@ public class BaseWindow : IDisposable
                         }
                         if (delay >= wait)
                         {
-                            TargetWindow.PumpEvents();
+                            SDL.PumpEvents();
                             OnUpdate?.Invoke(this, delay);
                             UpdateMs = milliseconds;
+                            while (true)
+                            {
+                                SDL.SetEventFilter(
+                                    (a, ref b) =>
+                                    {
+                                        return b.Window.WindowID == WindowHandle;
+                                    },
+                                    (nint)WindowID
+                                );
+                                var events = SDL.PollEvent(out var ev);
+                                if (!events)
+                                    break;
+                                foreach (var item in EventPool)
+                                {
+                                    if (ev.Type == (uint)item.Key)
+                                    {
+                                        item.Value?.Invoke(ev);
+                                        break;
+                                    }
+                                }
+                            }
                         }
                     }
                     catch (Exception ex)
@@ -268,9 +339,10 @@ public class BaseWindow : IDisposable
     private void OnWindowResized()
     {
         _resizePending = true;
-        _newWidth = (uint)TargetWindow.Width;
-        _newHeight = (uint)TargetWindow.Height;
-        Root.UpdateScreenSize(TargetWindow.Width, TargetWindow.Height);
+        SDL.GetWindowSize(WindowHandle, out int w, out int h);
+        _newWidth = (uint)w;
+        _newHeight = (uint)h;
+        Root.UpdateScreenSize(w, h);
     }
 
     public Action RendererContext { get; init; }
@@ -279,7 +351,7 @@ public class BaseWindow : IDisposable
     {
         MainThread?.Interrupt();
         RendererClass = null;
-        TargetWindow?.Close();
+        SDL.DestroyWindow(WindowHandle);
         UpdateThread?.Interrupt();
         commandList?.Dispose();
         try
