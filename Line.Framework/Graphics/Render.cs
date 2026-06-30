@@ -229,11 +229,21 @@ void main()
     }
 
     public Action<BaseWindow, UIDrawCollector> UIRenderer { get; }
+    internal uint BufferIndex = 0;
 
     public WindowsRenderer(GraphicsDevice gd)
     {
         CreateShader(gd);
-        CreatePipeline(gd);
+        _textureLayout = gd.ResourceFactory.CreateResourceLayout(
+            new ResourceLayoutDescription(
+                new ResourceLayoutElementDescription(
+                    "_texture",
+                    ResourceKind.TextureReadOnly,
+                    ShaderStages.Fragment
+                )
+            )
+        );
+
         UIRenderer = async (BaseWindow window, UIDrawCollector collector) =>
         {
             var gd = window.Dev;
@@ -347,7 +357,7 @@ void main()
                 CreateShader(gd);
             if (_pipeline == null)
             {
-                CreatePipeline(gd);
+                CreatePipeline(window);
             }
 
             // 2. 收集命令列表（已按 Z 排序）
@@ -595,8 +605,11 @@ void main()
                 return;
 
             // 6. 开始命令录制
+            BufferIndex = (BufferIndex + 1) % (uint)window.backBuffers.Length;
+
             cl.Begin();
-            cl.SetFramebuffer(gd.MainSwapchain.Framebuffer);
+            cl.SetFramebuffer(window.backBuffers[BufferIndex]);
+
             cl.ClearColorTarget(0, RgbaFloat.Black);
             cl.SetPipeline(_pipeline);
             cl.SetVertexBuffer(0, _vertexBuffer);
@@ -616,18 +629,11 @@ void main()
         };
     }
 
-    void CreatePipeline(GraphicsDevice gd)
+    void CreatePipeline(BaseWindow window)
     {
+        var gd = window.Dev;
         // 1. 创建资源布局 (ResourceLayout)
-        _textureLayout = gd.ResourceFactory.CreateResourceLayout(
-            new ResourceLayoutDescription(
-                new ResourceLayoutElementDescription(
-                    "_texture",
-                    ResourceKind.TextureReadOnly,
-                    ShaderStages.Fragment
-                )
-            )
-        );
+        
 
         // 2. 创建 1x1 白色纹理
         Texture whiteTexture = gd.ResourceFactory.CreateTexture(
@@ -679,7 +685,7 @@ void main()
             //ResourceLayouts = Array.Empty<ResourceLayout>(),
             ResourceLayouts = [_textureLayout],
             ShaderSet = new ShaderSetDescription([vertexLayout], _shaders),
-            Outputs = gd.SwapchainFramebuffer.OutputDescription,
+            Outputs = window.backBuffers[0].OutputDescription,
             BlendState = BlendStateDescription.SingleAlphaBlend,
         };
 

@@ -9,20 +9,24 @@ using Line.Framework.Resource.Graphic;
 using Line.Framework.UI;
 using SDL3;
 using Veldrid;
-using Veldrid.Sdl2;
 using Veldrid.StartupUtilities;
-using Vulkan;
-using Vulkan.Wayland;
 using UIScreen = Line.Framework.UI.UIScreen;
 
 namespace Line.Framework.Graphics;
 
 public class BaseWindow : IDisposable
 {
+    private unsafe nint _sdlRenderer;
+    private unsafe nint _sdlTexture;
+    private Texture _stagingTexture;
+    private int _currentBufferIndex = 0;
+    private uint _width,
+        _height;
     public WindowsRenderer RendererClass { get; private set; }
     public nint WindowHandle { get; init; }
     public InputManager Input { get; init; }
     public GraphicsDevice Dev { get; init; }
+    internal readonly Framebuffer[] backBuffers = { null, null };
     public Vector2 Size
     {
         get
@@ -119,20 +123,66 @@ public class BaseWindow : IDisposable
         WindowCreateInfo CreateInfo = new WindowCreateInfo(X, Y, Width, Height, State, Title);
         //一个窗口
         SDL.Init(SDL.InitFlags.Video);
-        SDL.WindowFlags flags = SDL.WindowFlags.Vulkan | SDL.WindowFlags.Resizable;
+        _sdlRenderer = SDL.CreateRenderer(WindowHandle, null);
+        _sdlTexture = SDL.CreateTexture(
+            _sdlRenderer,
+            SDL.PixelFormat.ABGR8888,
+            SDL.TextureAccess.Streaming,
+            (int)Width,
+            (int)Height
+        );
+        SDL.WindowFlags flags = SDL.WindowFlags.Vulkan;
         WindowHandle = SDL.CreateWindow(Title, Width, Height, flags);
+        SDL.ShowWindow(WindowHandle);
         SDL.SetHint("SDL_HINT_TOUCH_MOUSE_EVENTS", "0");
         WindowID = SDL.GetWindowID(WindowHandle);
-        SwapchainDescription sc=new();
         GraphicsDeviceOptions Options = new GraphicsDeviceOptions
         {
             //自动otto
             Debug = false,
             PreferStandardClipSpaceYDirection = true,
-            SwapchainSrgbFormat = false,
-            SyncToVerticalBlank = false,
         };
-        Dev = GraphicsDevice.CreateVulkan(Options,sc);
+        Dev = GraphicsDevice.CreateVulkan(Options);
+        Texture texture1 = Dev.ResourceFactory.CreateTexture(
+            TextureDescription.Texture2D(
+                (uint)Width,
+                (uint)Height,
+                1,
+                1,
+                PixelFormat.R8_G8_B8_A8_UNorm,
+                TextureUsage.RenderTarget | TextureUsage.Sampled
+            )
+        );
+        _stagingTexture = Dev.ResourceFactory.CreateTexture(
+            TextureDescription.Texture2D(
+                (uint)Width,
+                (uint)Height,
+                1,
+                1,
+                PixelFormat.R8_G8_B8_A8_UNorm,
+                TextureUsage.Staging
+            )
+        );
+
+        Texture texture2 = Dev.ResourceFactory.CreateTexture(
+            TextureDescription.Texture2D(
+                (uint)Width,
+                (uint)Height,
+                1,
+                1,
+                PixelFormat.R8_G8_B8_A8_UNorm,
+                TextureUsage.RenderTarget | TextureUsage.Sampled
+            )
+        );
+
+        // 使用纹理创建两个 Framebuffer
+        backBuffers[0] = Dev.ResourceFactory.CreateFramebuffer(
+            new FramebufferDescription(null, texture1)
+        );
+
+        backBuffers[1] = Dev.ResourceFactory.CreateFramebuffer(
+            new FramebufferDescription(null, texture2)
+        );
         //指令
         if (Dev == null)
         {
@@ -317,7 +367,29 @@ public class BaseWindow : IDisposable
                         OnRender?.Invoke(this, delay);
                         RenderMs = milliseconds;
                         RendererContext();
-                        Dev.SwapBuffers();
+                        Dev.WaitForIdle();
+
+                        MappedResource map = Dev.Map(_stagingTexture, MapMode.Read);
+                        try
+                        {
+                            // 6. 更新 SDL 纹理
+                            uint rowPitch = _width * 4; // RGBA8，每像素4字节
+                            if (
+                                SDL.UpdateTexture(_sdlTexture, 0, map.Data, (int)rowPitch)
+                            )
+                            {
+                                Log.Warning($"[Renderer]SDL_UpdateTexture 失败: {SDL.GetError()}");
+                            }
+                        }
+                        finally
+                        {
+                            Dev.Unmap(_stagingTexture);
+                        }
+
+                        // 7. 通过 SDL 渲染器显示到窗口
+                        SDL.RenderClear(_sdlRenderer);
+                        SDL.RenderTexture(_sdlRenderer, _sdlTexture,0,0);
+                        SDL.RenderPresent(_sdlRenderer);
                     }
                 }
                 catch (Exception ex)
