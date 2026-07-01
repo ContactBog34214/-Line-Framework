@@ -18,7 +18,7 @@ public class BaseWindow : IDisposable
 {
     private unsafe nint _sdlRenderer;
     private unsafe nint _sdlTexture;
-    private Texture _stagingTexture;
+    internal Texture _stagingTexture;
     private int _currentBufferIndex = 0;
     private uint _width,
         _height;
@@ -26,7 +26,7 @@ public class BaseWindow : IDisposable
     public nint WindowHandle { get; init; }
     public InputManager Input { get; init; }
     public GraphicsDevice Dev { get; init; }
-    internal readonly Framebuffer[] backBuffers = { null, null };
+    internal readonly List<(Framebuffer, Texture)> backBuffers = [];
     public Vector2 Size
     {
         get
@@ -120,19 +120,17 @@ public class BaseWindow : IDisposable
         {
             Backend = BackendSelector();
         }
+        _width = (uint)Width;
+        _height = (uint)Height;
         WindowCreateInfo CreateInfo = new WindowCreateInfo(X, Y, Width, Height, State, Title);
         //一个窗口
         SDL.Init(SDL.InitFlags.Video);
-        _sdlRenderer = SDL.CreateRenderer(WindowHandle, null);
-        _sdlTexture = SDL.CreateTexture(
-            _sdlRenderer,
-            SDL.PixelFormat.ABGR8888,
-            SDL.TextureAccess.Streaming,
-            (int)Width,
-            (int)Height
-        );
-        SDL.WindowFlags flags = SDL.WindowFlags.Vulkan;
+
+        SDL.WindowFlags flags = SDL.WindowFlags.Vulkan | SDL.WindowFlags.Resizable;
+
         WindowHandle = SDL.CreateWindow(Title, Width, Height, flags);
+        Width=(int)Size.X;
+        Height=(int)Size.Y;
         SDL.ShowWindow(WindowHandle);
         SDL.SetHint("SDL_HINT_TOUCH_MOUSE_EVENTS", "0");
         WindowID = SDL.GetWindowID(WindowHandle);
@@ -176,12 +174,18 @@ public class BaseWindow : IDisposable
         );
 
         // 使用纹理创建两个 Framebuffer
-        backBuffers[0] = Dev.ResourceFactory.CreateFramebuffer(
-            new FramebufferDescription(null, texture1)
+        backBuffers.Add(
+            new(
+                Dev.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, texture1)),
+                texture1
+            )
         );
 
-        backBuffers[1] = Dev.ResourceFactory.CreateFramebuffer(
-            new FramebufferDescription(null, texture2)
+        backBuffers.Add(
+            new(
+                Dev.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, texture2)),
+                texture2
+            )
         );
         //指令
         if (Dev == null)
@@ -205,6 +209,7 @@ public class BaseWindow : IDisposable
         Resource.AddType("Font", new TFont(Resource, Dev, RendererClass.TextureLayout));
         Audio = new TAudio(Resource);
         Resource.AddType("Audio", Audio);
+        OnWindowResized();
         //输入器
         Input = new(this);
         MainThread = new Thread(UpdateWindow);
@@ -212,6 +217,11 @@ public class BaseWindow : IDisposable
         MainThread.Name = "Renderer";
 
         //绑定事件
+
+        EventPool.TryAdd(SDL.EventType.WindowResized, (a) =>
+        {
+            OnWindowResized();
+        });
     }
 
     public TAudio Audio { get; private set; }
@@ -241,6 +251,25 @@ public class BaseWindow : IDisposable
 
     private void UpdateWindow()
     {
+        _sdlRenderer = SDL.CreateRenderer(WindowHandle, null);
+        if (_sdlRenderer == IntPtr.Zero)
+        {
+            Log.Error($"SDL 渲染器创建失败: {SDL.GetError()}");
+            return;
+        }
+        _sdlTexture = SDL.CreateTexture(
+            _sdlRenderer,
+            SDL.PixelFormat.ABGR8888,
+            SDL.TextureAccess.Streaming,
+            (int)_width,
+            (int)_height
+        );
+        if (_sdlTexture == IntPtr.Zero)
+        {
+            Log.Error($"SDL 纹理创建失败: {SDL.GetError()}");
+            return;
+        }
+
         var sw = new Stopwatch();
         sw.Start();
         long tick = sw.ElapsedTicks;
@@ -293,7 +322,7 @@ public class BaseWindow : IDisposable
                                 SDL.SetEventFilter(
                                     (a, ref b) =>
                                     {
-                                        return b.Window.WindowID == WindowHandle;
+                                        return b.Window.WindowID != WindowHandle;
                                     },
                                     (nint)WindowID
                                 );
@@ -331,7 +360,49 @@ public class BaseWindow : IDisposable
             //处理大小更新
             if (_resizePending)
             {
-                Dev.MainSwapchain.Resize(_newWidth, _newHeight);
+                Dev.WaitForIdle();
+                SDL.DestroyTexture(_sdlTexture);
+                _newWidth=(uint)Size.X;
+                _newHeight=(uint)Size.Y;
+                _sdlTexture = SDL.CreateTexture(
+                    _sdlRenderer,
+                    SDL.PixelFormat.ABGR8888,
+                    SDL.TextureAccess.Streaming,
+                    (int)_newWidth,
+                    (int)_newHeight
+                );
+                _stagingTexture?.Dispose();
+                _stagingTexture = Dev.ResourceFactory.CreateTexture(
+                    TextureDescription.Texture2D(
+                        _newWidth*1,
+                        _newHeight,
+                        1,
+                        1,
+                        PixelFormat.R8_G8_B8_A8_UNorm,
+                        TextureUsage.Staging
+                    )
+                );
+                for (int i = 0; i < backBuffers.Count; i++)
+                {
+                    backBuffers[i].Item1?.Dispose();
+                    backBuffers[i].Item2?.Dispose();
+                    Texture t = Dev.ResourceFactory.CreateTexture(
+                        TextureDescription.Texture2D(
+                            _newWidth*1,
+                            _newHeight,
+                            1,
+                            1,
+                            PixelFormat.R8_G8_B8_A8_UNorm,
+                            TextureUsage.RenderTarget | TextureUsage.Sampled
+                        )
+                    );
+
+                    backBuffers[i] = new(
+                        Dev.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, t)),
+                        t
+                    );
+                }
+                RendererClass?.ReCreatePipeline(this);
                 _resizePending = false;
             }
 
@@ -372,13 +443,35 @@ public class BaseWindow : IDisposable
                         MappedResource map = Dev.Map(_stagingTexture, MapMode.Read);
                         try
                         {
-                            // 6. 更新 SDL 纹理
-                            uint rowPitch = _width * 4; // RGBA8，每像素4字节
-                            if (
-                                SDL.UpdateTexture(_sdlTexture, 0, map.Data, (int)rowPitch)
-                            )
+                            unsafe
                             {
-                                Log.Warning($"[Renderer]SDL_UpdateTexture 失败: {SDL.GetError()}");
+                                IntPtr pixelsPtr;
+                                int pitch;
+                                if (
+                                    !SDL.LockTexture(
+                                        _sdlTexture,
+                                        IntPtr.Zero,
+                                        out pixelsPtr,
+                                        out pitch
+                                    )
+                                )
+                                {
+                                    Log.Warning($"SDL_LockTexture 失败: {SDL.GetError()}");
+                                }
+                                else
+                                {
+                                    byte* src = (byte*)map.Data;
+                                    byte* dst = (byte*)pixelsPtr;
+                                    int srcPitch = (int)map.RowPitch;
+                                    SDL.GetTextureSize(_sdlTexture,out _,out float h);
+                                    for (int i = 0; i < h; i++)
+                                    {
+                                        Buffer.MemoryCopy(src, dst, pitch, srcPitch);
+                                        src += srcPitch;
+                                        dst += pitch;
+                                    }
+                                    SDL.UnlockTexture(_sdlTexture);
+                                }
                             }
                         }
                         finally
@@ -388,7 +481,7 @@ public class BaseWindow : IDisposable
 
                         // 7. 通过 SDL 渲染器显示到窗口
                         SDL.RenderClear(_sdlRenderer);
-                        SDL.RenderTexture(_sdlRenderer, _sdlTexture,0,0);
+                        SDL.RenderTexture(_sdlRenderer, _sdlTexture, IntPtr.Zero, IntPtr.Zero);
                         SDL.RenderPresent(_sdlRenderer);
                     }
                 }
@@ -412,9 +505,9 @@ public class BaseWindow : IDisposable
     {
         _resizePending = true;
         SDL.GetWindowSize(WindowHandle, out int w, out int h);
-        _newWidth = (uint)w;
-        _newHeight = (uint)h;
-        Root.UpdateScreenSize(w, h);
+        _newWidth = (uint)Size.X;
+        _newHeight = (uint)Size.Y;
+        Root.UpdateScreenSize((int)_newWidth,(int)_newHeight);
     }
 
     public Action RendererContext { get; init; }

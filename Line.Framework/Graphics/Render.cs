@@ -248,7 +248,7 @@ void main()
         {
             var gd = window.Dev;
             var cl = window.commandList;
-            var screenSize = new Vector2(window.Size.X, window.Size.Y);
+            var screenSize = window.Size;
             if (collector == null)
             {
                 collector = new();
@@ -605,10 +605,13 @@ void main()
                 return;
 
             // 6. 开始命令录制
-            BufferIndex = (BufferIndex + 1) % (uint)window.backBuffers.Length;
+            BufferIndex = (BufferIndex + 1) % (uint)window.backBuffers.Count;
+
+            if (_pipeline == null)
+                return;
 
             cl.Begin();
-            cl.SetFramebuffer(window.backBuffers[BufferIndex]);
+            cl.SetFramebuffer(window.backBuffers[(int)BufferIndex].Item1);
 
             cl.ClearColorTarget(0, RgbaFloat.Black);
             cl.SetPipeline(_pipeline);
@@ -619,23 +622,25 @@ void main()
             foreach (var i in Tasks)
             {
                 uint num = (uint)i.Length;
-                cl.SetGraphicsResourceSet(0, i[0].ResourceSet);
+                cl.SetGraphicsResourceSet(0, i[0].ResourceSet ?? _textureResourceSet);
                 cl.Draw(num, 1, index, 0);
                 index += num;
             }
+
+            cl.CopyTexture(
+                window.backBuffers[(int)BufferIndex].Item1.ColorTargets[0].Target,
+                window._stagingTexture
+            );
 
             cl.End();
             gd.SubmitCommands(cl);
         };
     }
 
-    void CreatePipeline(BaseWindow window)
+    internal void ReCreatePipeline(BaseWindow window)
     {
+        _textureResourceSet?.Dispose();
         var gd = window.Dev;
-        // 1. 创建资源布局 (ResourceLayout)
-        
-
-        // 2. 创建 1x1 白色纹理
         Texture whiteTexture = gd.ResourceFactory.CreateTexture(
             TextureDescription.Texture2D(
                 1,
@@ -654,7 +659,7 @@ void main()
         _textureResourceSet = gd.ResourceFactory.CreateResourceSet(
             new ResourceSetDescription(_textureLayout, whiteTexture)
         );
-
+        _pipeline?.Dispose();
         var vertexLayout = new VertexLayoutDescription(
             new VertexElementDescription(
                 "Position",
@@ -682,14 +687,18 @@ void main()
                 false
             ),
             PrimitiveTopology = PrimitiveTopology.TriangleList,
-            //ResourceLayouts = Array.Empty<ResourceLayout>(),
             ResourceLayouts = [_textureLayout],
             ShaderSet = new ShaderSetDescription([vertexLayout], _shaders),
-            Outputs = window.backBuffers[0].OutputDescription,
+            Outputs = window.backBuffers[0].Item1.OutputDescription,
             BlendState = BlendStateDescription.SingleAlphaBlend,
         };
 
-        _pipeline = gd.ResourceFactory.CreateGraphicsPipeline(pipelineDescription);
+        _pipeline = window.Dev.ResourceFactory.CreateGraphicsPipeline(pipelineDescription);
+    }
+
+    void CreatePipeline(BaseWindow window)
+    {
+        ReCreatePipeline(window);
     }
 
     void CreateShader(GraphicsDevice gd)
