@@ -7,6 +7,7 @@ using Line.Framework.Resource.Graphic;
 using Line.Framework.UI.DefaultWidget;
 using Veldrid;
 using SDL3;
+using Line.Framework.UI;
 #pragma warning disable CS8618
 
 namespace SG;
@@ -20,7 +21,7 @@ public static unsafe class SimpleGame
     static readonly uint FontSize = 100;
     static Font font;
 
-    public static void Main(string[] args)
+    public static void Main()
     {
         sw.Start();
         Log.SetMinLevel(LogLevel.Debug);
@@ -114,7 +115,7 @@ public static unsafe class SimpleGame
             Host.FramePerSecond = 50;
         };
 
-        Host.RenderScale=new(1);
+        Host.UpdatePerSecond=5000;
 
         FPSPrinter();
     }
@@ -144,11 +145,19 @@ public static unsafe class SimpleGame
         };
         Host.OnUpdate += (a, b) =>
         {
-            UpdateMs += ((float)b - UpdateMs) / 100f;
-            Renderfps += (Rf- Renderfps) / 100f;
+            UpdateMs += ((float)b - UpdateMs) / 200f;
+            Renderfps += (Rf- Renderfps) / 200f;
             perText.Text =
                 $"{(int)Renderfps}/{Host.FramePerSecond}FPS\n{(int)(UpdateMs * 100f) / 100f}/{(int)(1000f / Host.UpdatePerSecond * 100f) / 100f}Ms";
             perText.Size = new(perText.GetTextSize(perText.Text), new());
         };
+    }
+
+    static void PerTest(uint num,UIWidget root)
+    {
+        for(int i = 0; i < num; i++)
+        {
+            _=new UIBox(){name=$"_PerTest",Z=-100,parent=root,visible=true};
+        }
     }
 }

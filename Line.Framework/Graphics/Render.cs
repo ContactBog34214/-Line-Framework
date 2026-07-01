@@ -578,16 +578,10 @@ void main()
                     t.Add(idx);
                     var c = idx.Color;
                     c = new(c.R, c.G, c.B, c.A * idx.Opacity);
-                    var ps = idx.Position;
-                    if (
-                        window.RenderBackend == GraphicBackend.OpenGL
-                        || window.RenderBackend == GraphicBackend.OpenGLES
-                    )
-                        ps.Y *= -1;
                     vert.Add(
                         new()
                         {
-                            Position = ps,
+                            Position = idx.Position,
                             Color = c,
                             UV = idx.UV,
                         }
@@ -611,7 +605,6 @@ void main()
                 return;
 
             // 6. 开始命令录制
-            BufferIndex = (BufferIndex + 1) % (uint)window.backBuffers.Count;
 
             if (_pipeline == null)
                 return;
@@ -623,7 +616,8 @@ void main()
             {
                 Log.Error($"[Renderer] {ex}");
             }
-            cl.SetFramebuffer(window.backBuffers[(int)BufferIndex].Item1);
+            //cl.SetFramebuffer(window.backBuffers[(int)BufferIndex].Item1);
+            cl.SetFramebuffer(window.Dev.SwapchainFramebuffer);
 
             cl.ClearColorTarget(0, RgbaFloat.Black);
             cl.SetPipeline(_pipeline);
@@ -638,15 +632,6 @@ void main()
                 cl.Draw(num, 1, index, 0);
                 index += num;
             }
-            if (
-                window._stagingTexture.Width == window.backBuffers[(int)BufferIndex].Item2?.Width
-                && window._stagingTexture.Height
-                    == window.backBuffers[(int)BufferIndex].Item2?.Height
-            )
-                cl.CopyTexture(
-                    window.backBuffers[(int)BufferIndex].Item1.ColorTargets[0].Target,
-                    window._stagingTexture
-                );
 
             cl.End();
             gd.SubmitCommands(cl);
@@ -705,7 +690,7 @@ void main()
             PrimitiveTopology = PrimitiveTopology.TriangleList,
             ResourceLayouts = [_textureLayout],
             ShaderSet = new ShaderSetDescription([vertexLayout], _shaders),
-            Outputs = window.backBuffers[0].Item1.OutputDescription,
+            Outputs = window.Dev.SwapchainFramebuffer.OutputDescription,
             BlendState = BlendStateDescription.SingleAlphaBlend,
         };
 

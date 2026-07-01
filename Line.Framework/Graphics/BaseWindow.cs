@@ -22,15 +22,10 @@ public enum GraphicBackend
     Direct3D,
     Vulkan,
     OpenGL,
-    OpenGLES,
 }
 
 public class BaseWindow : IDisposable
 {
-    private unsafe nint _sdlRenderer;
-    private unsafe nint _sdlTexture;
-    internal Texture _stagingTexture;
-    private int _currentBufferIndex = 0;
     private readonly uint _width;
     private readonly uint _height;
 
@@ -38,20 +33,6 @@ public class BaseWindow : IDisposable
     public nint WindowHandle { get; init; }
     public InputManager Input { get; init; }
     public GraphicsDevice Dev { get; init; }
-    public Vector2 RenderScale
-    {
-        get => _renderScale;
-        set
-        {
-            if (value.X > 0 && value.Y > 0)
-            {
-                _renderScale = value;
-                OnWindowResized();
-            }
-        }
-    }
-    Vector2 _renderScale = new(1);
-    internal readonly List<(Framebuffer, Texture)> backBuffers = [];
     public Vector2 Size
     {
         get
@@ -111,9 +92,6 @@ public class BaseWindow : IDisposable
                 case 4:
                     backend = GraphicsBackend.OpenGL;
                     break;
-                case 5:
-                    backend = GraphicsBackend.OpenGLES;
-                    break;
                 default:
                     backend = GraphicsBackend.Vulkan;
                     break;
@@ -128,8 +106,6 @@ public class BaseWindow : IDisposable
         //代码死犟死犟的，就这样吧～
         return (GraphicBackend)Choice;
     }
-
-    Sdl2Window _w;
 
     public BaseWindow(
         int X = 0,
@@ -162,18 +138,109 @@ public class BaseWindow : IDisposable
         {
             Backend = BackendSelector();
         }
+        Resource = new();
         _width = (uint)Width;
         _height = (uint)Height;
         WindowCreateInfo CreateInfo = new WindowCreateInfo(X, Y, Width, Height, State, Title);
         //一个窗口
         SDL.Init(SDL.InitFlags.Video);
 
-        SDL.WindowFlags flags = SDL.WindowFlags.Vulkan | SDL.WindowFlags.Resizable;
+        SDL.WindowFlags flags = SDL.WindowFlags.Resizable;
+
+        if (Backend == GraphicBackend.OpenGL)
+            flags = flags | SDL.WindowFlags.OpenGL;
+        if (Backend == GraphicBackend.Vulkan)
+            flags = flags | SDL.WindowFlags.Vulkan;
+        if (Backend == GraphicBackend.Metal)
+            flags = flags | SDL.WindowFlags.Metal;
 
         WindowHandle = SDL.CreateWindow(Title, Width, Height, flags);
-        Width = (int)(Size.X * RenderScale.X);
-        Height = (int)(Size.Y * RenderScale.Y);
         SDL.ShowWindow(WindowHandle);
+        SwapchainSource source = null;
+        var driver = SDL.GetCurrentVideoDriver();
+
+        try
+        {
+            uint props = SDL.GetWindowProperties(WindowHandle);
+            if (driver == "wayland")
+            {
+                IntPtr display = SDL.GetPointerProperty(
+                    props,
+                    SDL.Props.WindowWaylandDisplayPointer,
+                    IntPtr.Zero
+                );
+                IntPtr surface = SDL.GetPointerProperty(
+                    props,
+                    SDL.Props.WindowWaylandSurfacePointer,
+                    IntPtr.Zero
+                );
+                source = SwapchainSource.CreateWayland(display, surface);
+            }
+            else if (driver == "x11")
+            {
+                var display = SDL.GetPointerProperty(
+                    props,
+                    SDL.Props.WindowX11DisplayPointer,
+                    IntPtr.Zero
+                );
+                var x11Window = (IntPtr)
+                    SDL.GetNumberProperty(props, SDL.Props.WindowX11WindowNumber, 0);
+                source = SwapchainSource.CreateXlib(display, x11Window);
+            }
+            else if (driver == "windows")
+            {
+                var hwnd = SDL.GetPointerProperty(
+                    props,
+                    SDL.Props.WindowWin32HWNDPointer,
+                    IntPtr.Zero
+                );
+                var hinstance = SDL.GetPointerProperty(
+                    props,
+                    SDL.Props.WindowWin32InstancePointer,
+                    IntPtr.Zero
+                );
+                source = SwapchainSource.CreateWin32(hwnd, hinstance);
+            }
+            else if (driver == "Android")
+            {
+                var surfaceHandle = SDL.GetPointerProperty(
+                    props,
+                    SDL.Props.WindowAndroidSurfacePointer,
+                    IntPtr.Zero
+                );
+                var jniEnv = SDL.GetAndroidJNIEnv();
+                source = SwapchainSource.CreateAndroidSurface(surfaceHandle, jniEnv);
+            }
+            else if (driver == "cocoa")
+            {
+                IntPtr nsWindow = SDL.GetPointerProperty(
+                    props,
+                    SDL.Props.WindowCocoaWindowPointer,
+                    IntPtr.Zero
+                );
+                source = SwapchainSource.CreateNSWindow(nsWindow);
+            }
+            else
+            {
+                Log.Error($"[Renderer] What is {driver}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"[Renderer] {ex}");
+        }
+
+        Width = (int)Size.X;
+        Height = (int)Size.Y;
+
+        var swapchainDesc = new SwapchainDescription(
+            source,
+            (uint)Width,
+            (uint)Height,
+            null, // 深度格式，可选
+            false // 垂直同步
+        );
+
         SDL.SetHint("SDL_HINT_TOUCH_MOUSE_EVENTS", "0");
         WindowID = SDL.GetWindowID(WindowHandle);
         GraphicsDeviceOptions Options = new GraphicsDeviceOptions
@@ -181,74 +248,74 @@ public class BaseWindow : IDisposable
             //自动otto
             Debug = false,
             PreferStandardClipSpaceYDirection = true,
+            SyncToVerticalBlank = false,
         };
-
-        switch (Backend)
+        try
         {
-            case GraphicBackend.Metal:
-                Dev = GraphicsDevice.CreateMetal(Options);
-                break;
-            case GraphicBackend.Direct3D:
-                Dev = GraphicsDevice.CreateD3D11(Options);
-                break;
-            case GraphicBackend.Vulkan:
-                Dev = GraphicsDevice.CreateVulkan(Options);
-                break;
-            case GraphicBackend.OpenGL:
-                _w = VeldridStartup.CreateWindow(new() { WindowInitialState = WindowState.Hidden });
-                Dev = VeldridStartup.CreateDefaultOpenGLGraphicsDevice(
-                    Options,
-                    _w,
-                    GraphicsBackend.OpenGL
-                );
-                break;
-            case GraphicBackend.OpenGLES:
-                _w = VeldridStartup.CreateWindow(new() { WindowInitialState = WindowState.Hidden });
-                Dev = VeldridStartup.CreateDefaultOpenGLGraphicsDevice(
-                    Options,
-                    _w,
-                    GraphicsBackend.OpenGLES
-                );
-                break;
-            default:
-                Dev = GraphicsDevice.CreateVulkan(Options);
-                break;
+            switch (Backend)
+            {
+                case GraphicBackend.Metal:
+                    if (GraphicsDevice.IsBackendSupported(GraphicsBackend.Metal))
+                        Dev = GraphicsDevice.CreateMetal(Options, swapchainDesc);
+                    break;
+                case GraphicBackend.Direct3D:
+                    if (GraphicsDevice.IsBackendSupported(GraphicsBackend.Direct3D11))
+                        Dev = GraphicsDevice.CreateD3D11(Options, swapchainDesc);
+                    break;
+                case GraphicBackend.Vulkan:
+                    if (GraphicsDevice.IsBackendSupported(GraphicsBackend.Vulkan))
+                        Dev = GraphicsDevice.CreateVulkan(Options, swapchainDesc);
+                    break;
+                case GraphicBackend.OpenGL:
+                    if (GraphicsDevice.IsBackendSupported(GraphicsBackend.OpenGL))
+                    {
+                        nint GLContext = SDL.GLCreateContext(WindowHandle);
+
+                        IntPtr contextHandle = GLContext;
+
+                        var info = new OpenGLPlatformInfo(
+                            openGLContextHandle: GLContext,
+                            getProcAddress: (name) => SDL.GLGetProcAddress(name),
+                            makeCurrent: (ctx) => SDL.GLMakeCurrent(WindowHandle, ctx), // 必须返回 bool
+                            getCurrentContext: SDL.GLGetCurrentContext,
+                            clearCurrentContext: () => SDL.GLMakeCurrent(WindowHandle, IntPtr.Zero),
+                            deleteContext: (ctx) => SDL.GLDestroyContext(ctx),
+                            swapBuffers: () => SDL.GLSwapWindow(WindowHandle),
+                            setSyncToVerticalBlank: (enabled) =>
+                                SDL.GLSetSwapInterval(enabled ? 1 : 0)
+                        );
+                        SDL.GLSetSwapInterval(0);
+
+                        Dev = GraphicsDevice.CreateOpenGL(
+                            Options,
+                            info,
+                            (uint)Size.X,
+                            (uint)Size.Y
+                        );
+                    }
+                    break;
+                default:
+                    if (GraphicsDevice.IsBackendSupported(GraphicsBackend.Vulkan))
+                        Dev = GraphicsDevice.CreateVulkan(Options, swapchainDesc);
+                    break;
+            }
         }
-        _w?.Visible = false;
+        catch (Exception ex)
+        {
+            Log.Error($"[Renderer] {ex.Message}");
+            if (GraphicsDevice.IsBackendSupported(GraphicsBackend.Vulkan))
+                Dev = GraphicsDevice.CreateVulkan(Options, swapchainDesc);
+            else
+                Dispose();
+            return;
+        }
 
         RenderBackend = (GraphicBackend)Backend;
-
-        Texture texture1 = Dev.ResourceFactory.CreateTexture(
-            TextureDescription.Texture2D(
-                (uint)Width,
-                (uint)Height,
-                1,
-                1,
-                PixelFormat.R8_G8_B8_A8_UNorm,
-                TextureUsage.RenderTarget | TextureUsage.Sampled
-            )
-        );
-        _stagingTexture = Dev.ResourceFactory.CreateTexture(
-            TextureDescription.Texture2D(
-                (uint)Width,
-                (uint)Height,
-                1,
-                1,
-                PixelFormat.R8_G8_B8_A8_UNorm,
-                TextureUsage.Staging
-            )
-        );
-
-        backBuffers.Add(
-            new(
-                Dev.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, texture1)),
-                texture1
-            )
-        );
 
         //指令
         if (Dev == null)
         {
+            Log.Error($"[Renderer] GraphicsDevice Failed");
             Dispose();
             return;
         }
@@ -263,7 +330,6 @@ public class BaseWindow : IDisposable
         Root = new(this, 0, 0);
 
         //资源管理器
-        Resource = new();
         Resource.AddType("Image", new TResourceSet(Resource, Dev, RendererClass.TextureLayout));
         Resource.AddType("Font", new TFont(Resource, Dev, RendererClass.TextureLayout));
         Audio = new TAudio(Resource);
@@ -315,25 +381,6 @@ public class BaseWindow : IDisposable
 
     private void UpdateWindow()
     {
-        _sdlRenderer = SDL.CreateRenderer(WindowHandle, null);
-        if (_sdlRenderer == IntPtr.Zero)
-        {
-            Log.Error($"SDL 渲染器创建失败: {SDL.GetError()}");
-            return;
-        }
-        _sdlTexture = SDL.CreateTexture(
-            _sdlRenderer,
-            SDL.PixelFormat.ABGR8888,
-            SDL.TextureAccess.Streaming,
-            (int)_width,
-            (int)_height
-        );
-        if (_sdlTexture == IntPtr.Zero)
-        {
-            Log.Error($"SDL 纹理创建失败: {SDL.GetError()}");
-            return;
-        }
-
         var sw = new Stopwatch();
         sw.Start();
         long tick = sw.ElapsedTicks;
@@ -425,53 +472,13 @@ public class BaseWindow : IDisposable
             if (_resizePending)
             {
                 Dev.WaitForIdle();
-                SDL.DestroyTexture(_sdlTexture);
-                _newWidth = (uint)(Size.X * RenderScale.X);
-                _newHeight = (uint)(Size.Y * RenderScale.Y);
-                _sdlTexture = SDL.CreateTexture(
-                    _sdlRenderer,
-                    SDL.PixelFormat.ABGR8888,
-                    SDL.TextureAccess.Streaming,
-                    (int)_newWidth,
-                    (int)_newHeight
-                );
-                _stagingTexture?.Dispose();
-                _stagingTexture = Dev.ResourceFactory.CreateTexture(
-                    TextureDescription.Texture2D(
-                        _newWidth * 1,
-                        _newHeight,
-                        1,
-                        1,
-                        PixelFormat.R8_G8_B8_A8_UNorm,
-                        TextureUsage.Staging
-                    )
-                );
-                for (int i = 0; i < backBuffers.Count; i++)
-                {
-                    backBuffers[i].Item1?.Dispose();
-                    backBuffers[i].Item2?.Dispose();
-                    Texture t = Dev.ResourceFactory.CreateTexture(
-                        TextureDescription.Texture2D(
-                            _newWidth,
-                            _newHeight,
-                            1,
-                            1,
-                            PixelFormat.R8_G8_B8_A8_UNorm,
-                            TextureUsage.RenderTarget | TextureUsage.Sampled
-                        )
-                    );
-
-                    backBuffers[i] = new(
-                        Dev.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, t)),
-                        t
-                    );
-                }
-                RendererClass?.ReCreatePipeline(this);
+                _newWidth = (uint)Size.X;
+                _newHeight = (uint)Size.Y;
+                Dev.MainSwapchain.Resize(_newWidth, _newHeight);
                 _resizePending = false;
             }
 
             //正式渲染
-            Thread Swap = null;
             async void render()
             {
                 if (FramePerSecond <= 0)
@@ -503,67 +510,7 @@ public class BaseWindow : IDisposable
                         OnRender?.Invoke(this, delay);
                         RenderMs = milliseconds;
                         RendererContext();
-
-                        Action swap = async () =>
-                        {
-                            MappedResource map = Dev.Map(_stagingTexture, MapMode.Read);
-                            try
-                            {
-                                unsafe
-                                {
-                                    IntPtr pixelsPtr;
-                                    int pitch;
-                                    if (
-                                        !SDL.LockTexture(
-                                            _sdlTexture,
-                                            IntPtr.Zero,
-                                            out pixelsPtr,
-                                            out pitch
-                                        )
-                                    )
-                                    {
-                                        Log.Warning($"SDL_LockTexture 失败: {SDL.GetError()}");
-                                    }
-                                    else
-                                    {
-                                        byte* src = (byte*)map.Data;
-                                        byte* dst = (byte*)pixelsPtr;
-                                        int srcPitch = (int)map.RowPitch;
-                                        SDL.GetTextureSize(_sdlTexture, out float w, out float h);
-                                        int i = 0;
-
-                                        for (i = 0; i < h; i++)
-                                        {
-                                            if (
-                                                _stagingTexture.Width == (int)w
-                                                && _stagingTexture.Height == h
-                                            )
-                                            {
-                                                Buffer.MemoryCopy(src, dst, pitch, srcPitch);
-                                                src += srcPitch;
-                                                dst += pitch;
-                                            }
-                                            else
-                                            {
-                                                break;
-                                            }
-                                        }
-
-                                        SDL.UnlockTexture(_sdlTexture);
-                                    }
-                                }
-                            }
-                            finally
-                            {
-                                Dev.Unmap(_stagingTexture);
-                            }
-
-                            // 7. 通过 SDL 渲染器显示到窗口
-                            SDL.RenderClear(_sdlRenderer);
-                            SDL.RenderTexture(_sdlRenderer, _sdlTexture, IntPtr.Zero, IntPtr.Zero);
-                            SDL.RenderPresent(_sdlRenderer);
-                        };
-                        swap.Invoke();
+                        Dev.SwapBuffers();
                     }
                 }
                 catch (Exception ex)
@@ -585,12 +532,10 @@ public class BaseWindow : IDisposable
     private void OnWindowResized()
     {
         _resizePending = true;
-        SDL.GetWindowSize(WindowHandle, out int w, out int h);
+        SDL.GetWindowSize(WindowHandle, out _, out _);
         _newWidth = (uint)Size.X;
         _newHeight = (uint)Size.Y;
         Root.UpdateScreenSize((int)_newWidth, (int)_newHeight);
-        _w?.Width = (int)Size.X;
-        _w?.Height = (int)Size.Y;
     }
 
     public Action RendererContext { get; init; }
@@ -600,7 +545,6 @@ public class BaseWindow : IDisposable
         MainThread?.Interrupt();
         RendererClass = null;
         SDL.DestroyWindow(WindowHandle);
-        _w?.Close();
         UpdateThread?.Interrupt();
         commandList?.Dispose();
         try
