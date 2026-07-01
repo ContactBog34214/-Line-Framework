@@ -33,7 +33,7 @@ public static unsafe class SimpleGame
         foreach (var name in names)
             Log.Debug($"Asset:{name}");
 
-        Host = new(Backend: GraphicsBackend.OpenGLES);
+        Host = new(Backend: GraphicBackend.Vulkan);
         Host.Title = "-Line-Framework example";
         Host.UpdatePerSecond = 10000;
 
@@ -114,6 +114,8 @@ public static unsafe class SimpleGame
             Host.FramePerSecond = 50;
         };
 
+        Host.RenderScale=new(1);
+
         FPSPrinter();
     }
 
@@ -135,13 +137,15 @@ public static unsafe class SimpleGame
 
         float Renderfps = 0;
         float UpdateMs = 0;
+        float Rf=0;
         Host.OnRender += (a, b) =>
         {
-            Renderfps += (1000f / (float)b - Renderfps) / 100f;
+            Rf=1000f / (float)b ;
         };
         Host.OnUpdate += (a, b) =>
         {
             UpdateMs += ((float)b - UpdateMs) / 100f;
+            Renderfps += (Rf- Renderfps) / 100f;
             perText.Text =
                 $"{(int)Renderfps}/{Host.FramePerSecond}FPS\n{(int)(UpdateMs * 100f) / 100f}/{(int)(1000f / Host.UpdatePerSecond * 100f) / 100f}Ms";
             perText.Size = new(perText.GetTextSize(perText.Text), new());
