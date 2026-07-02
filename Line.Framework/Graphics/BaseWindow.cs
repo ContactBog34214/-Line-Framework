@@ -1,56 +1,110 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Numerics;
+using System.Runtime.InteropServices;
 using Line.Framework.Input;
 using Line.Framework.Resource;
 using Line.Framework.Resource.Audio;
 using Line.Framework.Resource.Graphic;
 using Line.Framework.UI;
+using SDL3;
 using Veldrid;
+using Veldrid.OpenGL;
 using Veldrid.Sdl2;
 using Veldrid.StartupUtilities;
 using UIScreen = Line.Framework.UI.UIScreen;
 
 namespace Line.Framework.Graphics;
 
+public enum GraphicBackend
+{
+    Metal,
+    Direct3D,
+    Vulkan,
+    OpenGL,
+}
+
 public class BaseWindow : IDisposable
 {
+    private readonly uint _width;
+    private readonly uint _height;
+
     public WindowsRenderer RendererClass { get; private set; }
-    public Sdl2Window TargetWindow { get; init; }
+    public nint WindowHandle { get; init; }
     public InputManager Input { get; init; }
     public GraphicsDevice Dev { get; init; }
+    public Vector2 Size
+    {
+        get
+        {
+            try
+            {
+                SDL.GetWindowSize(WindowHandle, out int w, out int h);
+                return new(w, h);
+            }
+            catch
+            {
+                return new(0);
+            }
+        }
+        set
+        {
+            try
+            {
+                SDL.SetWindowSize(WindowHandle, (int)value.X, (int)value.Y);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[Window] {ex}");
+            }
+        }
+    }
     public UIScreen Root { get; init; }
     private readonly Thread MainThread;
     public float FramePerSecond { get; set; } = 240;
     public float UpdatePerSecond { get; set; } = 1000;
     public CommandList commandList { get; init; }
     public UIDrawCollector Collector { get; init; }
+    public GraphicBackend RenderBackend { get; init; }
 
     public event EventHandler<double> OnRender;
 
     public event EventHandler<double> OnUpdate;
 
-    public static GraphicsBackend BackendSelector()
+    public static GraphicBackend BackendSelector()
     {
-        //建个队列（简单的不会搞）😭
-        GraphicsBackend[] queue =
-        {
-            GraphicsBackend.Metal,
-            GraphicsBackend.Vulkan,
-            GraphicsBackend.Direct3D11,
-            GraphicsBackend.OpenGL,
-            GraphicsBackend.OpenGLES,
-        };
         //默认设备（到最后都用不了那就算了吧）
-        GraphicsBackend? Choice = null;
-        foreach (GraphicsBackend backend in queue)
+        int Choice = 0;
+        for (int i = 0; i < 5; i++)
         {
+            GraphicsBackend backend;
+            switch (i)
+            {
+                case 1:
+                    backend = GraphicsBackend.Metal;
+                    break;
+                case 2:
+                    backend = GraphicsBackend.Direct3D11;
+                    break;
+                case 3:
+                    backend = GraphicsBackend.Vulkan;
+                    break;
+                case 4:
+                    backend = GraphicsBackend.OpenGL;
+                    break;
+                default:
+                    backend = GraphicsBackend.Vulkan;
+                    break;
+            }
+
             if (GraphicsDevice.IsBackendSupported(backend))
             {
-                Choice = backend;
+                Choice = i;
                 break;
             }
         }
         //代码死犟死犟的，就这样吧～
-        return (GraphicsBackend)Choice;
+        return (GraphicBackend)Choice;
     }
 
     public BaseWindow(
@@ -59,7 +113,7 @@ public class BaseWindow : IDisposable
         int Width = 640,
         int Height = 480,
         WindowState State = WindowState.Normal,
-        GraphicsBackend? Backend = null,
+        GraphicBackend? Backend = null,
         string Title = "Title"
     )
     {
@@ -84,35 +138,192 @@ public class BaseWindow : IDisposable
         {
             Backend = BackendSelector();
         }
+        Resource = new();
+        _width = (uint)Width;
+        _height = (uint)Height;
         WindowCreateInfo CreateInfo = new WindowCreateInfo(X, Y, Width, Height, State, Title);
         //一个窗口
-        TargetWindow = VeldridStartup.CreateWindow(CreateInfo);
+        if (Width < Height)
+            SDL.SetHint(SDL.Hints.Orientations, "Portrait");
+        else if (Height > Width)
+            SDL.SetHint(SDL.Hints.Orientations, "Landscape");
+        SDL.Init(SDL.InitFlags.Video);
+
+        SDL.WindowFlags flags = SDL.WindowFlags.Resizable;
+
+        if (Backend == GraphicBackend.OpenGL)
+            flags = flags | SDL.WindowFlags.OpenGL;
+        if (Backend == GraphicBackend.Vulkan)
+            flags = flags | SDL.WindowFlags.Vulkan;
+        if (Backend == GraphicBackend.Metal)
+            flags = flags | SDL.WindowFlags.Metal;
+
+        WindowHandle = SDL.CreateWindow(Title, Width, Height, flags);
+        SDL.ShowWindow(WindowHandle);
+        SwapchainSource source = null;
+        var driver = SDL.GetCurrentVideoDriver();
+
+        try
+        {
+            uint props = SDL.GetWindowProperties(WindowHandle);
+            if (driver == "wayland")
+            {
+                IntPtr display = SDL.GetPointerProperty(
+                    props,
+                    SDL.Props.WindowWaylandDisplayPointer,
+                    IntPtr.Zero
+                );
+                IntPtr surface = SDL.GetPointerProperty(
+                    props,
+                    SDL.Props.WindowWaylandSurfacePointer,
+                    IntPtr.Zero
+                );
+                source = SwapchainSource.CreateWayland(display, surface);
+            }
+            else if (driver == "x11")
+            {
+                var display = SDL.GetPointerProperty(
+                    props,
+                    SDL.Props.WindowX11DisplayPointer,
+                    IntPtr.Zero
+                );
+                var x11Window = (IntPtr)
+                    SDL.GetNumberProperty(props, SDL.Props.WindowX11WindowNumber, 0);
+                source = SwapchainSource.CreateXlib(display, x11Window);
+            }
+            else if (driver == "windows")
+            {
+                var hwnd = SDL.GetPointerProperty(
+                    props,
+                    SDL.Props.WindowWin32HWNDPointer,
+                    IntPtr.Zero
+                );
+                var hinstance = SDL.GetPointerProperty(
+                    props,
+                    SDL.Props.WindowWin32InstancePointer,
+                    IntPtr.Zero
+                );
+                source = SwapchainSource.CreateWin32(hwnd, hinstance);
+            }
+            else if (driver == "Android")
+            {
+                var surfaceHandle = SDL.GetPointerProperty(
+                    props,
+                    SDL.Props.WindowAndroidSurfacePointer,
+                    IntPtr.Zero
+                );
+                var jniEnv = SDL.GetAndroidJNIEnv();
+                source = SwapchainSource.CreateAndroidSurface(surfaceHandle, jniEnv);
+            }
+            else if (driver == "cocoa")
+            {
+                IntPtr nsWindow = SDL.GetPointerProperty(
+                    props,
+                    SDL.Props.WindowCocoaWindowPointer,
+                    IntPtr.Zero
+                );
+                source = SwapchainSource.CreateNSWindow(nsWindow);
+            }
+            else
+            {
+                Log.Error($"[Renderer] What is {driver}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"[Renderer] {ex}");
+        }
+
+        Width = (int)Size.X;
+        Height = (int)Size.Y;
+
+        var swapchainDesc = new SwapchainDescription(
+            source,
+            (uint)Width,
+            (uint)Height,
+            null, // 深度格式，可选
+            false // 垂直同步
+        );
+
+        SDL.SetHint(SDL.Hints.TouchMouseEvents, "0");
+        WindowID = SDL.GetWindowID(WindowHandle);
         GraphicsDeviceOptions Options = new GraphicsDeviceOptions
         {
             //自动otto
             Debug = false,
             PreferStandardClipSpaceYDirection = true,
-            SwapchainSrgbFormat = false,
             SyncToVerticalBlank = false,
         };
         try
         {
-            Dev = VeldridStartup.CreateGraphicsDevice(
-                TargetWindow,
-                Options,
-                (GraphicsBackend)Backend
-            );
+            switch (Backend)
+            {
+                case GraphicBackend.Metal:
+                    if (GraphicsDevice.IsBackendSupported(GraphicsBackend.Metal))
+                        Dev = GraphicsDevice.CreateMetal(Options, swapchainDesc);
+                    break;
+                case GraphicBackend.Direct3D:
+                    if (GraphicsDevice.IsBackendSupported(GraphicsBackend.Direct3D11))
+                        Dev = GraphicsDevice.CreateD3D11(Options, swapchainDesc);
+                    break;
+                case GraphicBackend.Vulkan:
+                    if (GraphicsDevice.IsBackendSupported(GraphicsBackend.Vulkan))
+                        Dev = GraphicsDevice.CreateVulkan(Options, swapchainDesc);
+                    break;
+                case GraphicBackend.OpenGL:
+                    if (GraphicsDevice.IsBackendSupported(GraphicsBackend.OpenGL))
+                    {
+                        nint GLContext = SDL.GLCreateContext(WindowHandle);
+
+                        IntPtr contextHandle = GLContext;
+
+                        var info = new OpenGLPlatformInfo(
+                            openGLContextHandle: GLContext,
+                            getProcAddress: (name) => SDL.GLGetProcAddress(name),
+                            makeCurrent: (ctx) => SDL.GLMakeCurrent(WindowHandle, ctx), // 必须返回 bool
+                            getCurrentContext: SDL.GLGetCurrentContext,
+                            clearCurrentContext: () => SDL.GLMakeCurrent(WindowHandle, IntPtr.Zero),
+                            deleteContext: (ctx) => SDL.GLDestroyContext(ctx),
+                            swapBuffers: () => SDL.GLSwapWindow(WindowHandle),
+                            setSyncToVerticalBlank: (enabled) =>
+                                SDL.GLSetSwapInterval(enabled ? 1 : 0)
+                        );
+                        SDL.GLSetSwapInterval(0);
+
+                        Dev = GraphicsDevice.CreateOpenGL(
+                            Options,
+                            info,
+                            (uint)Size.X,
+                            (uint)Size.Y
+                        );
+                    }
+                    break;
+                default:
+                    if (GraphicsDevice.IsBackendSupported(GraphicsBackend.Vulkan))
+                        Dev = GraphicsDevice.CreateVulkan(Options, swapchainDesc);
+                    break;
+            }
         }
-        catch
+        catch (Exception ex)
         {
-            Options.Debug = false;
-            Dev = VeldridStartup.CreateGraphicsDevice(
-                TargetWindow,
-                Options,
-                (GraphicsBackend)Backend
-            );
+            Log.Error($"[Renderer] {ex.Message}");
+            if (GraphicsDevice.IsBackendSupported(GraphicsBackend.Vulkan))
+                Dev = GraphicsDevice.CreateVulkan(Options, swapchainDesc);
+            else
+                Dispose();
+            return;
         }
+
+        RenderBackend = (GraphicBackend)Backend;
+
         //指令
+        if (Dev == null)
+        {
+            Log.Error($"[Renderer] GraphicsDevice Failed");
+            Dispose();
+            return;
+        }
+
         commandList = Dev.ResourceFactory.CreateCommandList();
         Collector = new();
         RendererClass = new(Dev);
@@ -120,24 +331,73 @@ public class BaseWindow : IDisposable
         {
             RendererClass.UIRenderer(this, Collector);
         };
-        TargetWindow.Resized += OnWindowResized;
         Root = new(this, 0, 0);
-        Root.UpdateScreenSize(TargetWindow.Width, TargetWindow.Height);
 
         //资源管理器
-        Resource = new();
         Resource.AddType("Image", new TResourceSet(Resource, Dev, RendererClass.TextureLayout));
         Resource.AddType("Font", new TFont(Resource, Dev, RendererClass.TextureLayout));
         Audio = new TAudio(Resource);
         Resource.AddType("Audio", Audio);
+        OnWindowResized();
         //输入器
-        Input = new(TargetWindow);
+        Input = new(this);
         MainThread = new Thread(UpdateWindow);
         MainThread.Start();
         MainThread.Name = "Renderer";
+
+        //绑定事件
+        EventPool.TryAdd(
+            SDL.EventType.WindowResized,
+            (a) =>
+            {
+                OnWindowResized();
+            }
+        );
+        EventPool.TryAdd(SDL.EventType.WindowFocusGained, (a) => FocusGained.Invoke());
+        EventPool.TryAdd(SDL.EventType.WindowFocusLost, (a) => FocusLost.Invoke());
+        OnCloseWindow = (ev) =>
+        {
+            Dispose();
+        };
     }
 
     public TAudio Audio { get; private set; }
+    public uint WindowID { get; init; }
+    public Action<SDL.Event> OnCloseWindow
+    {
+        get;
+        set
+        {
+            if (value == null)
+                throw new Exception($"Action cannot be null");
+            EventPool.TryRemove(SDL.EventType.WindowCloseRequested, out field);
+            field = value;
+            EventPool.TryAdd(SDL.EventType.WindowCloseRequested, field);
+        }
+    }
+
+    internal ConcurrentDictionary<SDL.EventType, Action<SDL.Event>> EventPool { get; } = new();
+    public event Action FocusGained;
+    public event Action FocusLost;
+    public bool Exists
+    {
+        get => SDL.GetWindowID(WindowHandle) != 0;
+    }
+    public string Title
+    {
+        get => SDL.GetWindowTitle(WindowHandle) ?? "";
+        set
+        {
+            try
+            {
+                SDL.SetWindowTitle(WindowHandle, value);
+            }
+            catch (NullReferenceException ex)
+            {
+                Log.Warning($"[Window] {ex.Message}");
+            }
+        }
+    }
 
     private void UpdateWindow()
     {
@@ -147,16 +407,16 @@ public class BaseWindow : IDisposable
         double milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
         double RenderMs = 0;
         //开始考试
-        while (TargetWindow.Exists)
+        while (Exists)
         {
             tick = sw.ElapsedTicks;
             milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
 
             //输入更新
-            void update()
+            unsafe void update()
             {
                 double UpdateMs = 0;
-                while (TargetWindow.Exists)
+                while (Exists)
                 {
                     //防止冻结
                     if (UpdatePerSecond <= 0)
@@ -185,9 +445,30 @@ public class BaseWindow : IDisposable
                         }
                         if (delay >= wait)
                         {
-                            TargetWindow.PumpEvents();
+                            SDL.PumpEvents();
                             OnUpdate?.Invoke(this, delay);
                             UpdateMs = milliseconds;
+                            while (true)
+                            {
+                                SDL.SetEventFilter(
+                                    (a, ref b) =>
+                                    {
+                                        return b.Window.WindowID != WindowHandle;
+                                    },
+                                    (nint)WindowID
+                                );
+                                var events = SDL.PollEvent(out var ev);
+                                if (!events)
+                                    break;
+                                foreach (var item in EventPool)
+                                {
+                                    if (ev.Type == (uint)item.Key)
+                                    {
+                                        item.Value?.Invoke(ev);
+                                        break;
+                                    }
+                                }
+                            }
                         }
                     }
                     catch (Exception ex)
@@ -210,12 +491,15 @@ public class BaseWindow : IDisposable
             //处理大小更新
             if (_resizePending)
             {
+                Dev.WaitForIdle();
+                _newWidth = (uint)Size.X;
+                _newHeight = (uint)Size.Y;
                 Dev.MainSwapchain.Resize(_newWidth, _newHeight);
                 _resizePending = false;
             }
 
             //正式渲染
-            void render()
+            async void render()
             {
                 if (FramePerSecond <= 0)
                 {
@@ -268,9 +552,10 @@ public class BaseWindow : IDisposable
     private void OnWindowResized()
     {
         _resizePending = true;
-        _newWidth = (uint)TargetWindow.Width;
-        _newHeight = (uint)TargetWindow.Height;
-        Root.UpdateScreenSize(TargetWindow.Width, TargetWindow.Height);
+        SDL.GetWindowSize(WindowHandle, out _, out _);
+        _newWidth = (uint)Size.X;
+        _newHeight = (uint)Size.Y;
+        Root.UpdateScreenSize((int)_newWidth, (int)_newHeight);
     }
 
     public Action RendererContext { get; init; }
@@ -279,8 +564,9 @@ public class BaseWindow : IDisposable
     {
         MainThread?.Interrupt();
         RendererClass = null;
-        TargetWindow?.Close();
+        SDL.DestroyWindow(WindowHandle);
         UpdateThread?.Interrupt();
+        Resource?.Dispose();
         commandList?.Dispose();
         try
         {
@@ -291,6 +577,5 @@ public class BaseWindow : IDisposable
             Log.Warning($"{ex.Message}");
         }
         Root?.Dispose();
-        Resource?.Dispose();
     }
 }

@@ -369,7 +369,7 @@ public sealed class Font : IDisposable
                 out float bx,
                 out float by
             );
-            var rs = Dev.ResourceFactory.CreateResourceSet(
+            var rs = Dev?.ResourceFactory.CreateResourceSet(
                 new ResourceSetDescription(Layout, r8Tex)
             );
             var cache = new FontTexture
