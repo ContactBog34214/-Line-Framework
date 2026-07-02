@@ -204,8 +204,15 @@ void main()
         return GetVertices(vert, source, s);
     }
 
+    static Dictionary<UINode, treeCache> TreeCache = [];
+
+    record treeCache(nint version, List<UIWidget> Tree);
+
     static List<UIWidget> trees(UIWidget root)
     {
+        if (TreeCache.TryGetValue(root, out treeCache cache))
+            if (cache.version == root.NodeTreeVersion)
+                return cache.Tree;
         List<UIWidget> widgets = new();
         HashSet<UIWidget> visited = new();
 
@@ -225,7 +232,7 @@ void main()
             node.oz = i++;
             widgets.Add(node);
 
-            var sortedChildren = node.children.Where(c => c != null).OrderBy(c => c.Z);
+            var sortedChildren = node.Children.Where(c => c != null).OrderBy(c => c.Z);
 
             foreach (var child in sortedChildren)
             {
@@ -234,6 +241,12 @@ void main()
         }
 
         Collect(root);
+        try
+        {
+            TreeCache.Remove(root);
+        }
+        catch { }
+        TreeCache.Add(root, new(root.NodeTreeVersion, widgets));
         return widgets;
     }
 
@@ -270,14 +283,14 @@ void main()
             for (int i = 0; i < ws.Count; i++)
             {
                 var item = ws[i];
-                if (item is UIWidget target && target.RendererContext != null) // 添加 null 检查
+                if (item is UIWidget target && target.RendererContext != null)
                 {
                     HashSet<UIWidget> visited = new();
                     void syncer(UIWidget target)
                     {
                         if (!visited.Add(target))
-                            return; // 防止无限递归
-                        var t = target.parent as UIWidget;
+                            return;
+                        var t = target.Parent as UIWidget;
                         if (t != null && !t.syncOK)
                             syncer(t);
                         //同步渲染区大小
@@ -553,12 +566,14 @@ void main()
                 }
             }
 
-            if (window.ParallelRender)
+            if (window != null && window.ParallelRender)
                 Parallel.For(
                     0,
                     TotalThreadCount,
                     idx =>
                     {
+                        if (window == null)
+                            return;
                         var i = commands[(int)idx];
                         CTV(i, (int)idx);
                     }
@@ -634,7 +649,6 @@ void main()
             {
                 Log.Error($"[Renderer] {ex}");
             }
-            //cl.SetFramebuffer(window.backBuffers[(int)BufferIndex].Item1);
             cl.SetFramebuffer(window.Dev.SwapchainFramebuffer);
 
             cl.ClearColorTarget(0, RgbaFloat.Black);

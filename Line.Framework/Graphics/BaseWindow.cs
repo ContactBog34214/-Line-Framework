@@ -10,8 +10,6 @@ using SDL3;
 using Veldrid;
 using Veldrid.OpenGL;
 using Veldrid.StartupUtilities;
-using UIScreen = Line.Framework.UI.UIScreen;
-
 namespace Line.Framework.Graphics;
 
 public enum GraphicBackend
@@ -490,11 +488,11 @@ public class BaseWindow : IDisposable
                         {
                             if (wait - delay > 4)
                             {
-                                Thread.Sleep((int)(wait - delay) - 2);
+                                Thread.Sleep((int)(wait - delay) - 4);
                             }
                             else
                             {
-                                Thread.SpinWait((int)(wait - delay) / 2);
+                                Thread.SpinWait((int)(wait - delay) / 4);
                             }
                             tick = sw.ElapsedTicks;
                             milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
@@ -571,11 +569,11 @@ public class BaseWindow : IDisposable
                     {
                         if (wait - delay > 4)
                         {
-                            Thread.Sleep((int)(wait - delay) - 2);
+                            Thread.Sleep((int)(wait - delay) - 4);
                         }
                         else
                         {
-                            Thread.SpinWait((int)(wait - delay) / 2);
+                            Thread.SpinWait((int)(wait - delay) / 4);
                         }
                         tick = sw.ElapsedTicks;
                         milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;

@@ -325,7 +325,7 @@ public sealed class Font : IDisposable
             backend?.Dispose();
             foreach (var kv in TextureCache)
                 kv.Value?.Dispose();
-            TextureCache.Clear();
+            TextureCache?.Clear();
         }
     }
 

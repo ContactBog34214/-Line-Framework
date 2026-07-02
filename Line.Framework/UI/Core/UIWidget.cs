@@ -12,9 +12,9 @@ public abstract class UIWidget : UINode
     public Vector2 GetPositionOnScreen()
     {
         Vector2 si = new(0, 0);
-        if (parent != null || parent is UIWidget i)
+        if (Parent != null || Parent is UIWidget i)
         {
-            i = parent as UIWidget;
+            i = Parent as UIWidget;
             si = i.GetSizeOnScreen() * i.Anchor;
         }
         return new(
@@ -112,7 +112,7 @@ public abstract class UIWidget : UINode
 
     public static UIWidget FindWidgetPointTouched(UIWidget w,Vector2 Point)
     {
-            UIWidget[] Children= w.children.OfType<UIWidget>().OrderBy(c => c.Z).ToArray();
+            UIWidget[] Children= w.Children.OfType<UIWidget>().OrderBy(c => c.Z).ToArray();
             for(int i = Children.Length;;)
             {
                 i--;

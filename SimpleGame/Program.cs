@@ -6,8 +6,6 @@ using Line.Framework.Graphics;
 using Line.Framework.Resource.Graphic;
 using Line.Framework.UI;
 using Line.Framework.UI.DefaultWidget;
-using SDL3;
-using Veldrid;
 #pragma warning disable CS8618
 
 namespace SG;
@@ -64,48 +62,48 @@ public static unsafe class SimpleGame
 
         var Background = new UIBox
         {
-            name = "Background",
+            Name = "Background",
             Size = new(new(), new(1, 1)),
             color = new(202f / 255f, 233f / 255f, 1, 1),
-            parent = Host.Root,
+            Parent = Host.Root,
         };
 
         var spinnerBox = new UIBox
         {
-            name = "SpinnerBox",
+            Name = "SpinnerBox",
             Position = new(new(), new(0.5f)),
             Size = new(new(SpinnerBoxSize), new()),
             Anchor = new(0.5f),
             color = new(153f / 255f, 153f / 255f, 1, 1),
-            parent = Background,
+            Parent = Background,
         };
         var Image = new UIImage(Host.Resource)
         {
-            name = "SpinnerImage",
+            Name = "SpinnerImage",
             Position = new(new(), new(0.5f)),
             Size = new(new(), new(1)),
             Anchor = new(0.5f),
-            parent = spinnerBox,
+            Parent = spinnerBox,
             TextureId = "Icon",
         };
 
         var cs = new UIImage(Host.Resource)
         {
-            name = "Cursor",
+            Name = "Cursor",
             Position = new(new(), new()),
             Size = new(new(32), new()),
             Anchor = new(0.5f),
-            parent = Host.Root,
+            Parent = Host.Root,
             TextureId = "Cursor",
             Z = 32767,
         };
 
         var title = new UIText(Host.Resource)
         {
-            name = "Title",
+            Name = "Title",
             Position = new(new(0, 100), new(0.5f, 0)),
             Anchor = new(0.5f),
-            parent = Background,
+            Parent = Background,
             color = new(105f / 255f, 110f / 255f, 1, 1),
             FontId = "Font",
             XAlignment = Alignment.Center,
@@ -132,12 +130,14 @@ public static unsafe class SimpleGame
             Host.FramePerSecond = 50;
         };
 
-        Host.UpdatePerSecond = 5000;
+        Host.UpdatePerSecond = 10000;
 
         FPSPrinter();
 
+        //PerTest(200000,Host.Root);
+
         Host.ShowCursor = false;
-        Host.ParallelRender = true;
+        Host.ParallelRender = false;
         Host.EnableMouseRelative = true;
 
         Host.Input.MouseMove += (x, y) => { };
@@ -147,10 +147,10 @@ public static unsafe class SimpleGame
     {
         var perText = new UIText(Host.Resource)
         {
-            name = "PerfText",
+            Name = "PerfText",
             Position = new(new(), new(1)),
             Anchor = new(1),
-            parent = Host.Root,
+            Parent = Host.Root,
             XAlignment = Alignment.Right,
             YAlignment = Alignment.Right,
             color = new(0, 0, 1, 1),
@@ -182,9 +182,9 @@ public static unsafe class SimpleGame
         {
             _ = new UIBox()
             {
-                name = $"_PerTest",
+                Name = $"_PerTest",
                 Z = -100,
-                parent = root,
+                Parent = root,
                 visible = true,
             };
         }
