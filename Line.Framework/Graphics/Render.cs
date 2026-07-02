@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
+using System.Formats.Tar;
 using System.Numerics;
 using System.Text;
 using Line.Framework.UI;
+using TagLib;
 using Veldrid;
 using Veldrid.SPIRV;
 using BufferDescription = Veldrid.BufferDescription;
@@ -204,23 +206,30 @@ void main()
 
     static List<UIWidget> trees(UIWidget root)
     {
-        List<UIWidget> widgets = [];
+        List<UIWidget> widgets = new();
+        HashSet<UIWidget> visited = new();
+
         int i = 0;
 
         void Collect(UIWidget node)
         {
             if (node == null)
                 return;
+
+            if (!visited.Add(node))
+                return; // 已访问或正在访问
+
             if (!node.visible)
                 return;
+
             node.oz = i++;
             widgets.Add(node);
 
-            var sortedChildren = node.children.ToArray().OrderBy(c => c.Z);
+            var sortedChildren = node.children.Where(c => c != null).OrderBy(c => c.Z);
 
-            foreach (var i in sortedChildren)
+            foreach (var child in sortedChildren)
             {
-                Collect(i as UIWidget);
+                Collect(child as UIWidget);
             }
         }
 
@@ -263,12 +272,17 @@ void main()
                 var item = ws[i];
                 if (item is UIWidget target && target.RendererContext != null) // 添加 null 检查
                 {
-                    void syncer()
+                    HashSet<UIWidget> visited = new();
+                    void syncer(UIWidget target)
                     {
+                        if (!visited.Add(target))
+                            return; // 防止无限递归
+                        var t = target.parent as UIWidget;
+                        if (t != null && !t.syncOK)
+                            syncer(t);
                         //同步渲染区大小
                         try
                         {
-                            var t = target.parent as UIWidget;
                             if (t == null)
                                 return;
                             target.s = new(
@@ -283,7 +297,6 @@ void main()
                         //同步移位
                         try
                         {
-                            var t = target.parent as UIWidget;
                             if (t is UIScreen a)
                             {
                                 target.p = new(0, 0);
@@ -303,7 +316,6 @@ void main()
                         //同步透明度
                         try
                         {
-                            var t = target.parent as UIWidget;
                             if (t is UIScreen a)
                             {
                                 target.o = target.Opacity;
@@ -321,7 +333,6 @@ void main()
                         try
                         {
                             target.ClipList.Clear();
-                            var t = target.parent as UIWidget;
                             target.ClipList.AddRange(t.ClipList);
                             target.ClipList.Add(target.GetClipArea(screenSize));
                         }
@@ -329,8 +340,9 @@ void main()
                         {
                             target.ClipList.Clear();
                         }
+                        visited.Remove(target);
                     }
-                    syncer();
+                    syncer(target);
                     var source = target.s;
                     target.RendererContext(
                         new RendererContextArgs
@@ -375,6 +387,7 @@ void main()
 
             void CTV(UIDrawCollector.DrawCommand i, int idx)
             {
+                i?.Source?.syncOK = false;
                 try
                 {
                     List<Vertex> tasks = [];
@@ -540,22 +553,27 @@ void main()
                 }
             }
 
-            Parallel.For(
-                0,
-                TotalThreadCount,
-                idx =>
-                {
-                    var i = commands[(int)idx];
-                    CTV(i, (int)idx);
-                }
-            );
+            if (window.ParallelRender)
+                Parallel.For(
+                    0,
+                    TotalThreadCount,
+                    idx =>
+                    {
+                        var i = commands[(int)idx];
+                        CTV(i, (int)idx);
+                    }
+                );
+            else
+                for (int idx = 0; idx < TotalThreadCount; idx++)
+                    CTV(commands[idx], idx);
 
             // 4. 第一遍遍历：转换一下，顺手上传
             List<VertexPositionColor> vert = [];
             List<VertexTask[]> Tasks = [];
             ResourceSet LastRs = null;
             List<VertexTask> t = [];
-            foreach (var i1 in values.OrderBy(c => c.index))
+
+            foreach (var i1 in values.OrderBy(i1 => i1.index))
             {
                 var i = i1.v;
                 foreach (var a in i)

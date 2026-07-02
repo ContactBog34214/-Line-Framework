@@ -1,9 +1,10 @@
 using System;
 using System.Collections.Concurrent;
 using System.Numerics;
+using Line.Framework.Graphics;
+using SDL3;
 using Veldrid;
 using static SDL3.SDL;
-using Line.Framework.Graphics;
 
 namespace Line.Framework.Input
 {
@@ -43,7 +44,10 @@ namespace Line.Framework.Input
             _window.EventPool.TryAdd(EventType.MouseButtonDown, OnMouseDown);
             _window.EventPool.TryAdd(EventType.MouseButtonUp, OnMouseUp);
             _window.EventPool.TryAdd(EventType.MouseWheel, OnMouseWheel);
-            _window.EventPool.TryAdd(EventType.MouseWheel, OnMouseWheel);
+            _window.OnUpdate += (a, b) =>
+            {
+                OnMouseMove();
+            };
         }
 
         private void OnKeyDown(Event evt)
@@ -72,18 +76,20 @@ namespace Line.Framework.Input
 
         private void OnMouseWheel(Event evt)
         {
-            Vector2 delta = new(evt.Wheel.X,evt.Wheel.Y);
+            Vector2 delta = new(evt.Wheel.X, evt.Wheel.Y);
             TotalMouseWheelDelta += delta;
             MouseWheel?.Invoke(delta);
         }
 
-        private void OnMouseMove(Event evt)
+        private void OnMouseMove()
         {
-            float dx = evt.Button.X - LastMousePosition.X;
-            float dy = evt.Button.Y - LastMousePosition.Y;
-            LastMousePosition = new(dx,dy);
+            GetMouseState(out float x, out float y);
+            float dx = x - LastMousePosition.X;
+            float dy = y - LastMousePosition.Y;
+            LastMousePosition = new(x, y);
             TotalMouseDelta += new Vector2(dx, dy);
-            MouseMove?.Invoke(dx, dy);
+            if (dx != 0 && dy != 0)
+                MouseMove?.Invoke(dx, dy);
         }
 
         // 状态查询

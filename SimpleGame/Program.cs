@@ -4,10 +4,10 @@ using System.Reflection;
 using Line.Framework;
 using Line.Framework.Graphics;
 using Line.Framework.Resource.Graphic;
-using Line.Framework.UI.DefaultWidget;
-using Veldrid;
-using SDL3;
 using Line.Framework.UI;
+using Line.Framework.UI.DefaultWidget;
+using SDL3;
+using Veldrid;
 #pragma warning disable CS8618
 
 namespace SG;
@@ -45,7 +45,7 @@ public static unsafe class SimpleGame
         );
 
         //Exp
-        float ptr=0.2f;
+        float ptr = 0.2f;
         Log.Debug("Loaded Font");
         font = Host.Resource.GetResource("Font") as Font;
         font?.Size = FontSize;
@@ -54,6 +54,11 @@ public static unsafe class SimpleGame
             "Image",
             "Icon",
             assembly.GetManifestResourceStream("SimpleGame.assets.-L-F.png")
+        );
+        Host.Resource.Create(
+            "Image",
+            "Cursor",
+            assembly.GetManifestResourceStream("SimpleGame.assets.cursor.png")
         );
         Log.Debug("Loaded Font");
 
@@ -84,11 +89,15 @@ public static unsafe class SimpleGame
             TextureId = "Icon",
         };
 
-        Host.OnUpdate += (a, b) =>
+        var cs = new UIImage(Host.Resource)
         {
-            float r = sw.ElapsedMilliseconds / 1000f % SpinnerBoxSpeed * 360f / SpinnerBoxSpeed;
-            spinnerBox.Rotation = r;
-            Image.Rotation = r;
+            name = "Cursor",
+            Position = new(new(), new()),
+            Size = new(new(32), new()),
+            Anchor = new(0.5f),
+            parent = Host.Root,
+            TextureId = "Cursor",
+            Z = 32767,
         };
 
         var title = new UIText(Host.Resource)
@@ -106,6 +115,14 @@ public static unsafe class SimpleGame
         };
         title.Size = new(title.GetTextSize(title.Text) / new Vector2(1, 1), new());
 
+        Host.OnUpdate += (a, b) =>
+        {
+            float r = sw.ElapsedMilliseconds / 1000f % SpinnerBoxSpeed * 360f / SpinnerBoxSpeed;
+            spinnerBox.Rotation = r;
+            Image.Rotation = r;
+            cs.Position = new(Host.Input.TotalMouseDelta, new());
+        };
+
         Host.FocusGained += () =>
         {
             Host.FramePerSecond = 720;
@@ -115,9 +132,15 @@ public static unsafe class SimpleGame
             Host.FramePerSecond = 50;
         };
 
-        Host.UpdatePerSecond=5000;
+        Host.UpdatePerSecond = 5000;
 
         FPSPrinter();
+
+        Host.ShowCursor = false;
+        Host.ParallelRender = true;
+        Host.EnableMouseRelative = true;
+
+        Host.Input.MouseMove += (x, y) => { };
     }
 
     static void FPSPrinter()
@@ -138,26 +161,32 @@ public static unsafe class SimpleGame
 
         float Renderfps = 0;
         float UpdateMs = 0;
-        float Rf=0;
+        float Rf = 0;
         Host.OnRender += (a, b) =>
         {
-            Rf=1000f / (float)b ;
+            Rf = 1000f / (float)b;
         };
         Host.OnUpdate += (a, b) =>
         {
             UpdateMs += ((float)b - UpdateMs) / 200f;
-            Renderfps += (Rf- Renderfps) / 200f;
+            Renderfps += (Rf - Renderfps) / 200f;
             perText.Text =
                 $"{(int)Renderfps}/{Host.FramePerSecond}FPS\n{(int)(UpdateMs * 100f) / 100f}/{(int)(1000f / Host.UpdatePerSecond * 100f) / 100f}Ms";
             perText.Size = new(perText.GetTextSize(perText.Text), new());
         };
     }
 
-    static void PerTest(uint num,UIWidget root)
+    static void PerTest(uint num, UIWidget root)
     {
-        for(int i = 0; i < num; i++)
+        for (int i = 0; i < num; i++)
         {
-            _=new UIBox(){name=$"_PerTest",Z=-100,parent=root,visible=true};
+            _ = new UIBox()
+            {
+                name = $"_PerTest",
+                Z = -100,
+                parent = root,
+                visible = true,
+            };
         }
     }
 }

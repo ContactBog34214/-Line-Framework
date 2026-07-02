@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Numerics;
-using System.Runtime.InteropServices;
 using Line.Framework.Input;
 using Line.Framework.Resource;
 using Line.Framework.Resource.Audio;
@@ -10,7 +9,6 @@ using Line.Framework.UI;
 using SDL3;
 using Veldrid;
 using Veldrid.OpenGL;
-using Veldrid.Sdl2;
 using Veldrid.StartupUtilities;
 using UIScreen = Line.Framework.UI.UIScreen;
 
@@ -33,6 +31,18 @@ public class BaseWindow : IDisposable
     public nint WindowHandle { get; init; }
     public InputManager Input { get; init; }
     public GraphicsDevice Dev { get; init; }
+    public bool EnableMouseRelative
+    {
+        get => SDL.GetWindowRelativeMouseMode(WindowHandle);
+        set
+        {
+            SDL.SetWindowRelativeMouseMode(WindowHandle, value);
+            if (ShowCursor)
+                SDL.ShowCursor();
+            else
+                SDL.HideCursor();
+        }
+    }
     public Vector2 Size
     {
         get
@@ -60,6 +70,7 @@ public class BaseWindow : IDisposable
         }
     }
     public UIScreen Root { get; init; }
+    public bool ParallelRender { get; set; } = true;
     private readonly Thread MainThread;
     public float FramePerSecond { get; set; } = 240;
     public float UpdatePerSecond { get; set; } = 1000;
@@ -329,7 +340,8 @@ public class BaseWindow : IDisposable
         RendererClass = new(Dev);
         RendererContext = () =>
         {
-            RendererClass.UIRenderer(this, Collector);
+            if (this != null && Collector != null)
+                RendererClass.UIRenderer(this, Collector);
         };
         Root = new(this, 0, 0);
 
@@ -353,8 +365,34 @@ public class BaseWindow : IDisposable
                 OnWindowResized();
             }
         );
-        EventPool.TryAdd(SDL.EventType.WindowFocusGained, (a) => FocusGained.Invoke());
-        EventPool.TryAdd(SDL.EventType.WindowFocusLost, (a) => FocusLost.Invoke());
+        EventPool.TryAdd(
+            SDL.EventType.WindowFocusGained,
+            (a) =>
+            {
+                if (SDL.GetMouseFocus() == WindowHandle)
+                {
+                    if (ShowCursor)
+                        SDL.ShowCursor();
+                    else
+                        SDL.HideCursor();
+                }
+                FocusGained?.Invoke();
+            }
+        );
+        EventPool.TryAdd(
+            SDL.EventType.WindowFocusLost,
+            (a) =>
+            {
+                if (SDL.GetMouseFocus() == WindowHandle)
+                {
+                    if (ShowCursor)
+                        SDL.ShowCursor();
+                    else
+                        SDL.HideCursor();
+                }
+                FocusLost?.Invoke();
+            }
+        );
         OnCloseWindow = (ev) =>
         {
             Dispose();
@@ -363,6 +401,25 @@ public class BaseWindow : IDisposable
 
     public TAudio Audio { get; private set; }
     public uint WindowID { get; init; }
+    public bool IsFocus
+    {
+        get => SDL.GetKeyboardFocus() == WindowHandle;
+    }
+    public bool ShowCursor
+    {
+        get => field && EnableMouseRelative;
+        set
+        {
+            field = value;
+            if (SDL.GetMouseFocus() == WindowHandle)
+            {
+                if (field)
+                    SDL.ShowCursor();
+                else
+                    SDL.HideCursor();
+            }
+        }
+    } = true;
     public Action<SDL.Event> OnCloseWindow
     {
         get;
@@ -453,7 +510,7 @@ public class BaseWindow : IDisposable
                                 SDL.SetEventFilter(
                                     (a, ref b) =>
                                     {
-                                        return b.Window.WindowID != WindowHandle;
+                                        return b.Window.WindowID == WindowID;
                                     },
                                     (nint)WindowID
                                 );
@@ -465,7 +522,6 @@ public class BaseWindow : IDisposable
                                     if (ev.Type == (uint)item.Key)
                                     {
                                         item.Value?.Invoke(ev);
-                                        break;
                                     }
                                 }
                             }
