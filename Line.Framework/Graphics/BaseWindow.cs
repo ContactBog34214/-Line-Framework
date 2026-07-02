@@ -143,6 +143,10 @@ public class BaseWindow : IDisposable
         _height = (uint)Height;
         WindowCreateInfo CreateInfo = new WindowCreateInfo(X, Y, Width, Height, State, Title);
         //一个窗口
+        if (Width < Height)
+            SDL.SetHint(SDL.Hints.Orientations, "Portrait");
+        else if (Height > Width)
+            SDL.SetHint(SDL.Hints.Orientations, "Landscape");
         SDL.Init(SDL.InitFlags.Video);
 
         SDL.WindowFlags flags = SDL.WindowFlags.Resizable;
@@ -241,7 +245,7 @@ public class BaseWindow : IDisposable
             false // 垂直同步
         );
 
-        SDL.SetHint("SDL_HINT_TOUCH_MOUSE_EVENTS", "0");
+        SDL.SetHint(SDL.Hints.TouchMouseEvents, "0");
         WindowID = SDL.GetWindowID(WindowHandle);
         GraphicsDeviceOptions Options = new GraphicsDeviceOptions
         {
@@ -342,7 +346,6 @@ public class BaseWindow : IDisposable
         MainThread.Name = "Renderer";
 
         //绑定事件
-
         EventPool.TryAdd(
             SDL.EventType.WindowResized,
             (a) =>
@@ -352,10 +355,27 @@ public class BaseWindow : IDisposable
         );
         EventPool.TryAdd(SDL.EventType.WindowFocusGained, (a) => FocusGained.Invoke());
         EventPool.TryAdd(SDL.EventType.WindowFocusLost, (a) => FocusLost.Invoke());
+        OnCloseWindow = (ev) =>
+        {
+            Dispose();
+        };
     }
 
     public TAudio Audio { get; private set; }
     public uint WindowID { get; init; }
+    public Action<SDL.Event> OnCloseWindow
+    {
+        get;
+        set
+        {
+            if (value == null)
+                throw new Exception($"Action cannot be null");
+            EventPool.TryRemove(SDL.EventType.WindowCloseRequested, out field);
+            field = value;
+            EventPool.TryAdd(SDL.EventType.WindowCloseRequested, field);
+        }
+    }
+
     internal ConcurrentDictionary<SDL.EventType, Action<SDL.Event>> EventPool { get; } = new();
     public event Action FocusGained;
     public event Action FocusLost;
@@ -546,6 +566,7 @@ public class BaseWindow : IDisposable
         RendererClass = null;
         SDL.DestroyWindow(WindowHandle);
         UpdateThread?.Interrupt();
+        Resource?.Dispose();
         commandList?.Dispose();
         try
         {
@@ -556,6 +577,5 @@ public class BaseWindow : IDisposable
             Log.Warning($"{ex.Message}");
         }
         Root?.Dispose();
-        Resource?.Dispose();
     }
 }
