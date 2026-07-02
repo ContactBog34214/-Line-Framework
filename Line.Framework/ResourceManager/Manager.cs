@@ -125,7 +125,7 @@ public class ResourceManager : IDisposable
         {
             return;
         }
-        if (Types.TryGetValue(id, out var obj))
+        if (Types.TryGetValue(id, out _))
         {
             Types.Remove(id);
         }
@@ -154,16 +154,20 @@ public class ResourceManager : IDisposable
         {
             return;
         }
-        if (Resources.TryGetValue(targetId, out var obj))
+        if (Resources.TryGetValue(targetId, out _))
         {
             return;
         }
-        t.Create(targetId, stream);
+        try{
+        t.Create(targetId, stream);}catch(Exception ex)
+        {
+            Log.Error($"[ResourceManager] {ex}");
+        }
     }
 
     public void DisposeType(string id)
     {
-        if (!Types.TryGetValue(id, out var obj))
+        if (!Types.TryGetValue(id, out _))
         {
             return;
         }

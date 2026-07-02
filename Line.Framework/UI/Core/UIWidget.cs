@@ -1,5 +1,4 @@
 using System.Numerics;
-using System.Reflection.Metadata.Ecma335;
 
 namespace Line.Framework.UI;
 
@@ -79,6 +78,7 @@ public abstract class UIWidget : UINode
     public float Rotation { get; set; } = 0;
     public float Opacity { get; set; } = 1;
     internal Vector2 s { get; set; } = new(0, 0);
+    internal bool syncOK=false;
     internal Vector2 p { get; set; } = new(0, 0);
     internal float o { get; set; } = 1;
     internal List<Vector2[]> ClipList=[];
