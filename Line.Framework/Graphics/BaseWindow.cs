@@ -154,7 +154,7 @@ public class BaseWindow : IDisposable
         //一个窗口
         if (Width < Height)
             SDL.SetHint(SDL.Hints.Orientations, "Portrait");
-        else if (Height > Width)
+        else if (Width > Height)
             SDL.SetHint(SDL.Hints.Orientations, "Landscape");
         SDL.Init(SDL.InitFlags.Video);
 
@@ -468,7 +468,7 @@ public class BaseWindow : IDisposable
             milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
 
             //输入更新
-            unsafe void update()
+            void update()
             {
                 double UpdateMs = 0;
                 while (Exists)
@@ -553,7 +553,7 @@ public class BaseWindow : IDisposable
             }
 
             //正式渲染
-            async void render()
+            void render()
             {
                 if (FramePerSecond <= 0)
                 {

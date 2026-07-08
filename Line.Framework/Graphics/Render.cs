@@ -186,6 +186,12 @@ void main()
         Vector2 br = new(tmp.Width, tmp.Height);
         RgbaFloat finalColor = f;
 
+        Vector2 ps = new(tmp.X, tmp.Y);
+        tl += ps;
+        tr += ps;
+        bl += ps;
+        br += ps;
+
         //uv
         Vector2 uv_tl = new Vector2(0, 0);
         Vector2 uv_tr = new Vector2(1, 0);
