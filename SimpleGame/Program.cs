@@ -96,6 +96,7 @@ public static unsafe class SimpleGame
             Parent = Host.Root,
             TextureId = "Cursor",
             Z = 32767,
+            CanTouch=false
         };
 
         var title = new UIText(Host.Resource)
@@ -140,7 +141,20 @@ public static unsafe class SimpleGame
         Host.ParallelRender = false;
         Host.EnableMouseRelative = true;
 
-        Host.Input.MouseMove += (x, y) => { };
+        var input = new UIInput(Host.Resource)
+        {
+            Name = "Input",
+            Position = new(new(0, -120), new(0.5f, 1)),
+            Size = new(new(400, 160), new()),
+            Anchor = new(0.5f),
+            Parent = Host.Root,
+            Z = 100,
+            FontId = "Font",
+            CursorColor=new(1,1,1,0.5f),
+            FontScale=0.5f
+        };
+        input.Text = "114514\n1919810\n1145141919810";
+        input.InputPosition=new(3,input.Text.Length-5);
     }
 
     static void FPSPrinter()

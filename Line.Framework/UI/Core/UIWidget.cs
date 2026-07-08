@@ -75,13 +75,15 @@ public abstract class UIWidget : UINode
     public virtual void RendererContext(RendererContextArgs args) { }
 
     internal float oz = 0;
+    internal Vector2 s { get; set; } = new(0, 0);
+    public bool CanTouch { get; set; } = true;
+    internal Vector2 p { get; set; } = new(0, 0);
+    internal bool syncOK = false;
+    internal float o { get; set; } = 1;
+    internal List<Vector2[]> ClipList = [];
     public float Rotation { get; set; } = 0;
     public float Opacity { get; set; } = 1;
-    internal Vector2 s { get; set; } = new(0, 0);
-    internal bool syncOK=false;
-    internal Vector2 p { get; set; } = new(0, 0);
-    internal float o { get; set; } = 1;
-    internal List<Vector2[]> ClipList=[];
+
     public Vector2 Scale { get; set; } = new(1, 1);
 
     public Vector2 MousePosition(Vector2 mousePixel)
@@ -110,19 +112,38 @@ public abstract class UIWidget : UINode
         return 0 <= tmp.X && 0 <= tmp.Y && tmp.X <= S.X && tmp.Y <= S.Y;
     }
 
-    public static UIWidget FindWidgetPointTouched(UIWidget w,Vector2 Point)
+    public static UIWidget FindWidgetPointTouched(UIWidget w, Vector2 Point)
     {
-            UIWidget[] Children= w.Children.OfType<UIWidget>().OrderBy(c => c.Z).ToArray();
-            for(int i = Children.Length;;)
+        UIWidget[] Children = w.Children.OfType<UIWidget>().OrderBy(c => c.Z).ToArray();
+        for (int i = Children.Length; ; )
+        {
+            i--;
+            if (i < 0)
+                break;
+            if (Children[i].CanTouch && Children[i].HitTest(Point))
             {
-                i--;
-                if(i<0)break;
-                if (Children[i].HitTest(Point))
-                {
-                    return FindWidgetPointTouched(Children[i],Point);
-                }
+                return FindWidgetPointTouched(Children[i], Point);
             }
-            return w;
+        }
+        return w;
+    }
+
+    public static bool IsWidgetPointTouched(UIWidget w, UIWidget t, Vector2 Point)
+    {
+        UIWidget[] Children = w.Children.OfType<UIWidget>().OrderBy(c => c.Z).ToArray();
+        for (int i = Children.Length; ; )
+        {
+            i--;
+            if (i < 0)
+                break;
+            if (Children[i].CanTouch && Children[i].HitTest(Point))
+            {
+                if (Children[i] == t)
+                    return true;
+                return IsWidgetPointTouched(Children[i], t, Point);
+            }
+        }
+        return false;
     }
 }
 

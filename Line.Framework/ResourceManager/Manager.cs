@@ -17,6 +17,7 @@ public class ResourceManager : IDisposable
     }
 
     Dictionary<string, IResource> Resources = [];
+    public bool AutoReleaseResources { get; set; } = true;
     Dictionary<string, (ulong LastGetTime, ulong NumGet)> Rs = [];
     Dictionary<string, ResourceType> Types = [];
     Stopwatch sw = new();
@@ -32,7 +33,8 @@ public class ResourceManager : IDisposable
 
     void OnReleaseTimer(object? a)
     {
-        ReleaseIdleResources();
+        if (AutoReleaseResources)
+            ReleaseIdleResources();
     }
 
     public void AddResource(string id, IResource res)
@@ -158,8 +160,11 @@ public class ResourceManager : IDisposable
         {
             return;
         }
-        try{
-        t.Create(targetId, stream);}catch(Exception ex)
+        try
+        {
+            t.Create(targetId, stream);
+        }
+        catch (Exception ex)
         {
             Log.Error($"[ResourceManager] {ex}");
         }

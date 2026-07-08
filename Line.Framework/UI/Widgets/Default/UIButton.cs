@@ -15,10 +15,16 @@ public class UIButton : UIWidget
     Stopwatch ClickSw = new();
 
     public event EventHandler<UIButton, byte> WhenRelease;
-    public bool clicking { get; private set; } = false;
-    public bool enabled { get; set; } = true;
+    public bool Clicking { get; private set; } = false;
+    public bool Enabled { get; set; } = true;
     private InputManager input;
-    Action<RendererContextArgs> RenderAction;
+    readonly Action<RendererContextArgs> RenderAction;
+
+    public override void Dispose()
+    {
+        SetParent(null);
+        base.Dispose();
+    }
 
     public override void RendererContext(RendererContextArgs args)
     {
@@ -31,19 +37,19 @@ public class UIButton : UIWidget
     {
         Press = (a) =>
         {
-            if (visible && enabled && HitTest(input.TotalMouseDelta))
+            if (visible && Enabled && IsWidgetPointTouched(root,this,input.TotalMouseDelta))
             {
                 WhenPress?.Invoke(this, a);
-                clicking = true;
+                Clicking = true;
                 ClickSw.Reset();
                 ClickSw.Restart();
             }
         };
         Release = (a) =>
         {
-            if (clicking)
+            if (Clicking)
             {
-                clicking = false;
+                Clicking = false;
                 WhenRelease?.Invoke(this, a);
                 ClickSw.Stop();
                 if (ClickSw.Elapsed.Milliseconds <= ClickMaximumTime)
@@ -104,7 +110,10 @@ public class UIButton : UIWidget
                 Release(a.Button);
             };
         }
+        root = a as UIWidget;
     }
+
+    UIWidget root;
 
     public override void SetParent(UINode value)
     {
