@@ -151,9 +151,9 @@ public static unsafe class SimpleGame
             Z = 100,
             FontId = "Font",
             CursorColor=new(1,1,1,0.5f),
-            FontScale=0.5f
+            FontScale=1f
         };
-        input.Text = "114514\n1919810\n1145141919810";
+        input.Text = "11451419198101145141919810";
         input.InputPosition=new(3,input.Text.Length-5);
     }
 

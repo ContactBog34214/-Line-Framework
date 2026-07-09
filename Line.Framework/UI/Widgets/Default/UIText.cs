@@ -136,7 +136,7 @@ public sealed class UIText : UIWidget
         // 构建顶点并提交给 collector
         // 参考之前的 renderAText 逻辑，但直接使用屏幕坐标，不再乘缩放
         var tl = new WindowsRenderer.Vertex(
-            position,
+            position + Offset,
             color,
             new(new(), new(0, 0)),
             cache.Texture,
@@ -144,7 +144,7 @@ public sealed class UIText : UIWidget
             1
         );
         var tr = new WindowsRenderer.Vertex(
-            position + new Vector2(size.X, 0),
+            position + new Vector2(size.X, 0) + Offset,
             color,
             new(new(), new(1, 0)),
             cache.Texture,
@@ -152,7 +152,7 @@ public sealed class UIText : UIWidget
             1
         );
         var bl = new WindowsRenderer.Vertex(
-            position + new Vector2(0, size.Y),
+            position + new Vector2(0, size.Y) + Offset,
             color,
             new(new(), new(0, 1)),
             cache.Texture,
@@ -160,7 +160,7 @@ public sealed class UIText : UIWidget
             1
         );
         var br = new WindowsRenderer.Vertex(
-            position + size,
+            position + size + Offset,
             color,
             new(new(), new(1, 1)),
             cache.Texture,
@@ -223,6 +223,7 @@ public sealed class UIText : UIWidget
     }
 
     public float LetterSpacing { get; set; } = 1f;
+    public Vector2 Offset { get; set; } = new(0);
     public Alignment XAlignment { get; set; } = Alignment.Left;
     public Alignment YAlignment { get; set; } = Alignment.Left;
 }
