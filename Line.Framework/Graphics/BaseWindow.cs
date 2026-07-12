@@ -10,6 +10,7 @@ using SDL3;
 using Veldrid;
 using Veldrid.OpenGL;
 using Veldrid.StartupUtilities;
+
 namespace Line.Framework.Graphics;
 
 public enum GraphicBackend
@@ -68,6 +69,15 @@ public class BaseWindow : IDisposable
         }
     }
     public UIScreen Root { get; init; }
+    public bool VSync
+    {
+        get;
+        set
+        {
+            Dev?.SyncToVerticalBlank = value;
+            field = value;
+        }
+    } = false;
     public bool ParallelRender { get; set; } = true;
     private readonly Thread MainThread;
     public float FramePerSecond { get; set; } = 240;
@@ -156,7 +166,12 @@ public class BaseWindow : IDisposable
             SDL.SetHint(SDL.Hints.Orientations, "Portrait");
         else if (Width > Height)
             SDL.SetHint(SDL.Hints.Orientations, "Landscape");
+        SDL.SetHint(SDL.Hints.VideoDriver, "wayland");
         SDL.Init(SDL.InitFlags.Video);
+        Log.Debug($"[BaseWindow]Video driver: {SDL.GetCurrentVideoDriver()}");
+        SDL.SetHint(SDL.Hints.TouchMouseEvents, "0");
+        SDL.SetHint(SDL.Hints.MouseTouchEvents, "0");
+        SDL.GLSetSwapInterval(0);
 
         SDL.WindowFlags flags = SDL.WindowFlags.Resizable;
 
@@ -254,7 +269,6 @@ public class BaseWindow : IDisposable
             false // 垂直同步
         );
 
-        SDL.SetHint(SDL.Hints.TouchMouseEvents, "0");
         WindowID = SDL.GetWindowID(WindowHandle);
         GraphicsDeviceOptions Options = new GraphicsDeviceOptions
         {
@@ -332,6 +346,9 @@ public class BaseWindow : IDisposable
             Dispose();
             return;
         }
+
+        Log.Debug($"[Renderer] GraphicsDevice:{Dev.BackendType} {Dev.ApiVersion}");
+        Log.Debug($"[Renderer] GPU:{Dev.DeviceName}");
 
         commandList = Dev.ResourceFactory.CreateCommandList();
         Collector = new();
@@ -508,11 +525,14 @@ public class BaseWindow : IDisposable
                                 SDL.SetEventFilter(
                                     (a, ref b) =>
                                     {
-                                        return b.Window.WindowID == WindowID;
+                                        return b.Window.WindowID == WindowID
+                                            || b.TFinger.WindowID == WindowID;
                                     },
                                     (nint)WindowID
                                 );
+
                                 var events = SDL.PollEvent(out var ev);
+
                                 if (!events)
                                     break;
                                 foreach (var item in EventPool)
@@ -550,6 +570,7 @@ public class BaseWindow : IDisposable
                 _newHeight = (uint)Size.Y;
                 Dev.MainSwapchain.Resize(_newWidth, _newHeight);
                 _resizePending = false;
+                Dev?.SyncToVerticalBlank = VSync;
             }
 
             //正式渲染

@@ -88,10 +88,9 @@ public abstract class UIWidget : UINode
 
     public Vector2 MousePosition(Vector2 mousePixel)
     {
-        var S = GetSizeOnScreen();
         var P = GetPositionOnScreen();
         //到相对
-        var tmp = mousePixel - P - Anchor * S;
+        var tmp = mousePixel - P;
 
         //旋转
         double r = (double)Rotation % 360d;
@@ -100,15 +99,13 @@ public abstract class UIWidget : UINode
         double sin = Math.Sin(r * Math.PI / 180f);
         tmp = new((float)(tmp.X * cos - tmp.Y * sin), (float)(tmp.Y * cos + tmp.X * sin));
 
-        tmp += Anchor * S;
-        return tmp;
+        return -tmp;
     }
 
     public virtual bool HitTest(Vector2 mousePixel)
     {
         var tmp = MousePosition(mousePixel);
         var S = GetSizeOnScreen();
-        var P = GetPositionOnScreen();
         return 0 <= tmp.X && 0 <= tmp.Y && tmp.X <= S.X && tmp.Y <= S.Y;
     }
 

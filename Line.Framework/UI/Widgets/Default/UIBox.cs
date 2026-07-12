@@ -1,6 +1,5 @@
 using Line.Framework.Graphics;
 using Veldrid;
-using Rectangle = System.Drawing.RectangleF;
 
 namespace Line.Framework.UI.DefaultWidget;
 

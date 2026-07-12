@@ -363,6 +363,7 @@ void main()
                     }
                     syncer(target);
                     var source = target.s;
+                    try{
                     target.RendererContext(
                         new RendererContextArgs
                         {
@@ -378,7 +379,7 @@ void main()
                             height = target.Size.offset.Y + target.Size.scale.Y * source.Y,
                             Collector = collector,
                         }
-                    );
+                    );}catch(Exception ex){Log.Error($"{ex}");}
                 }
             }
 
