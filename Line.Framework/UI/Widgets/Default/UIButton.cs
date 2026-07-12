@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Numerics;
 using Line.Framework.Input;
 using Veldrid;
 using static SDL3.SDL;
@@ -9,16 +10,22 @@ namespace Line.Framework.UI.DefaultWidget;
 public class UIButton : UIWidget
 {
     public RgbaFloat color { get; set; } = new(0, 0, 0, 0);
-    public event EventHandler<UIButton, byte> WhenPress;
-    public event EventHandler<UIButton, byte> WhenClick;
+    public event EventHandler<UIButton, ICursor> WhenPress;
+    public event EventHandler<UIButton, ICursor> WhenClick;
     public int ClickMaximumTime { get; set; } = 200;
     Stopwatch ClickSw = new();
 
-    public event EventHandler<UIButton, byte> WhenRelease;
-    public bool clicking { get; private set; } = false;
-    public bool enabled { get; set; } = true;
+    public event EventHandler<UIButton, ICursor> WhenRelease;
+    public bool Clicking { get; private set; } = false;
+    public bool Enabled { get; set; } = true;
     private InputManager input;
-    Action<RendererContextArgs> RenderAction;
+    readonly Action<RendererContextArgs> RenderAction;
+
+    public override void Dispose()
+    {
+        SetParent(null);
+        base.Dispose();
+    }
 
     public override void RendererContext(RendererContextArgs args)
     {
@@ -27,30 +34,45 @@ public class UIButton : UIWidget
         RenderAction(args);
     }
 
+    List<ICursor> Pressing = [];
+
+    void UpdateState(ICursor cursor)
+    {
+        if (Clicking != (Pressing.Count != 0))
+        {
+            Clicking = Pressing.Count != 0;
+            if (Clicking)
+            {
+                WhenPress?.Invoke(this, cursor);
+                ClickSw.Reset();
+                ClickSw.Restart();
+            }
+            else
+            {
+                WhenRelease?.Invoke(this, cursor);
+                ClickSw.Stop();
+                if (ClickSw.Elapsed.Milliseconds <= ClickMaximumTime)
+                {
+                    WhenClick?.Invoke(this, cursor);
+                }
+            }
+        }
+    }
+
     public UIButton()
     {
         Press = (a) =>
         {
-            if (visible && enabled && HitTest(input.TotalMouseDelta))
+            if (visible && Enabled && IsWidgetPointTouched(root, this, input.Mouse.Position))
             {
-                WhenPress?.Invoke(this, a);
-                clicking = true;
-                ClickSw.Reset();
-                ClickSw.Restart();
+                Pressing.Add(a);
+                UpdateState(a);
             }
         };
         Release = (a) =>
         {
-            if (clicking)
-            {
-                clicking = false;
-                WhenRelease?.Invoke(this, a);
-                ClickSw.Stop();
-                if (ClickSw.Elapsed.Milliseconds <= ClickMaximumTime)
-                {
-                    WhenClick?.Invoke(this, a);
-                }
-            }
+            Pressing.Remove(a);
+            UpdateState(a);
         };
         UpdateRoot();
         RenderAction = (RendererContextArgs args) =>
@@ -81,30 +103,21 @@ public class UIButton : UIWidget
     {
         if (input != null)
         {
-            input.MouseDown -= (a) =>
-            {
-                Press(a.Button);
-            };
-            input.MouseUp -= (a) =>
-            {
-                Release(a.Button);
-            };
+            input?.CursorDown -= Press;
+            input?.CursorUp -= Release;
         }
         var a = FindRoot(this);
         if (a is UIScreen)
         {
             var b = a as UIScreen;
             input = b.window.Input;
-            input.MouseDown += (a) =>
-            {
-                Press(a.Button);
-            };
-            input.MouseUp += (a) =>
-            {
-                Release(a.Button);
-            };
+            input?.CursorDown += Press;
+            input?.CursorUp += Release;
         }
+        root = a as UIWidget;
     }
+
+    UIWidget root;
 
     public override void SetParent(UINode value)
     {
@@ -112,6 +125,6 @@ public class UIButton : UIWidget
         UpdateRoot();
     }
 
-    Action<byte> Press { get; init; }
-    Action<byte> Release { get; init; }
+    Action<ICursor> Press { get; init; }
+    Action<ICursor> Release { get; init; }
 }

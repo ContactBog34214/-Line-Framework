@@ -2,21 +2,28 @@ namespace Line.Framework.UI;
 
 public abstract class UINode : IDisposable
 {
-    public string name { get; set; }
+    public string Name { get; set; }
 
     //对外的加点料
     private UINode _parent;
-    public UINode parent
+    public UINode Parent
     {
         get => _parent;
         set => SetParent(value);
     }
 
     //对外的只读
-    private protected  readonly List<UINode> _children = [];
-    public List<UINode> children
+    private protected readonly List<UINode> _children = [];
+    public List<UINode> Children
     {
         get => _children;
+    }
+    internal nint NodeTreeVersion { get; set; } = 0;
+
+    internal void AddNodeTreeVersion()
+    {
+        _parent?.AddNodeTreeVersion();
+        NodeTreeVersion++;
     }
 
     public virtual void SetParent(UINode value)
@@ -26,16 +33,13 @@ public abstract class UINode : IDisposable
             return;
         }
         //解除旧绑定
-        if (_parent != null)
-        {
-            _parent._children.Remove(this);
-        }
+        _parent?.AddNodeTreeVersion();
+        _parent?._children.Remove(this);
+
         //新绑定
         _parent = value;
-        if (_parent != null)
-        {
-            _parent._children.Add(this);
-        }
+        _parent?._children.Add(this);
+        _parent?.AddNodeTreeVersion();
     }
 
     public List<UINode> FindChildren(string name)
@@ -43,7 +47,7 @@ public abstract class UINode : IDisposable
         List<UINode> tmp = [];
         foreach (UINode i in _children)
         {
-            if (name == i.name)
+            if (name == i.Name)
             {
                 tmp.Add(i);
             }
@@ -53,7 +57,7 @@ public abstract class UINode : IDisposable
 
     public virtual void Dispose()
     {
-        parent = null;
+        Parent = null;
         //删除children
         List<UINode> tmp = [];
         tmp.AddRange(_children);
@@ -66,26 +70,28 @@ public abstract class UINode : IDisposable
 
     public Action DisposeHook;
     public float Z { get; set; } = 0;
+
     public UINode FindRoot()
     {
-        if (this.parent != null)
+        if (this.Parent != null)
         {
-            return FindRoot(this.parent);
+            return FindRoot(this.Parent);
         }
-        else if (this.parent is UIScreen)
+        else if (this.Parent is UIScreen)
         {
-            return this.parent;
+            return this.Parent;
         }
         else
         {
             return null;
         }
     }
+
     public static UINode FindRoot(UINode widget)
     {
-        if (widget.parent != null)
+        if (widget.Parent != null)
         {
-            return FindRoot(widget.parent);
+            return FindRoot(widget.Parent);
         }
         else if (widget is UIScreen)
         {

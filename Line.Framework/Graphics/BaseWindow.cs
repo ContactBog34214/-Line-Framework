@@ -10,7 +10,6 @@ using SDL3;
 using Veldrid;
 using Veldrid.OpenGL;
 using Veldrid.StartupUtilities;
-using UIScreen = Line.Framework.UI.UIScreen;
 
 namespace Line.Framework.Graphics;
 
@@ -70,6 +69,15 @@ public class BaseWindow : IDisposable
         }
     }
     public UIScreen Root { get; init; }
+    public bool VSync
+    {
+        get;
+        set
+        {
+            Dev?.SyncToVerticalBlank = value;
+            field = value;
+        }
+    } = false;
     public bool ParallelRender { get; set; } = true;
     private readonly Thread MainThread;
     public float FramePerSecond { get; set; } = 240;
@@ -156,9 +164,14 @@ public class BaseWindow : IDisposable
         //一个窗口
         if (Width < Height)
             SDL.SetHint(SDL.Hints.Orientations, "Portrait");
-        else if (Height > Width)
+        else if (Width > Height)
             SDL.SetHint(SDL.Hints.Orientations, "Landscape");
+        SDL.SetHint(SDL.Hints.VideoDriver, "wayland");
         SDL.Init(SDL.InitFlags.Video);
+        Log.Debug($"[BaseWindow]Video driver: {SDL.GetCurrentVideoDriver()}");
+        SDL.SetHint(SDL.Hints.TouchMouseEvents, "0");
+        SDL.SetHint(SDL.Hints.MouseTouchEvents, "0");
+        SDL.GLSetSwapInterval(0);
 
         SDL.WindowFlags flags = SDL.WindowFlags.Resizable;
 
@@ -256,7 +269,6 @@ public class BaseWindow : IDisposable
             false // 垂直同步
         );
 
-        SDL.SetHint(SDL.Hints.TouchMouseEvents, "0");
         WindowID = SDL.GetWindowID(WindowHandle);
         GraphicsDeviceOptions Options = new GraphicsDeviceOptions
         {
@@ -334,6 +346,9 @@ public class BaseWindow : IDisposable
             Dispose();
             return;
         }
+
+        Log.Debug($"[Renderer] GraphicsDevice:{Dev.BackendType} {Dev.ApiVersion}");
+        Log.Debug($"[Renderer] GPU:{Dev.DeviceName}");
 
         commandList = Dev.ResourceFactory.CreateCommandList();
         Collector = new();
@@ -470,7 +485,7 @@ public class BaseWindow : IDisposable
             milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
 
             //输入更新
-            unsafe void update()
+            void update()
             {
                 double UpdateMs = 0;
                 while (Exists)
@@ -490,11 +505,11 @@ public class BaseWindow : IDisposable
                         {
                             if (wait - delay > 4)
                             {
-                                Thread.Sleep((int)(wait - delay) - 2);
+                                Thread.Sleep((int)(wait - delay) - 4);
                             }
                             else
                             {
-                                Thread.SpinWait((int)(wait - delay) / 2);
+                                Thread.SpinWait((int)(wait - delay) / 4);
                             }
                             tick = sw.ElapsedTicks;
                             milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
@@ -510,11 +525,14 @@ public class BaseWindow : IDisposable
                                 SDL.SetEventFilter(
                                     (a, ref b) =>
                                     {
-                                        return b.Window.WindowID == WindowID;
+                                        return b.Window.WindowID == WindowID
+                                            || b.TFinger.WindowID == WindowID;
                                     },
                                     (nint)WindowID
                                 );
+
                                 var events = SDL.PollEvent(out var ev);
+
                                 if (!events)
                                     break;
                                 foreach (var item in EventPool)
@@ -552,10 +570,11 @@ public class BaseWindow : IDisposable
                 _newHeight = (uint)Size.Y;
                 Dev.MainSwapchain.Resize(_newWidth, _newHeight);
                 _resizePending = false;
+                Dev?.SyncToVerticalBlank = VSync;
             }
 
             //正式渲染
-            async void render()
+            void render()
             {
                 if (FramePerSecond <= 0)
                 {
@@ -571,11 +590,11 @@ public class BaseWindow : IDisposable
                     {
                         if (wait - delay > 4)
                         {
-                            Thread.Sleep((int)(wait - delay) - 2);
+                            Thread.Sleep((int)(wait - delay) - 4);
                         }
                         else
                         {
-                            Thread.SpinWait((int)(wait - delay) / 2);
+                            Thread.SpinWait((int)(wait - delay) / 4);
                         }
                         tick = sw.ElapsedTicks;
                         milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;

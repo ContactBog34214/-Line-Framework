@@ -16,23 +16,22 @@ public class ResourceManager : IDisposable
         Types.Clear();
     }
 
-    Dictionary<string, IResource> Resources = [];
-    Dictionary<string, (ulong LastGetTime, ulong NumGet)> Rs = [];
-    Dictionary<string, ResourceType> Types = [];
-    Stopwatch sw = new();
-    private readonly Timer _releaseTimer;
-    private readonly int _releaseIntervalMs;
+    readonly Dictionary<string, IResource> Resources = [];
+    public bool AutoReleaseResources { get; set; } = true;
+    readonly Dictionary<string, (ulong LastGetTime, ulong NumGet)> Rs = [];
+    readonly Dictionary<string, ResourceType> Types = [];
+    readonly Stopwatch sw = new();
 
     public ResourceManager()
     {
         sw.Start();
-        _releaseIntervalMs = 1500;
-        _releaseTimer = new Timer(OnReleaseTimer, null, _releaseIntervalMs, _releaseIntervalMs);
+        _ = new Timer(OnReleaseTimer, null, 1500, 1500);
     }
 
     void OnReleaseTimer(object? a)
     {
-        ReleaseIdleResources();
+        if (AutoReleaseResources)
+            ReleaseIdleResources();
     }
 
     public void AddResource(string id, IResource res)
@@ -158,8 +157,11 @@ public class ResourceManager : IDisposable
         {
             return;
         }
-        try{
-        t.Create(targetId, stream);}catch(Exception ex)
+        try
+        {
+            t.Create(targetId, stream);
+        }
+        catch (Exception ex)
         {
             Log.Error($"[ResourceManager] {ex}");
         }
