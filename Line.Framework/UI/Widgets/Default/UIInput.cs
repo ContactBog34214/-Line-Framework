@@ -2,8 +2,8 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using Line.Framework.Input;
 using Line.Framework.Resource;
-using SDL3;
 using Veldrid;
+using SDL3;
 
 namespace Line.Framework.UI.DefaultWidget;
 
@@ -24,9 +24,6 @@ public class UIInput : UIWidget
                 SDL.StartTextInput((root as UIScreen)?.window.WindowHandle ?? nint.Zero);
             else
                 SDL.StopTextInput((root as UIScreen)?.window.WindowHandle ?? nint.Zero);
-            Log.Debug(
-                $"[Input] Enabled:{SDL.TextInputActive((root as UIScreen)?.window.WindowHandle ?? nint.Zero)}"
-            );
             if (Focused)
             {
                 (root as UIScreen)?.window.EventPool.TryAdd(SDL.EventType.TextInput, InputAction);
@@ -42,9 +39,9 @@ public class UIInput : UIWidget
 
     public record Cursor(int StartPosition, int EndPosition);
 
-    readonly Action<SDL.Keycode> KeyAction;
+    readonly Action<KeyCode> KeyAction;
 
-    void WhenKeyDown(SDL.Keycode ev)
+    void WhenKeyDown(KeyCode ev)
     {
         if (!(im?.IsKeyDown(ev) ?? false))
             return;
@@ -54,10 +51,10 @@ public class UIInput : UIWidget
             return;
         switch (ev)
         {
-            case SDL.Keycode.Escape:
+            case KeyCode.Escape:
                 Focused = false;
                 break;
-            case SDL.Keycode.Backspace:
+            case KeyCode.Backspace:
                 if (InputPosition.StartPosition == InputPosition.EndPosition)
                 {
                     if (InputPosition.StartPosition <= 0)
@@ -70,15 +67,27 @@ public class UIInput : UIWidget
                     var cur = front.Length;
                     InputPosition = new(cur, cur);
                 }
+                else
+                {
+                    if (InputPosition.StartPosition <= 0)
+                        return;
+                    if (Text.Length == 0)
+                        return;
+                    string front = Text.Substring(0, InputPosition.StartPosition);
+                    string back = Text.Substring(InputPosition.EndPosition);
+                    Text = front + back;
+                    var cur = front.Length;
+                    InputPosition = new(cur, cur);
+                }
                 break;
-            case SDL.Keycode.V:
+            case KeyCode.V:
                 if (
-                    (im?.IsKeyDown(SDL.Keycode.LCtrl) ?? false)
-                    || (im?.IsKeyDown(SDL.Keycode.RCtrl) ?? false)
+                    (im?.IsKeyDown(KeyCode.LCtrl) ?? false)
+                    || (im?.IsKeyDown(KeyCode.RCtrl) ?? false)
                 )
                     AddText(im?.GetClipBoardText() ?? "");
                 break;
-            case SDL.Keycode.Left:
+            case KeyCode.Left:
                 var cur2 = InputPosition.StartPosition;
                 if (InputPosition.StartPosition == InputPosition.EndPosition)
                 {
@@ -86,16 +95,13 @@ public class UIInput : UIWidget
                 }
                 InputPosition = new(cur2, cur2);
                 break;
-            case SDL.Keycode.Right:
+            case KeyCode.Right:
                 var cur3 = InputPosition.EndPosition;
                 if (InputPosition.StartPosition == InputPosition.EndPosition)
                 {
                     cur3++;
                 }
                 InputPosition = new(cur3, cur3);
-                break;
-            default:
-                Console.WriteLine(ev);
                 break;
         }
     }
@@ -130,10 +136,10 @@ public class UIInput : UIWidget
             var e = value.EndPosition;
             if (e < s)
                 e = s;
-            if (e >= Text.Length)
-                e = Text.Length - 1;
-            if (s >= Text.Length)
-                s = Text.Length - 1;
+            if (e > Text.Length)
+                e = Text.Length;
+            if (s > Text.Length)
+                s = Text.Length;
             if (e < 0)
                 e = 0;
             if (s < 0)
@@ -156,7 +162,7 @@ public class UIInput : UIWidget
 
     public UIInput(ResourceManager rm)
     {
-        ClickAction = a => WhenClick(new(a.X, a.Y));
+        ClickAction = a => WhenClick(new(a.Position.X,a.Position.Y));
         InputAction = WhenInput;
         KeyAction = WhenKeyDown;
         if (rm == null)
@@ -180,10 +186,10 @@ public class UIInput : UIWidget
         root = FindRoot(this) as UIWidget;
         if ((root as UIScreen)?.window.Input == im)
             return;
-        im?.MouseDown -= ClickAction;
+        im?.CursorDown -= ClickAction;
         im?.KeyDown -= KeyAction;
         im = (root as UIScreen)?.window.Input;
-        im?.MouseDown += ClickAction;
+        im?.CursorDown += ClickAction;
         im?.KeyDown += KeyAction;
 
         Focused = i;
@@ -191,7 +197,7 @@ public class UIInput : UIWidget
 
     public static UIInput Focus { get; internal set; }
 
-    readonly Action<SDL3.SDL.MouseButtonEvent> ClickAction;
+    readonly Action<ICursor> ClickAction;
 
     public bool FadeWhenNotInput { get; set; } = true;
 
@@ -251,10 +257,10 @@ public class UIInput : UIWidget
             var e = cursor.EndPosition;
             if (e < st)
                 e = st;
-            if (e >= Text.Length)
-                e = Text.Length - 1;
-            if (st >= Text.Length)
-                st = Text.Length - 1;
+            if (e > Text.Length)
+                e = Text.Length;
+            if (st > Text.Length)
+                st = Text.Length;
             if (e < 0)
                 e = 0;
             if (st < 0)
