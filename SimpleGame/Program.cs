@@ -158,6 +158,7 @@ public static class SimpleGame
         };
 
         VisualTouch();
+        Host.Scale=1.2f;
     }
 
     static void FPSPrinter()
