@@ -1,13 +1,7 @@
 #nullable disable
 
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using ManagedBass;
 using ManagedBass.Fx;
-using Line.Framework;
-using Line.Framework.Resource;
 
 namespace Line.Framework.Resource.Audio
 {

@@ -8,7 +8,7 @@
     <Nullable>disable</Nullable>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>Line.Framework</PackageId>
-    <Version>2026.100.0</Version>
+    <Version>2026.101.0</Version>
     <Authors>SmellyFish</Authors>
     <Description>A Game Framework</Description>
     <PackageOutputPath>./nupkg</PackageOutputPath>
@@ -23,7 +23,6 @@
     <PackageReference Include="TagLibSharp" Version="2.3.0" />
     <PackageReference Include="Veldrid" Version="4.9.0" />
     <PackageReference Include="Veldrid.ImageSharp" Version="4.9.0" />
-    <PackageReference Include="Veldrid.SDL2" Version="4.9.0" />
     <PackageReference Include="Veldrid.SPIRV" Version="1.0.15" />
     <PackageReference Include="Veldrid.StartupUtilities" Version="4.9.0" />
   </ItemGroup>

@@ -1,5 +1,3 @@
-using SDL3;
-
 namespace Line.Framework.Input;
 
 public interface IKey

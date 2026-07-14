@@ -1,11 +1,8 @@
-using System.Dynamic;
 using System.Numerics;
 using Line.Framework.Graphics;
 using Line.Framework.Resource;
 using Line.Framework.Resource.Graphic;
-using TagLib.IFD.Entries;
 using Veldrid;
-using Veldrid.SPIRV;
 
 namespace Line.Framework.UI.DefaultWidget;
 

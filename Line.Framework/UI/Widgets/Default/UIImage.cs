@@ -2,8 +2,6 @@ using Line.Framework.Graphics;
 using Line.Framework.Resource;
 using Line.Framework.Resource.Graphic;
 using Veldrid;
-using Veldrid.ImageSharp;
-using Rectangle = System.Drawing.RectangleF;
 
 namespace Line.Framework.UI.DefaultWidget;
 
