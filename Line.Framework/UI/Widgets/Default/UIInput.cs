@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Line.Framework.Input;
@@ -49,6 +50,8 @@ public class UIInput : UIWidget
             return;
         bool shift =
             (im?.IsKeyDown(KeyCode.LShift) ?? false) || (im?.IsKeyDown(KeyCode.RShift) ?? false);
+        bool ctrl =
+            (im?.IsKeyDown(KeyCode.LCtrl) ?? false) || (im?.IsKeyDown(KeyCode.RCtrl) ?? false);
         switch (ev)
         {
             case KeyCode.Escape:
@@ -81,10 +84,7 @@ public class UIInput : UIWidget
                 }
                 break;
             case KeyCode.V:
-                if (
-                    (im?.IsKeyDown(KeyCode.LCtrl) ?? false)
-                    || (im?.IsKeyDown(KeyCode.RCtrl) ?? false)
-                )
+                if (ctrl)
                     AddText(im?.GetClipBoardText() ?? "");
                 break;
             case KeyCode.Left:
@@ -154,6 +154,13 @@ public class UIInput : UIWidget
                 if (LineBreaks)
                     AddText("\n");
                 break;
+            case KeyCode.A:
+                if (ctrl)
+                {
+                    IsLeftMain = true;
+                    InputPosition = new(0, Text.Length);
+                }
+                break;
         }
     }
 
@@ -167,6 +174,19 @@ public class UIInput : UIWidget
         AddText(inputText);
     }
 
+    void WhenScroll(IMouse mouse)
+    {
+        if(!CanScrollByCursor)return;
+        if(!HitTest(mouse.Position))return;
+        var of = Offset;
+        of.Y -= mouse.WheelDelta.Y * ScrollRate;
+        of.X += mouse.WheelDelta.X * ScrollRate;
+        Offset = of;
+    }
+
+    public uint ScrollRate { get; set; } = 15;
+    public bool CanScrollByCursor { get; set; } = true;
+
     void AddText(string t)
     {
         if (t.Length == 0)
@@ -176,6 +196,7 @@ public class UIInput : UIWidget
         var cur = front.Length + t.Length;
         Text = front + t + back;
         InputPosition = new(cur, cur);
+        SetOffsetToDefault();
     }
 
     public Cursor InputPosition
@@ -207,10 +228,10 @@ public class UIInput : UIWidget
         var idx = 0;
 
         if (IsLeftMain)
-            idx = InputPosition.EndPosition;
+            idx += InputPosition.EndPosition;
         else
-            idx = InputPosition.StartPosition;
-        Vector2 pos = TextWidget?.GetWhereIndexCharIs(Text,idx) ?? new();
+            idx += InputPosition.StartPosition;
+        Vector2 pos = TextWidget?.GetWhereIndexCharIs(Text, idx) ?? new();
         var s = GetSizeOnScreen();
         var top = 0;
         var bottom = s.Y;
@@ -218,14 +239,19 @@ public class UIInput : UIWidget
         var right = s.X;
 
         var Height = (TextWidget?.GetTextSize(" ") ?? new()).Y;
-        if (top > (pos - Offset).Y || bottom < pos.Y+ Height-Offset.Y)
+        if (top > (pos - Offset).Y || bottom < pos.Y + Height - Offset.Y)
         {
             if (top > (pos - Offset).Y)
                 Offset = new(Offset.X, pos.Y);
             else
-            {
                 Offset = new(Offset.X, pos.Y + Height - s.Y);
-            }
+        }
+        if (left > pos.X - Offset.X || right < pos.X - Offset.X)
+        {
+            if (left > pos.X - Offset.X)
+                Offset = new(pos.X, Offset.Y);
+            else
+                Offset = new(pos.X - s.X + CursorWidth, Offset.Y);
         }
     }
 
@@ -303,7 +329,7 @@ public class UIInput : UIWidget
                     Select = lines[i];
                     Result -= lines[i].Length;
                     if (i != 0)
-                        Result+=i;
+                        Result += i;
                     break;
                 }
                 if (i + 1 == lines.Count && bottomY < tmp.Y)
@@ -348,11 +374,13 @@ public class UIInput : UIWidget
         im?.CursorUp -= WhenUp;
         im?.KeyDown -= WhenKeyDown;
         im?.CursorMove -= WhenHold;
+        im?.MouseWheel -= WhenScroll;
         im = (root as UIScreen)?.window.Input;
         im?.CursorDown += WhenClick;
         im?.KeyDown += WhenKeyDown;
         im?.CursorUp += WhenUp;
         im?.CursorMove += WhenHold;
+        im?.MouseWheel += WhenScroll;
 
         Focused = i;
     }
@@ -412,13 +440,13 @@ public class UIInput : UIWidget
         if (usingHint)
         {
             var s = HintWidget?.GetTextSize(" ") ?? new(0, 0);
-            HintWidget?.Offset = new(-Offset.X,s.Y*0.1f - Offset.Y);
+            HintWidget?.Offset = new(-Offset.X, s.Y * 0.1f - Offset.Y);
             HintWidget?.RendererContext(Args);
         }
         else
         {
             var s = TextWidget?.GetTextSize(" ") ?? new(0, 0);
-            TextWidget?.Offset = new(-Offset.X,s.Y*0.1f - Offset.Y);
+            TextWidget?.Offset = new(-Offset.X, s.Y * 0.1f - Offset.Y);
             TextWidget?.RendererContext(Args);
         }
         var cl = args.Collector;

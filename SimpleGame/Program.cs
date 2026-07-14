@@ -154,7 +154,7 @@ public static class SimpleGame
             FontId = "Font",
             CursorColor = new(1, 1, 1, 0.5f),
             FontScale = 1f,
-            Text = "Wow\nwow",
+            Text = "Wowabcdefghijklmnopq\nwow",
             Offset=new(0)
         };
 

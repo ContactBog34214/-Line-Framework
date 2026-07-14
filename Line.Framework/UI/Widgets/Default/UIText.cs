@@ -35,19 +35,29 @@ public sealed class UIText : UIWidget
         RenderAction(args);
     }
 
-    public Vector2 GetWhereIndexCharIs(string Text,int Index)
+    public Vector2 GetWhereIndexCharIs(string Text, int Index)
     {
         if (Index >= Text.Length)
-            Index = Text.Length-1;
+            Index = Text.Length - 1;
         if (Index <= 0)
             return new(0);
-        var sub = Text.Substring(0, Index+1);
+        string[] AllLines = Text.Split('\n');
+        var ot = 1;
+        if (Text.Substring(0, Index - 1).Split('\n').Length == AllLines.Length)
+        {
+            Index += 1;
+        }
+
+        var sub = Text.Substring(0, Index);
         string[] AllLinesBeforeCur = sub.Split('\n');
-        
+
         var s = GetTextSize(AllLinesBeforeCur.Last());
         var Height = GetTextSize(" ").Y;
 
-        return new(s.X, Height*(AllLinesBeforeCur.Length-1));
+        if (AllLinesBeforeCur.Length==AllLines.Length-1&&Text.ToArray().Last() == '\n')
+            ot--;
+
+        return new(s.X, Height * (AllLinesBeforeCur.Length - ot));
     }
 
     void SetText(string s)
@@ -193,11 +203,10 @@ public sealed class UIText : UIWidget
         var font = rm.GetResource(FontId) as Font;
         if (font == null)
             return Vector2.One;
-        
 
         float lineHeight = font.Size / 1.4f * FontScale;
         if (string.IsNullOrEmpty(s))
-            return new(0,lineHeight);
+            return new(0, lineHeight);
         float maxWidth = 0;
         float currentWidth = 0;
         int lineCount = 1;
