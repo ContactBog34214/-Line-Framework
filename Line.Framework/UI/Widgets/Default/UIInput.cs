@@ -274,7 +274,8 @@ public class UIInput : UIWidget
     {
         if (pressed == null)
             return;
-        var curIdx = GetIndexOnCur(a.Position);
+
+        var curIdx = GetIndexOnCur(pressed.Position);
         if (IsLeftMain)
         {
             IsLeftMain = curIdx >= InputPosition.StartPosition;
