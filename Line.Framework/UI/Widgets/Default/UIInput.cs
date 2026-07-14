@@ -2,8 +2,8 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using Line.Framework.Input;
 using Line.Framework.Resource;
-using Veldrid;
 using SDL3;
+using Veldrid;
 
 namespace Line.Framework.UI.DefaultWidget;
 
@@ -39,8 +39,6 @@ public class UIInput : UIWidget
 
     public record Cursor(int StartPosition, int EndPosition);
 
-    readonly Action<KeyCode> KeyAction;
-
     void WhenKeyDown(KeyCode ev)
     {
         if (!(im?.IsKeyDown(ev) ?? false))
@@ -49,6 +47,8 @@ public class UIInput : UIWidget
             return;
         if (!Enabled)
             return;
+        bool shift =
+            (im?.IsKeyDown(KeyCode.LShift) ?? false) || (im?.IsKeyDown(KeyCode.RShift) ?? false);
         switch (ev)
         {
             case KeyCode.Escape:
@@ -69,7 +69,7 @@ public class UIInput : UIWidget
                 }
                 else
                 {
-                    if (InputPosition.StartPosition <= 0)
+                    if (InputPosition.StartPosition < 0)
                         return;
                     if (Text.Length == 0)
                         return;
@@ -88,6 +88,29 @@ public class UIInput : UIWidget
                     AddText(im?.GetClipBoardText() ?? "");
                 break;
             case KeyCode.Left:
+                var Loffset = 1;
+                if (shift)
+                {
+                    if (!IsLeftMain)
+                    {
+                        InputPosition = new(
+                            InputPosition.StartPosition - Loffset,
+                            InputPosition.EndPosition
+                        );
+                    }
+                    else
+                    {
+                        int[] l =
+                        [
+                            InputPosition.StartPosition,
+                            InputPosition.EndPosition - Loffset,
+                        ];
+                        InputPosition = new(l.Min(), l.Max());
+                        if (l[0] >= l[1])
+                            IsLeftMain = false;
+                    }
+                    break;
+                }
                 var cur2 = InputPosition.StartPosition;
                 if (InputPosition.StartPosition == InputPosition.EndPosition)
                 {
@@ -96,12 +119,40 @@ public class UIInput : UIWidget
                 InputPosition = new(cur2, cur2);
                 break;
             case KeyCode.Right:
+                var Roffset = 1;
+                if (shift)
+                {
+                    if (IsLeftMain)
+                    {
+                        InputPosition = new(
+                            InputPosition.StartPosition,
+                            InputPosition.EndPosition + Roffset
+                        );
+                    }
+                    else
+                    {
+                        int[] l =
+                        [
+                            InputPosition.StartPosition + Roffset,
+                            InputPosition.EndPosition,
+                        ];
+                        InputPosition = new(l.Min(), l.Max());
+                        if (l[0] == l[1])
+                            IsLeftMain = true;
+                    }
+                    break;
+                }
                 var cur3 = InputPosition.EndPosition;
                 if (InputPosition.StartPosition == InputPosition.EndPosition)
                 {
                     cur3++;
                 }
                 InputPosition = new(cur3, cur3);
+                break;
+            case KeyCode.KpEnter:
+            case KeyCode.Return:
+                if (LineBreaks)
+                    AddText("\n");
                 break;
         }
     }
@@ -145,10 +196,40 @@ public class UIInput : UIWidget
             if (s < 0)
                 s = 0;
             field = new(s, e);
+            SetOffsetToDefault();
         }
     } = new(0, 0);
 
     public string Text { get; set; } = "";
+
+    public void SetOffsetToDefault()
+    {
+        var idx = 0;
+
+        if (IsLeftMain)
+            idx = InputPosition.EndPosition;
+        else
+            idx = InputPosition.StartPosition;
+        Vector2 pos = TextWidget?.GetWhereIndexCharIs(Text,idx) ?? new();
+        var s = GetSizeOnScreen();
+        var top = 0;
+        var bottom = s.Y;
+        var left = 0;
+        var right = s.X;
+
+        var Height = (TextWidget?.GetTextSize(" ") ?? new()).Y;
+        if (top > (pos - Offset).Y || bottom < pos.Y+ Height-Offset.Y)
+        {
+            if (top > (pos - Offset).Y)
+                Offset = new(Offset.X, pos.Y);
+            else
+            {
+                Offset = new(Offset.X, pos.Y + Height - s.Y);
+            }
+        }
+    }
+
+    public bool AllowPaste { get; set; } = true;
     public bool Enabled { get; set; } = true;
     public string Hint { get; set; } = "Type something...";
     public RgbaFloat CursorColor { get; set; } = new(1, 1, 1, 1);
@@ -159,12 +240,38 @@ public class UIInput : UIWidget
     public float FontScale { get; set; } = 1;
     readonly UIText TextWidget;
     readonly UIText HintWidget;
+    ICursor pressed = null;
+
+    void WhenHold(ICursor a)
+    {
+        if (pressed == null)
+            return;
+        var curIdx = GetIndexOnCur(a.Position);
+        if (IsLeftMain)
+        {
+            IsLeftMain = curIdx >= InputPosition.StartPosition;
+            if (curIdx == InputPosition.StartPosition)
+                InputPosition = new(curIdx, curIdx);
+            if (curIdx < InputPosition.StartPosition)
+                InputPosition = new(curIdx, InputPosition.StartPosition);
+            else
+                InputPosition = new(InputPosition.StartPosition, curIdx);
+        }
+        else
+        {
+            IsLeftMain = curIdx >= InputPosition.EndPosition;
+            if (curIdx == InputPosition.EndPosition)
+                InputPosition = new(curIdx, curIdx);
+            if (curIdx > InputPosition.EndPosition)
+                InputPosition = new(InputPosition.EndPosition, curIdx);
+            else
+                InputPosition = new(curIdx, InputPosition.EndPosition);
+        }
+    }
 
     public UIInput(ResourceManager rm)
     {
-        ClickAction = a => WhenClick(new(a.Position.X,a.Position.Y));
         InputAction = WhenInput;
-        KeyAction = WhenKeyDown;
         if (rm == null)
         {
             throw new NullReferenceException();
@@ -174,37 +281,106 @@ public class UIInput : UIWidget
         SyncChildrenAtt();
     }
 
+    public int GetIndexOnCur(Vector2 cur)
+    {
+        SyncChildrenAtt();
+        var tmp = MousePosition(cur);
+        List<string> lines = Text.Split('\n').ToList();
+        float topY = 0;
+        float bottomY = -Offset.Y;
+        string Select = "";
+        int Result = 0;
+        if (tmp.Y < topY)
+            return 0;
+        else
+            for (int i = 0; i < lines.Count; i++)
+            {
+                topY = bottomY;
+                bottomY += (TextWidget?.GetTextSize(lines[i]) ?? new(0, 0)).Y;
+                Result += lines[i].Length;
+                if (tmp.Y >= topY && bottomY >= tmp.Y)
+                {
+                    Select = lines[i];
+                    Result -= lines[i].Length;
+                    if (i != 0)
+                        Result+=i;
+                    break;
+                }
+                if (i + 1 == lines.Count && bottomY < tmp.Y)
+                    return Text.Length;
+            }
+        float startX = -Offset.X;
+        if (tmp.X < startX)
+            return Result;
+        else
+            for (int i = 0; i < Select.Length; i++)
+            {
+                var l = (TextWidget?.GetTextSize(Select.Substring(i, 1)) ?? new(0, 0)).X;
+
+                if (startX <= tmp.X && startX + l >= tmp.X)
+                {
+                    break;
+                }
+                startX += l;
+                Result++;
+            }
+        return Result;
+    }
+
     InputManager im;
+
+    public Vector2 Offset { get; set; } = new(0);
     UIWidget root;
 
     public override void SetParent(UINode value)
     {
         var i = Focused;
         if (Parent != value)
+        {
             Focused = false;
+            pressed = null;
+        }
         base.SetParent(value);
         root = FindRoot(this) as UIWidget;
         if ((root as UIScreen)?.window.Input == im)
             return;
-        im?.CursorDown -= ClickAction;
-        im?.KeyDown -= KeyAction;
+        im?.CursorDown -= WhenClick;
+        im?.CursorUp -= WhenUp;
+        im?.KeyDown -= WhenKeyDown;
+        im?.CursorMove -= WhenHold;
         im = (root as UIScreen)?.window.Input;
-        im?.CursorDown += ClickAction;
-        im?.KeyDown += KeyAction;
+        im?.CursorDown += WhenClick;
+        im?.KeyDown += WhenKeyDown;
+        im?.CursorUp += WhenUp;
+        im?.CursorMove += WhenHold;
 
         Focused = i;
     }
 
     public static UIInput Focus { get; internal set; }
 
-    readonly Action<ICursor> ClickAction;
-
     public bool FadeWhenNotInput { get; set; } = true;
+    public bool IsLeftMain { get; set; } = true;
+    public bool LineBreaks { get; set; } = true;
 
-    void WhenClick(Vector2 pos)
+    void WhenClick(ICursor cursor)
     {
+        var pos = cursor.Position;
         var t = FindWidgetPointTouched(root, pos);
         Focused = t == this && Enabled;
+        if (Focused)
+        {
+            pressed = cursor;
+            var cur = GetIndexOnCur(pos);
+            InputPosition = new(cur, cur);
+            IsLeftMain = true;
+        }
+    }
+
+    void WhenUp(ICursor cursor)
+    {
+        if (cursor == pressed)
+            pressed = null;
     }
 
     void SyncChildrenAtt()
@@ -235,14 +411,14 @@ public class UIInput : UIWidget
         };
         if (usingHint)
         {
-            var s = HintWidget?.GetTextSize(Hint) ?? new(0, 0);
-            HintWidget?.Offset = new(0, s.Y * 0.05f);
+            var s = HintWidget?.GetTextSize(" ") ?? new(0, 0);
+            HintWidget?.Offset = new(-Offset.X,s.Y*0.1f - Offset.Y);
             HintWidget?.RendererContext(Args);
         }
         else
         {
-            var s = TextWidget?.GetTextSize(Text) ?? new(0, 0);
-            TextWidget?.Offset = new(0, s.Y * 0.05f);
+            var s = TextWidget?.GetTextSize(" ") ?? new(0, 0);
+            TextWidget?.Offset = new(-Offset.X,s.Y*0.1f - Offset.Y);
             TextWidget?.RendererContext(Args);
         }
         var cl = args.Collector;
@@ -271,30 +447,45 @@ public class UIInput : UIWidget
             {
                 var sub = Text.Substring(0, cursor.StartPosition);
                 AllLinesBeforeCur = sub.Split('\n');
-                var s = TextWidget?.GetTextSize(sub) ?? new();
-                var EndHeight = s.Y;
+                var s = TextWidget?.GetTextSize(AllLinesBeforeCur.Last()) ?? new();
+                var EndHeight = (TextWidget?.GetTextSize(sub) ?? new()).Y;
+
                 var Height =
                     TextWidget?.GetTextSize(AllLinesBeforeCur[AllLinesBeforeCur.Length - 1]).Y ?? 0;
                 if (EndHeight - Height == 0)
                 {
                     Height = EndHeight = TextWidget?.GetTextSize(" ").Y ?? 0;
                 }
+                else if (Height == 0)
+                {
+                    Height = TextWidget?.GetTextSize(" ").Y ?? 0;
+                }
 
                 var sub2 = Text.Substring(0, cursor.EndPosition);
                 AllLinesBeforeCur = sub2.Split('\n');
-                var s2 = TextWidget?.GetTextSize(sub2) ?? new();
-                var EndHeight2 = s2.Y;
+                var s2 = TextWidget?.GetTextSize(AllLinesBeforeCur.Last()) ?? new();
+                var EndHeight2 = (TextWidget?.GetTextSize(sub2) ?? new()).Y;
+
                 var Height2 =
                     TextWidget?.GetTextSize(AllLinesBeforeCur[AllLinesBeforeCur.Length - 1]).Y ?? 0;
                 if (EndHeight2 - Height2 == 0)
                 {
                     Height2 = EndHeight2 = TextWidget?.GetTextSize(" ").Y ?? 0;
                 }
+                else if (Height2 == 0)
+                {
+                    Height2 = TextWidget?.GetTextSize(" ").Y ?? 0;
+                }
                 if (EndHeight == EndHeight2)
                 {
                     float[] h = [Height, Height2];
                     cl.DrawRect(
-                        new(s.X, EndHeight - h.Max(), s2.X + CursorWidth - s.X, h.Max()),
+                        new(
+                            s.X - Offset.X,
+                            EndHeight - h.Max() - Offset.Y,
+                            Math.Abs(s2.X - s.X) + CursorWidth,
+                            h.Max()
+                        ),
                         0,
                         new(0),
                         color,
@@ -305,21 +496,31 @@ public class UIInput : UIWidget
                 {
                     if (EndHeight != EndHeight2 - Height2)
                         cl.DrawRect(
-                            new(0, EndHeight, (float)args.width, EndHeight2 - Height2 - EndHeight),
+                            new(
+                                -Offset.X,
+                                EndHeight - Offset.Y,
+                                (float)args.width,
+                                EndHeight2 - Height2 - EndHeight
+                            ),
                             0,
                             new(0),
                             color,
                             this
                         );
                     cl.DrawRect(
-                        new(s.X, EndHeight - Height, (float)args.width - s.X, Height),
+                        new(
+                            s.X - Offset.X,
+                            EndHeight - Height - Offset.Y,
+                            (float)args.width - s.X,
+                            Height
+                        ),
                         0,
                         new(0),
                         color,
                         this
                     );
                     cl.DrawRect(
-                        new(0, EndHeight2 - Height2, s2.X + CursorWidth, Height),
+                        new(-Offset.X, EndHeight2 - Height2 - Offset.Y, s2.X + CursorWidth, Height),
                         0,
                         new(0),
                         color,

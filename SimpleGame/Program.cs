@@ -3,6 +3,7 @@ using System.Numerics;
 using System.Reflection;
 using Line.Framework;
 using Line.Framework.Graphics;
+using Line.Framework.Resource.Audio;
 using Line.Framework.Resource.Graphic;
 using Line.Framework.UI;
 using Line.Framework.UI.DefaultWidget;
@@ -45,7 +46,6 @@ public static class SimpleGame
         );
 
         //Exp
-        float ptr = 0.2f;
         Log.Debug("Loaded Font");
         font = Host.Resource.GetResource("Font") as Font;
         font?.Size = FontSize;
@@ -137,7 +137,7 @@ public static class SimpleGame
 
         FPSPrinter();
 
-        //PerTest(20000,Host.Root);
+        //PerTest(2000,Host.Root);
 
         Host.ShowCursor = false;
         Host.ParallelRender = true;
@@ -154,7 +154,8 @@ public static class SimpleGame
             FontId = "Font",
             CursorColor = new(1, 1, 1, 0.5f),
             FontScale = 1f,
-            Text = "Test",
+            Text = "Wow\nwow",
+            Offset=new(0)
         };
 
         VisualTouch();
