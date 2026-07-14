@@ -1,5 +1,3 @@
-using System.Numerics;
-
 namespace Line.Framework.Input;
 
 public interface ITouchDevice{

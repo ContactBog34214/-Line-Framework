@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.Numerics;
 using Veldrid;
 using static Line.Framework.Graphics.WindowsRenderer;

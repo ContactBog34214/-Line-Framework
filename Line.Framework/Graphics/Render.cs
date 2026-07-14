@@ -1,9 +1,7 @@
 using System.Collections.Concurrent;
-using System.Formats.Tar;
 using System.Numerics;
 using System.Text;
 using Line.Framework.UI;
-using TagLib;
 using Veldrid;
 using Veldrid.SPIRV;
 using BufferDescription = Veldrid.BufferDescription;

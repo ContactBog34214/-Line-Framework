@@ -1,8 +1,6 @@
 using System.Diagnostics;
-using System.Numerics;
 using Line.Framework.Input;
 using Veldrid;
-using static SDL3.SDL;
 using Rectangle = System.Drawing.RectangleF;
 
 namespace Line.Framework.UI.DefaultWidget;

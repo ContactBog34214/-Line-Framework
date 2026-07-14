@@ -1,11 +1,8 @@
-using System.Dynamic;
 using System.Numerics;
 using Line.Framework.Graphics;
 using Line.Framework.Resource;
 using Line.Framework.Resource.Graphic;
-using TagLib.IFD.Entries;
 using Veldrid;
-using Veldrid.SPIRV;
 
 namespace Line.Framework.UI.DefaultWidget;
 
@@ -33,6 +30,31 @@ public sealed class UIText : UIWidget
         if (RenderAction == null)
             return;
         RenderAction(args);
+    }
+
+    public Vector2 GetWhereIndexCharIs(string Text, int Index)
+    {
+        if (Index >= Text.Length)
+            Index = Text.Length - 1;
+        if (Index <= 0)
+            return new(0);
+        string[] AllLines = Text.Split('\n');
+        var ot = 1;
+        if (Text.Substring(0, Index - 1).Split('\n').Length == AllLines.Length)
+        {
+            Index += 1;
+        }
+
+        var sub = Text.Substring(0, Index);
+        string[] AllLinesBeforeCur = sub.Split('\n');
+
+        var s = GetTextSize(AllLinesBeforeCur.Last());
+        var Height = GetTextSize(" ").Y;
+
+        if (AllLinesBeforeCur.Length==AllLines.Length-1&&Text.ToArray().Last() == '\n')
+            ot--;
+
+        return new(s.X, Height * (AllLinesBeforeCur.Length - ot));
     }
 
     void SetText(string s)
@@ -178,13 +200,13 @@ public sealed class UIText : UIWidget
         var font = rm.GetResource(FontId) as Font;
         if (font == null)
             return Vector2.One;
-        if (string.IsNullOrEmpty(s))
-            return Vector2.Zero;
 
         float lineHeight = font.Size / 1.4f * FontScale;
+        if (string.IsNullOrEmpty(s))
+            return new(0, lineHeight);
         float maxWidth = 0;
         float currentWidth = 0;
-        int lineCount = s.Split('\n').Length;
+        int lineCount = 1;
 
         foreach (char c in s)
         {
@@ -192,6 +214,7 @@ public sealed class UIText : UIWidget
             {
                 maxWidth = Math.Max(maxWidth, currentWidth);
                 currentWidth = 0;
+                lineCount++;
                 continue;
             }
 
