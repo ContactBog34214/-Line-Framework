@@ -619,7 +619,7 @@ void main()
                     vert.Add(
                         new()
                         {
-                            Position = idx.Position,
+                            Position = (idx.Position+new Vector2(1-window.Scale,window.Scale-1))/window.Scale,
                             Color = c,
                             UV = idx.UV,
                         }

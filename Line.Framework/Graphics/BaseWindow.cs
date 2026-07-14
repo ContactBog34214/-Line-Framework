@@ -82,6 +82,15 @@ public class BaseWindow : IDisposable
     private readonly Thread MainThread;
     public float FramePerSecond { get; set; } = 240;
     public float UpdatePerSecond { get; set; } = 1000;
+    public float Scale
+    {
+        get; set
+        {
+            if(value==field)return;
+            if(value>0)field=value;
+            OnWindowResized();
+        }
+    }=1;
     public CommandList commandList { get; init; }
     public UIDrawCollector Collector { get; init; }
     public GraphicBackend RenderBackend { get; init; }
