@@ -105,7 +105,7 @@ public class InputManager
         float dx = x - LastMousePosition.X;
         float dy = y - LastMousePosition.Y;
         LastMousePosition = new(x, y);
-        Mouse.Position = LastMousePosition;
+        Mouse.Position = LastMousePosition * _window.Scale;
         if (dx != 0 && dy != 0)
         {
             MouseMove?.Invoke(Mouse);
@@ -124,7 +124,7 @@ public class InputManager
         var id = evt.TFinger.FingerID;
         var position = new Vector2(evt.TFinger.X, evt.TFinger.Y);
         position *= _window.Size;
-        var finger = new Sdl3TouchPoint() { Position = position };
+        var finger = new Sdl3TouchPoint() { Position = position * _window.Scale };
         Touch.Touches.TryAdd(id, finger);
         FingerDown?.Invoke((id, finger));
         CursorDown?.Invoke(finger);
@@ -140,7 +140,7 @@ public class InputManager
             Touch.Touches.Remove(id);
             var position = new Vector2(evt.TFinger.X, evt.TFinger.Y);
             position *= _window.Size;
-            touch.Position = position;
+            touch.Position = position * _window.Scale;
             FingerUp?.Invoke((id, (Sdl3TouchPoint)touch));
             CursorUp?.Invoke(touch);
         }
@@ -155,7 +155,7 @@ public class InputManager
         {
             var position = new Vector2(evt.TFinger.X, evt.TFinger.Y);
             position *= _window.Size;
-            touch.Position = position;
+            touch.Position = position * _window.Scale;
             FingerMove?.Invoke((id, (Sdl3TouchPoint)touch));
             CursorMove?.Invoke(touch);
         }

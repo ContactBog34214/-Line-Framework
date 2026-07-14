@@ -59,7 +59,6 @@ void main()
     ResourceLayout _textureLayout;
     ResourceSet _textureResourceSet;
     DeviceBuffer _vertexBuffer;
-    const uint INITIAL_BUFFER_SIZE = 1024 * 1024;
     public ResourceLayout TextureLayout => _textureLayout;
 
     public struct VertexPositionColor
@@ -253,8 +252,6 @@ void main()
         TreeCache.Add(root, new(root.NodeTreeVersion, widgets));
         return widgets;
     }
-
-    public Action<BaseWindow, UIDrawCollector> UIRenderer { get; }
     internal uint BufferIndex = 0;
 
     public WindowsRenderer(GraphicsDevice gd)
@@ -269,99 +266,101 @@ void main()
                 )
             )
         );
+    }
 
-        UIRenderer = async (BaseWindow window, UIDrawCollector collector) =>
+    public virtual void UIRenderer(BaseWindow window, UIDrawCollector collector)
+    {
+        var gd = window.Dev;
+        var cl = window.commandList;
+        var screenSize = window.Size;
+        if (collector == null)
         {
-            var gd = window.Dev;
-            var cl = window.commandList;
-            var screenSize = window.Size;
-            if (collector == null)
-            {
-                collector = new();
-            }
-            collector.Clear();
-            List<UIWidget> ws = [];
-            ws.AddRange(trees(window.Root));
+            collector = new();
+        }
+        collector.Clear();
+        List<UIWidget> ws = [];
+        ws.AddRange(trees(window.Root));
 
-            //各种同步然后请求渲染内容
-            for (int i = 0; i < ws.Count; i++)
+        //各种同步然后请求渲染内容
+        for (int i = 0; i < ws.Count; i++)
+        {
+            var item = ws[i];
+            if (item is UIWidget target && target.RendererContext != null)
             {
-                var item = ws[i];
-                if (item is UIWidget target && target.RendererContext != null)
+                HashSet<UIWidget> visited = new();
+                void syncer(UIWidget target)
                 {
-                    HashSet<UIWidget> visited = new();
-                    void syncer(UIWidget target)
+                    if (!visited.Add(target))
+                        return;
+                    var t = target.Parent as UIWidget;
+                    if (t != null && !t.syncOK)
+                        syncer(t);
+                    //同步渲染区大小
+                    try
                     {
-                        if (!visited.Add(target))
+                        if (t == null)
                             return;
-                        var t = target.Parent as UIWidget;
-                        if (t != null && !t.syncOK)
-                            syncer(t);
-                        //同步渲染区大小
-                        try
+                        target.s = new(
+                            t.Size.offset.X + t.Size.scale.X * t.s.X,
+                            t.Size.offset.Y + t.Size.scale.Y * t.s.Y
+                        );
+                    }
+                    catch
+                    {
+                        target.s = new(window.Size.X, window.Size.Y);
+                    }
+                    //同步移位
+                    try
+                    {
+                        if (t is UIScreen a)
                         {
-                            if (t == null)
-                                return;
-                            target.s = new(
-                                t.Size.offset.X + t.Size.scale.X * t.s.X,
-                                t.Size.offset.Y + t.Size.scale.Y * t.s.Y
+                            target.p = new(0, 0);
+                        }
+                        else
+                        {
+                            target.p = new(
+                                t.Position.offset.X + t.Position.scale.X * t.s.X + t.p.X,
+                                t.Position.offset.Y + t.Position.scale.Y * t.s.Y + t.p.Y
                             );
                         }
-                        catch
-                        {
-                            target.s = new(window.Size.X, window.Size.Y);
-                        }
-                        //同步移位
-                        try
-                        {
-                            if (t is UIScreen a)
-                            {
-                                target.p = new(0, 0);
-                            }
-                            else
-                            {
-                                target.p = new(
-                                    t.Position.offset.X + t.Position.scale.X * t.s.X + t.p.X,
-                                    t.Position.offset.Y + t.Position.scale.Y * t.s.Y + t.p.Y
-                                );
-                            }
-                        }
-                        catch
-                        {
-                            target.s = new(0, 0);
-                        }
-                        //同步透明度
-                        try
-                        {
-                            if (t is UIScreen a)
-                            {
-                                target.o = target.Opacity;
-                            }
-                            else
-                            {
-                                target.o = target.Opacity * t.o;
-                            }
-                        }
-                        catch
+                    }
+                    catch
+                    {
+                        target.s = new(0, 0);
+                    }
+                    //同步透明度
+                    try
+                    {
+                        if (t is UIScreen a)
                         {
                             target.o = target.Opacity;
                         }
-                        //同步剪切链
-                        try
+                        else
                         {
-                            target.ClipList.Clear();
-                            target.ClipList.AddRange(t.ClipList);
-                            target.ClipList.Add(target.GetClipArea(screenSize));
+                            target.o = target.Opacity * t.o;
                         }
-                        catch
-                        {
-                            target.ClipList.Clear();
-                        }
-                        visited.Remove(target);
                     }
-                    syncer(target);
-                    var source = target.s;
-                    try{
+                    catch
+                    {
+                        target.o = target.Opacity;
+                    }
+                    //同步剪切链
+                    try
+                    {
+                        target.ClipList.Clear();
+                        target.ClipList.AddRange(t.ClipList);
+                        target.ClipList.Add(target.GetClipArea(screenSize));
+                    }
+                    catch
+                    {
+                        target.ClipList.Clear();
+                    }
+                    visited.Remove(target);
+                }
+                syncer(target);
+                var source = target.s;
+                try
+                {
                     target.RendererContext(
                         new RendererContextArgs
                         {
@@ -377,302 +376,308 @@ void main()
                             height = target.Size.offset.Y + target.Size.scale.Y * source.Y,
                             Collector = collector,
                         }
-                    );}catch(Exception ex){Log.Error($"{ex}");}
-                }
-            }
-
-            //开始正式渲染
-            // 1. 确保 Pipeline 已创建
-            if (_shaders == null)
-                CreateShader(gd);
-            if (_pipeline == null)
-            {
-                CreatePipeline(window);
-            }
-
-            // 2. 收集命令列表（已按 Z 排序）
-            collector.Update();
-            var commands = collector.AllCommands;
-            if (commands.Count == 0)
-                return;
-
-            // 3.将所有commands转为顶点们
-            int totalVertexCount = 0;
-            ManualResetEventSlim CTVThreadWaiter = new ManualResetEventSlim(false);
-            long CPThreadCount = 0;
-            long TotalThreadCount = commands.Count;
-            ConcurrentBag<(uint index, Vertex[] v)> values = new ConcurrentBag<(uint, Vertex[])>();
-
-            void CTV(UIDrawCollector.DrawCommand i, int idx)
-            {
-                i?.Source?.syncOK = false;
-                try
-                {
-                    List<Vertex> tasks = [];
-                    for (int y = 0; y < 1; y++)
-                    {
-                        if (i.Source.GetSizeOnScreen() == new Vector2(0, 0))
-                            break;
-                        if (i is UIDrawCollector.DrawRectCommand r)
-                        {
-                            //矩形处理
-                            var a = GetRectVertices(r.Rect, r.Color, screenSize, r.Source);
-                            foreach (var b in a)
-                            {
-                                tasks.Add(
-                                    new Vertex(
-                                        b.Position,
-                                        b.Color,
-                                        new(new(), b.UV),
-                                        null,
-                                        _textureResourceSet,
-                                        r.Source.o
-                                    )
-                                    {
-                                        Clips = i.Source.ClipList,
-                                    }
-                                );
-                            }
-                        }
-                        else if (i is UIDrawCollector.DrawTextureCommand t)
-                        {
-                            //带材质矩形处理
-                            var a = GetRectVertices(t.Rect, t.Tint, screenSize, t.Source);
-                            foreach (var b in a)
-                            {
-                                tasks.Add(
-                                    new Vertex(
-                                        b.Position,
-                                        b.Color,
-                                        new(new(), b.UV),
-                                        t.Texture,
-                                        t.TextureResourceSet,
-                                        t.Source.o
-                                    )
-                                    {
-                                        Clips = i.Source.ClipList,
-                                    }
-                                );
-                            }
-                        }
-                        else if (i is UIDrawCollector.DrawVertCommand verts)
-                        {
-                            //顶点组处理
-                            List<Vertex> v = [];
-                            foreach (var c in verts.Vert)
-                            {
-                                var a = GetVertices(
-                                    [new(c.Position, c.Color, c.Export().UV)],
-                                    screenSize,
-                                    verts.Source
-                                )[0];
-                                tasks.Add(
-                                    new(
-                                        a.Position,
-                                        a.Color,
-                                        new(new(), a.UV),
-                                        c.Texture,
-                                        c?.ResourceSet ?? _textureResourceSet,
-                                        verts.Source.o
-                                    )
-                                    {
-                                        Clips = i.Source.ClipList,
-                                    }
-                                );
-                            }
-                        }
-                        if (tasks.Count != 0)
-                        {
-                            for (int v = 0; v < tasks.Count; v += 3)
-                            {
-                                if (v + 2 >= tasks.Count)
-                                    break;
-                                List<Vertex[]> tmp = [];
-                                VertexPositionColor[] VertToVPC(Vertex[] vertices)
-                                {
-                                    var ctmp = new List<VertexPositionColor> { };
-
-                                    for (int vr = 0; vr < vertices.Length; vr++)
-                                    {
-                                        var tg = vertices[vr];
-                                        ctmp.Add(
-                                            new()
-                                            {
-                                                Position = tg.Position,
-                                                UV = tg.Export().UV,
-                                                Color = tg.Color,
-                                            }
-                                        );
-                                    }
-                                    return ctmp.ToArray();
-                                }
-
-                                tmp.Add([tasks[v + 0], tasks[v + 1], tasks[v + 2]]);
-                                var st = tasks[v];
-                                for (int clip = 0; clip < st.Clips.Count; clip++)
-                                {
-                                    var p = st.Clips[clip];
-                                    VertexPositionColor[] quad =
-                                    [
-                                        new(p[0], RgbaFloat.White, new(0, 0)),
-                                        new(p[1], RgbaFloat.White, new(0, 0)),
-                                        new(p[2], RgbaFloat.White, new(0, 0)),
-                                        new(p[3], RgbaFloat.White, new(0, 0)),
-                                    ];
-                                    List<Vertex[]> tmp2 = [];
-                                    for (int ptr = 0; ptr < tmp.Count; ptr++)
-                                    {
-                                        foreach (
-                                            var item in GeometryClipper.ClipTriangleByQuad(
-                                                VertToVPC(tmp[ptr]),
-                                                quad
-                                            )
-                                        )
-                                        {
-                                            List<Vertex> vertices = [];
-                                            foreach (var item2 in item)
-                                            {
-                                                vertices.Add(
-                                                    new(
-                                                        item2.Position,
-                                                        item2.Color,
-                                                        new(new(), item2.UV),
-                                                        st.Texture,
-                                                        st.ResourceSet,
-                                                        st.Opacity
-                                                    )
-                                                );
-                                            }
-                                            tmp2.Add(vertices.ToArray());
-                                        }
-                                    }
-                                    tmp.Clear();
-                                    tmp.AddRange(tmp2);
-                                }
-                                foreach (var item in tmp)
-                                {
-                                    values.Add(new((uint)idx, item));
-                                }
-                            }
-                        }
-                    }
+                    );
                 }
                 catch (Exception ex)
                 {
-                    Log.Error($"[Renderer] {ex}");
-                }
-                finally
-                {
-                    CPThreadCount += 1;
-                    if (CPThreadCount >= TotalThreadCount)
-                    {
-                        CTVThreadWaiter.Set();
-                    }
+                    Log.Error($"{ex}");
                 }
             }
+        }
 
-            if (window != null && window.ParallelRender)
-                Parallel.For(
-                    0,
-                    TotalThreadCount,
-                    idx =>
-                    {
-                        if (window == null)
-                            return;
-                        var i = commands[(int)idx];
-                        CTV(i, (int)idx);
-                    }
-                );
-            else
-                for (int idx = 0; idx < TotalThreadCount; idx++)
-                    CTV(commands[idx], idx);
+        //开始正式渲染
+        // 1. 确保 Pipeline 已创建
+        if (_shaders == null)
+            CreateShader(gd);
+        if (_pipeline == null)
+        {
+            CreatePipeline(window);
+        }
 
-            // 4. 第一遍遍历：转换一下，顺手上传
-            List<VertexPositionColor> vert = [];
-            List<VertexTask[]> Tasks = [];
-            ResourceSet LastRs = null;
-            List<VertexTask> t = [];
+        // 2. 收集命令列表（已按 Z 排序）
+        collector.Update();
+        var commands = collector.AllCommands;
+        if (commands.Count == 0)
+            return;
 
-            foreach (var i1 in values.OrderBy(i1 => i1.index))
-            {
-                var i = i1.v;
-                foreach (var a in i)
-                {
-                    var idx = a.Export();
-                    totalVertexCount += 1;
+        // 3.将所有commands转为顶点们
+        int totalVertexCount = 0;
+        ManualResetEventSlim CTVThreadWaiter = new ManualResetEventSlim(false);
+        long CPThreadCount = 0;
+        long TotalThreadCount = commands.Count;
+        ConcurrentBag<(uint index, Vertex[] v)> values = new ConcurrentBag<(uint, Vertex[])>();
 
-                    /*
-                     *如果资源集与上次不一样就上传重置
-                     *管它的，反正优化了
-                     */
-                    if (LastRs != a.ResourceSet)
-                    {
-                        if (t.Count != 0)
-                            Tasks.Add(t.ToArray());
-                        t.Clear();
-                        LastRs = a.ResourceSet;
-                    }
-
-                    t.Add(idx);
-                    var c = idx.Color;
-                    c = new(c.R, c.G, c.B, c.A * idx.Opacity);
-                    vert.Add(
-                        new()
-                        {
-                            Position = idx.Position,
-                            Color = c,
-                            UV = idx.UV,
-                        }
-                    );
-                }
-            }
-            if (t.Count != 0)
-                Tasks.Add(t.ToArray());
-            //顶点缓冲区大小检查
-            uint totalSize = (uint)(totalVertexCount * VertexPositionColor.SizeInBytes);
-            if (_vertexBuffer == null || totalSize > _vertexBuffer.SizeInBytes)
-            {
-                _vertexBuffer?.Dispose();
-                _vertexBuffer = gd.ResourceFactory.CreateBuffer(
-                    new BufferDescription(totalSize, BufferUsage.VertexBuffer | BufferUsage.Dynamic)
-                );
-            }
-            gd.UpdateBuffer(_vertexBuffer, 0, vert.ToArray());
-
-            if (totalVertexCount == 0)
-                return;
-
-            // 6. 开始命令录制
-
-            if (_pipeline == null)
-                return;
+        void CTV(UIDrawCollector.DrawCommand i, int idx)
+        {
+            i?.Source?.syncOK = false;
             try
             {
-                cl.Begin();
+                List<Vertex> tasks = [];
+                for (int y = 0; y < 1; y++)
+                {
+                    if (i.Source.GetSizeOnScreen() == new Vector2(0, 0))
+                        break;
+                    if (i is UIDrawCollector.DrawRectCommand r)
+                    {
+                        //矩形处理
+                        var a = GetRectVertices(r.Rect, r.Color, screenSize, r.Source);
+                        foreach (var b in a)
+                        {
+                            tasks.Add(
+                                new Vertex(
+                                    b.Position,
+                                    b.Color,
+                                    new(new(), b.UV),
+                                    null,
+                                    _textureResourceSet,
+                                    r.Source.o
+                                )
+                                {
+                                    Clips = i.Source.ClipList,
+                                }
+                            );
+                        }
+                    }
+                    else if (i is UIDrawCollector.DrawTextureCommand t)
+                    {
+                        //带材质矩形处理
+                        var a = GetRectVertices(t.Rect, t.Tint, screenSize, t.Source);
+                        foreach (var b in a)
+                        {
+                            tasks.Add(
+                                new Vertex(
+                                    b.Position,
+                                    b.Color,
+                                    new(new(), b.UV),
+                                    t.Texture,
+                                    t.TextureResourceSet,
+                                    t.Source.o
+                                )
+                                {
+                                    Clips = i.Source.ClipList,
+                                }
+                            );
+                        }
+                    }
+                    else if (i is UIDrawCollector.DrawVertCommand verts)
+                    {
+                        //顶点组处理
+                        List<Vertex> v = [];
+                        foreach (var c in verts.Vert)
+                        {
+                            var a = GetVertices(
+                                [new(c.Position, c.Color, c.Export().UV)],
+                                screenSize,
+                                verts.Source
+                            )[0];
+                            tasks.Add(
+                                new(
+                                    a.Position,
+                                    a.Color,
+                                    new(new(), a.UV),
+                                    c.Texture,
+                                    c?.ResourceSet ?? _textureResourceSet,
+                                    verts.Source.o
+                                )
+                                {
+                                    Clips = i.Source.ClipList,
+                                }
+                            );
+                        }
+                    }
+                    if (tasks.Count != 0)
+                    {
+                        for (int v = 0; v < tasks.Count; v += 3)
+                        {
+                            if (v + 2 >= tasks.Count)
+                                break;
+                            List<Vertex[]> tmp = [];
+                            VertexPositionColor[] VertToVPC(Vertex[] vertices)
+                            {
+                                var ctmp = new List<VertexPositionColor> { };
+
+                                for (int vr = 0; vr < vertices.Length; vr++)
+                                {
+                                    var tg = vertices[vr];
+                                    ctmp.Add(
+                                        new()
+                                        {
+                                            Position = tg.Position,
+                                            UV = tg.Export().UV,
+                                            Color = tg.Color,
+                                        }
+                                    );
+                                }
+                                return ctmp.ToArray();
+                            }
+
+                            tmp.Add([tasks[v + 0], tasks[v + 1], tasks[v + 2]]);
+                            var st = tasks[v];
+                            for (int clip = 0; clip < st.Clips.Count; clip++)
+                            {
+                                var p = st.Clips[clip];
+                                VertexPositionColor[] quad =
+                                [
+                                    new(p[0], RgbaFloat.White, new(0, 0)),
+                                    new(p[1], RgbaFloat.White, new(0, 0)),
+                                    new(p[2], RgbaFloat.White, new(0, 0)),
+                                    new(p[3], RgbaFloat.White, new(0, 0)),
+                                ];
+                                List<Vertex[]> tmp2 = [];
+                                for (int ptr = 0; ptr < tmp.Count; ptr++)
+                                {
+                                    foreach (
+                                        var item in GeometryClipper.ClipTriangleByQuad(
+                                            VertToVPC(tmp[ptr]),
+                                            quad
+                                        )
+                                    )
+                                    {
+                                        List<Vertex> vertices = [];
+                                        foreach (var item2 in item)
+                                        {
+                                            vertices.Add(
+                                                new(
+                                                    item2.Position,
+                                                    item2.Color,
+                                                    new(new(), item2.UV),
+                                                    st.Texture,
+                                                    st.ResourceSet,
+                                                    st.Opacity
+                                                )
+                                            );
+                                        }
+                                        tmp2.Add(vertices.ToArray());
+                                    }
+                                }
+                                tmp.Clear();
+                                tmp.AddRange(tmp2);
+                            }
+                            foreach (var item in tmp)
+                            {
+                                values.Add(new((uint)idx, item));
+                            }
+                        }
+                    }
+                }
             }
             catch (Exception ex)
             {
                 Log.Error($"[Renderer] {ex}");
             }
-            cl.SetFramebuffer(window.Dev.SwapchainFramebuffer);
-
-            cl.ClearColorTarget(0, RgbaFloat.Black);
-            cl.SetPipeline(_pipeline);
-            cl.SetVertexBuffer(0, _vertexBuffer);
-
-            // 7. 逐个控件绘制（每个 Draw 绑定自己的资源集）
-            uint index = 0;
-            foreach (var i in Tasks)
+            finally
             {
-                uint num = (uint)i.Length;
-                cl.SetGraphicsResourceSet(0, i[0].ResourceSet ?? _textureResourceSet);
-                cl.Draw(num, 1, index, 0);
-                index += num;
+                CPThreadCount += 1;
+                if (CPThreadCount >= TotalThreadCount)
+                {
+                    CTVThreadWaiter.Set();
+                }
             }
+        }
 
-            cl.End();
-            gd.SubmitCommands(cl);
-        };
+        if (window != null && window.ParallelRender)
+            Parallel.For(
+                0,
+                TotalThreadCount,
+                idx =>
+                {
+                    if (window == null)
+                        return;
+                    var i = commands[(int)idx];
+                    CTV(i, (int)idx);
+                }
+            );
+        else
+            for (int idx = 0; idx < TotalThreadCount; idx++)
+                CTV(commands[idx], idx);
+
+        // 4. 第一遍遍历：转换一下，顺手上传
+        List<VertexPositionColor> vert = [];
+        List<VertexTask[]> Tasks = [];
+        ResourceSet LastRs = null;
+        List<VertexTask> t = [];
+
+        foreach (var i1 in values.OrderBy(i1 => i1.index))
+        {
+            var i = i1.v;
+            foreach (var a in i)
+            {
+                var idx = a.Export();
+                totalVertexCount += 1;
+
+                /*
+                 *如果资源集与上次不一样就上传重置
+                 *管它的，反正优化了
+                 */
+                if (LastRs != a.ResourceSet)
+                {
+                    if (t.Count != 0)
+                        Tasks.Add(t.ToArray());
+                    t.Clear();
+                    LastRs = a.ResourceSet;
+                }
+
+                t.Add(idx);
+                var c = idx.Color;
+                c = new(c.R, c.G, c.B, c.A * idx.Opacity);
+                vert.Add(
+                    new()
+                    {
+                        Position =
+                            (idx.Position + new Vector2(1 - window.Scale, window.Scale - 1))
+                            / window.Scale,
+                        Color = c,
+                        UV = idx.UV,
+                    }
+                );
+            }
+        }
+        if (t.Count != 0)
+            Tasks.Add(t.ToArray());
+        //顶点缓冲区大小检查
+        uint totalSize = (uint)(totalVertexCount * VertexPositionColor.SizeInBytes);
+        if (_vertexBuffer == null || totalSize > _vertexBuffer.SizeInBytes)
+        {
+            _vertexBuffer?.Dispose();
+            _vertexBuffer = gd.ResourceFactory.CreateBuffer(
+                new BufferDescription(totalSize, BufferUsage.VertexBuffer | BufferUsage.Dynamic)
+            );
+        }
+        gd.UpdateBuffer(_vertexBuffer, 0, vert.ToArray());
+
+        if (totalVertexCount == 0)
+            return;
+
+        // 6. 开始命令录制
+
+        if (_pipeline == null)
+            return;
+        try
+        {
+            cl.Begin();
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"[Renderer] {ex}");
+        }
+        cl.SetFramebuffer(window.Dev.SwapchainFramebuffer);
+
+        cl.ClearColorTarget(0, RgbaFloat.Black);
+        cl.SetPipeline(_pipeline);
+        cl.SetVertexBuffer(0, _vertexBuffer);
+
+        // 7. 逐个控件绘制（每个 Draw 绑定自己的资源集）
+        uint index = 0;
+        foreach (var i in Tasks)
+        {
+            uint num = (uint)i.Length;
+            cl.SetGraphicsResourceSet(0, i[0].ResourceSet ?? _textureResourceSet);
+            cl.Draw(num, 1, index, 0);
+            index += num;
+        }
+
+        cl.End();
+        gd.SubmitCommands(cl);
     }
 
     internal void ReCreatePipeline(BaseWindow window)

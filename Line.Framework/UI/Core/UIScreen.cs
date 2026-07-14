@@ -27,7 +27,7 @@ public class UIScreen : UIWidget
         _screenWidth = width;
         _screenHeight = height;
         // 将 Size 设置为绝对像素值（scale=0, offset=宽高）
-        Size = new Coord2 { scale = Vector2.Zero, offset = new Vector2(width, height) };
+        Size = new Coord2 { scale = Vector2.Zero, offset = new Vector2(width, height)*window.Scale };
     }
 
     public override bool HitTest(Vector2 mousePixel)
