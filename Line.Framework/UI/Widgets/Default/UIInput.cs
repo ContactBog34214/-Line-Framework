@@ -176,8 +176,10 @@ public class UIInput : UIWidget
 
     void WhenScroll(IMouse mouse)
     {
-        if(!CanScrollByCursor)return;
-        if(!HitTest(mouse.Position))return;
+        if (!CanScrollByCursor)
+            return;
+        if (!HitTest(mouse.Position))
+            return;
         var of = Offset;
         of.Y -= mouse.WheelDelta.Y * ScrollRate;
         of.X += mouse.WheelDelta.X * ScrollRate;
@@ -525,7 +527,7 @@ public class UIInput : UIWidget
                     if (EndHeight != EndHeight2 - Height2)
                         cl.DrawRect(
                             new(
-                                -Offset.X,
+                                0,
                                 EndHeight - Offset.Y,
                                 (float)args.width,
                                 EndHeight2 - Height2 - EndHeight
@@ -539,7 +541,7 @@ public class UIInput : UIWidget
                         new(
                             s.X - Offset.X,
                             EndHeight - Height - Offset.Y,
-                            (float)args.width - s.X,
+                            (float)args.width - s.X + Offset.X,
                             Height
                         ),
                         0,
