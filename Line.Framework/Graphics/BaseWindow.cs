@@ -64,7 +64,7 @@ public class BaseWindow : IDisposable
             }
             catch (Exception ex)
             {
-                Log.Warning($"[Window] {ex}");
+                Log.Warning(ex.ToString());
             }
         }
     }
@@ -81,16 +81,29 @@ public class BaseWindow : IDisposable
     public bool ParallelRender { get; set; } = true;
     private readonly Thread MainThread;
     public float FramePerSecond { get; set; } = 240;
+    public bool FullScreen
+    {
+        get;
+        set
+        {
+            SDL.SetWindowFullscreen(WindowHandle, value);
+            field = value;
+        }
+    } = false;
+
     public float UpdatePerSecond { get; set; } = 1000;
     public float Scale
     {
-        get; set
+        get;
+        set
         {
-            if(value==field)return;
-            if(value>0)field=value;
+            if (value == field)
+                return;
+            if (value > 0)
+                field = value;
             OnWindowResized();
         }
-    }=1;
+    } = 1;
     public CommandList commandList { get; init; }
     public UIDrawCollector Collector { get; init; }
     public GraphicBackend RenderBackend { get; init; }
@@ -177,7 +190,7 @@ public class BaseWindow : IDisposable
             SDL.SetHint(SDL.Hints.Orientations, "Landscape");
         SDL.SetHint(SDL.Hints.VideoDriver, "wayland");
         SDL.Init(SDL.InitFlags.Video);
-        Log.Debug($"[BaseWindow]Video driver: {SDL.GetCurrentVideoDriver()}");
+        Log.Debug($"Video driver: {SDL.GetCurrentVideoDriver()}");
         SDL.SetHint(SDL.Hints.TouchMouseEvents, "0");
         SDL.SetHint(SDL.Hints.MouseTouchEvents, "0");
         SDL.GLSetSwapInterval(0);
@@ -259,12 +272,12 @@ public class BaseWindow : IDisposable
             }
             else
             {
-                Log.Error($"[Renderer] What is {driver}");
+                Log.Error($"What is {driver}");
             }
         }
         catch (Exception ex)
         {
-            Log.Error($"[Renderer] {ex}");
+            Log.Error($"{ex}");
         }
 
         Width = (int)Size.X;
@@ -306,9 +319,6 @@ public class BaseWindow : IDisposable
                     if (GraphicsDevice.IsBackendSupported(GraphicsBackend.OpenGL))
                     {
                         nint GLContext = SDL.GLCreateContext(WindowHandle);
-
-                        IntPtr contextHandle = GLContext;
-
                         var info = new OpenGLPlatformInfo(
                             openGLContextHandle: GLContext,
                             getProcAddress: (name) => SDL.GLGetProcAddress(name),
@@ -338,7 +348,7 @@ public class BaseWindow : IDisposable
         }
         catch (Exception ex)
         {
-            Log.Error($"[Renderer] {ex.Message}");
+            Log.Error($"{ex.Message}");
             if (GraphicsDevice.IsBackendSupported(GraphicsBackend.Vulkan))
                 Dev = GraphicsDevice.CreateVulkan(Options, swapchainDesc);
             else
@@ -351,13 +361,13 @@ public class BaseWindow : IDisposable
         //指令
         if (Dev == null)
         {
-            Log.Error($"[Renderer] GraphicsDevice Failed");
+            Log.Error("GraphicsDevice Failed");
             Dispose();
             return;
         }
 
-        Log.Debug($"[Renderer] GraphicsDevice:{Dev.BackendType} {Dev.ApiVersion}");
-        Log.Debug($"[Renderer] GPU:{Dev.DeviceName}");
+        Log.Debug($"GraphicsDevice:{Dev.BackendType} {Dev.ApiVersion}");
+        Log.Debug($"GPU:{Dev.DeviceName}");
 
         commandList = Dev.ResourceFactory.CreateCommandList();
         Collector = new();
@@ -475,7 +485,7 @@ public class BaseWindow : IDisposable
             }
             catch (NullReferenceException ex)
             {
-                Log.Warning($"[Window] {ex.Message}");
+                Log.Warning($"{ex.Message}");
             }
         }
     }
@@ -556,7 +566,7 @@ public class BaseWindow : IDisposable
                     }
                     catch (Exception ex)
                     {
-                        Log.Error($"[Update]{ex}");
+                        Log.Error($"{ex}");
                     }
                 }
             }
@@ -619,7 +629,7 @@ public class BaseWindow : IDisposable
                 }
                 catch (Exception ex)
                 {
-                    Log.Error($"[Renderer]{ex}");
+                    Log.Error($"{ex}");
                 }
             }
             render();
@@ -661,5 +671,16 @@ public class BaseWindow : IDisposable
             Log.Warning($"{ex.Message}");
         }
         Root?.Dispose();
+    }
+
+    public FullScreenMode[] GetFullScreenModes(uint display)
+    {
+        var s=SDL.GetFullscreenDisplayModes(display,out int _);
+        List<FullScreenMode> tmp=[];
+        foreach (var item in s)
+        {
+            tmp.Add(new(new(item.W,item.H),item.RefreshRate,item.PixelDensity));
+        }
+        return tmp.ToArray();
     }
 }

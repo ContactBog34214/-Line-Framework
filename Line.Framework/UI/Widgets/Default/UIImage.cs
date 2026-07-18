@@ -11,7 +11,7 @@ public class UIImage : UIWidget
     public RgbaFloat Color { get; set; } = new(1, 1, 1, 1);
     public string TextureId { get; set; }
     internal ResourceManager Manager;
-    Action<RendererContextArgs> RenderAction;
+    readonly Action<RendererContextArgs> RenderAction;
 
     public override void RendererContext(RendererContextArgs args)
     {

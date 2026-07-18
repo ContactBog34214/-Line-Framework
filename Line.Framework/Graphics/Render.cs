@@ -252,6 +252,7 @@ void main()
         TreeCache.Add(root, new(root.NodeTreeVersion, widgets));
         return widgets;
     }
+
     internal uint BufferIndex = 0;
 
     public WindowsRenderer(GraphicsDevice gd)
@@ -563,7 +564,7 @@ void main()
             }
             catch (Exception ex)
             {
-                Log.Error($"[Renderer] {ex}");
+                Log.Error($"{ex}");
             }
             finally
             {
@@ -658,7 +659,7 @@ void main()
         }
         catch (Exception ex)
         {
-            Log.Error($"[Renderer] {ex}");
+            Log.Error($" {ex}");
         }
         cl.SetFramebuffer(window.Dev.SwapchainFramebuffer);
 

@@ -4,6 +4,7 @@
  */
 
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 
 namespace Line.Framework;
 
@@ -80,13 +81,17 @@ public static class Log
     }
 
     // ---------- 公开的日志 API ----------
-    public static void Debug(string msg) => Enqueue(LogLevel.Debug, msg);
+    public static void Debug(string msg, [CallerMemberName] string member = "") =>
+        Enqueue(LogLevel.Debug, $"[{member}] {msg}");
 
-    public static void Info(string msg) => Enqueue(LogLevel.Info, msg);
+    public static void Info(string msg, [CallerMemberName] string member = "") =>
+        Enqueue(LogLevel.Info, $"[{member}] {msg}");
 
-    public static void Warning(string msg) => Enqueue(LogLevel.Warning, msg);
+    public static void Warning(string msg, [CallerMemberName] string member = "") =>
+        Enqueue(LogLevel.Warning, $"[{member}] {msg}");
 
-    public static void Error(string msg) => Enqueue(LogLevel.Error, msg);
+    public static void Error(string msg, [CallerMemberName] string member = "") =>
+        Enqueue(LogLevel.Error, $"[{member}] {msg}");
 
     private static void Enqueue(LogLevel level, string msg)
     {

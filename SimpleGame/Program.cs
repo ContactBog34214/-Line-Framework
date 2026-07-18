@@ -6,6 +6,7 @@ using Line.Framework.Graphics;
 using Line.Framework.Resource.Graphic;
 using Line.Framework.UI;
 using Line.Framework.UI.DefaultWidget;
+using SDL3;
 #pragma warning disable CS8618
 
 namespace SG;
@@ -123,20 +124,21 @@ public static class SimpleGame
             cs.Position = new(Host.Input.Mouse.Position, new());
         };
 
+        Host.FramePerSecond = 5000;
         Host.FocusGained += () =>
         {
-            Host.FramePerSecond = 480;
+            Host.VSync = false;
         };
         Host.FocusLost += () =>
         {
-            Host.FramePerSecond = 50;
+            Host.VSync = true;
         };
 
         Host.UpdatePerSecond = 1000;
 
         FPSPrinter();
 
-        //PerTest(2000,Host.Root);
+        //PerTest(200000,Host.Root);
 
         Host.ShowCursor = false;
         Host.ParallelRender = true;
@@ -154,11 +156,11 @@ public static class SimpleGame
             CursorColor = new(1, 1, 1, 0.5f),
             FontScale = 1f,
             Text = "Wowabcdefghijklmnopq\nwow",
-            Offset=new(0)
+            Offset = new(0),
         };
 
         VisualTouch();
-        Host.Scale=1.2f;
+        Host.Scale = 1.2f;
     }
 
     static void FPSPrinter()
