@@ -13,7 +13,7 @@ namespace SG;
 
 public static class SimpleGame
 {
-    static BaseWindow Host;
+    static Window Host;
     static Stopwatch sw = new();
     static readonly float SpinnerBoxSpeed = 3.5f;
     static readonly float SpinnerBoxSize = 400;

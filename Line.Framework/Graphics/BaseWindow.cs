@@ -21,10 +21,8 @@ public enum GraphicBackend
     OpenGL,
 }
 
-public class BaseWindow : IDisposable
+public class Window : IDisposable
 {
-    private readonly uint _width;
-    private readonly uint _height;
 
     public WindowsRenderer RendererClass { get; private set; }
     public nint WindowHandle { get; init; }
@@ -148,7 +146,7 @@ public class BaseWindow : IDisposable
         return (GraphicBackend)Choice;
     }
 
-    public BaseWindow(
+    public Window(
         int X = 0,
         int Y = 0,
         int Width = 640,
@@ -180,8 +178,6 @@ public class BaseWindow : IDisposable
             Backend = BackendSelector();
         }
         Resource = new();
-        _width = (uint)Width;
-        _height = (uint)Height;
         WindowCreateInfo CreateInfo = new WindowCreateInfo(X, Y, Width, Height, State, Title);
         //一个窗口
         if (Width < Height)
@@ -460,7 +456,7 @@ public class BaseWindow : IDisposable
         set
         {
             if (value == null)
-                throw new Exception($"Action cannot be null");
+                throw new InvalidOperationException($"Action cannot be null");
             EventPool.TryRemove(SDL.EventType.WindowCloseRequested, out field);
             field = value;
             EventPool.TryAdd(SDL.EventType.WindowCloseRequested, field);
@@ -673,7 +669,7 @@ public class BaseWindow : IDisposable
         Root?.Dispose();
     }
 
-    public FullScreenMode[] GetFullScreenModes(uint display)
+    public static FullScreenMode[] GetFullScreenModes(uint display)
     {
         var s=SDL.GetFullscreenDisplayModes(display,out int _);
         List<FullScreenMode> tmp=[];

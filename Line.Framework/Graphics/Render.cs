@@ -248,7 +248,10 @@ void main()
         {
             TreeCache.Remove(root);
         }
-        catch { }
+        catch (Exception)
+        {
+            Log.Debug($"Root not found");
+        }
         TreeCache.Add(root, new(root.NodeTreeVersion, widgets));
         return widgets;
     }
@@ -269,7 +272,7 @@ void main()
         );
     }
 
-    public virtual void UIRenderer(BaseWindow window, UIDrawCollector collector)
+    public virtual void UIRenderer(Window window, UIDrawCollector collector)
     {
         var gd = window.Dev;
         var cl = window.commandList;
@@ -598,9 +601,8 @@ void main()
         ResourceSet LastRs = null;
         List<VertexTask> t = [];
 
-        foreach (var i1 in values.OrderBy(i1 => i1.index))
+        foreach (var i in values.OrderBy(a => a.index).Select(i1 => i1.v))
         {
-            var i = i1.v;
             foreach (var a in i)
             {
                 var idx = a.Export();
@@ -681,7 +683,7 @@ void main()
         gd.SubmitCommands(cl);
     }
 
-    internal void ReCreatePipeline(BaseWindow window)
+    internal void ReCreatePipeline(Window window)
     {
         _textureResourceSet?.Dispose();
         var gd = window.Dev;
@@ -740,7 +742,7 @@ void main()
         _pipeline = window.Dev.ResourceFactory.CreateGraphicsPipeline(pipelineDescription);
     }
 
-    void CreatePipeline(BaseWindow window)
+    void CreatePipeline(Window window)
     {
         ReCreatePipeline(window);
     }

@@ -28,7 +28,7 @@ public class ResourceManager : IDisposable
         _ = new Timer(OnReleaseTimer, null, 1500, 1500);
     }
 
-    void OnReleaseTimer(object? a)
+    void OnReleaseTimer(object a)
     {
         if (AutoReleaseResources)
             ReleaseIdleResources();

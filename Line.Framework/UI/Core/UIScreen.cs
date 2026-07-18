@@ -6,10 +6,10 @@ namespace Line.Framework.UI;
 public class UIScreen : UIWidget
 {
     private int _screenWidth;
-    public BaseWindow window { get; init; }
+    public Window window { get; init; }
     private int _screenHeight;
 
-    public UIScreen(BaseWindow w, int screenWidth, int screenHeight)
+    public UIScreen(Window w, int screenWidth, int screenHeight)
     {
         window = w;
         // 固定位置为 (0,0)
