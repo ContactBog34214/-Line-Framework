@@ -12,8 +12,6 @@
     <Authors>SmellyFish</Authors>
     <Description>A Game Framework</Description>
     <PackageOutputPath>./nupkg</PackageOutputPath>
-    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
-    <RestoreLockedMode>false</RestoreLockedMode>
   </PropertyGroup>
 
   <ItemGroup>
