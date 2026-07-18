@@ -46,7 +46,8 @@ namespace Line.Framework.Resource.Audio
         {
             lock (_lock)
             {
-                if (_initialized) return;
+                if (_initialized)
+                    return;
                 if (!Bass.Init())
                     throw new InvalidOperationException($"Bass init failed {Bass.LastError}");
                 _initializedDevices.Add(-1);
@@ -113,7 +114,8 @@ namespace Line.Framework.Resource.Audio
         {
             lock (_lock)
             {
-                if (!_initialized) return;
+                if (!_initialized)
+                    return;
                 var instances = new List<TAudio>();
                 _audioInstances.RemoveAll(wr => !wr.TryGetTarget(out _));
                 foreach (var wr in _audioInstances)
@@ -141,7 +143,8 @@ namespace Line.Framework.Resource.Audio
             var devices = new List<DeviceInfo>();
             if (Bass.GetDeviceInfo(-1, out var defaultInfo))
                 devices.Add(defaultInfo);
-            for (int i = 0; ; i++)
+            int i = 0;
+            while (true)
             {
                 if (Bass.GetDeviceInfo(i, out var info))
                 {
@@ -150,6 +153,7 @@ namespace Line.Framework.Resource.Audio
                 }
                 else
                     break;
+                i++;
             }
             return devices;
         }
@@ -175,7 +179,8 @@ namespace Line.Framework.Resource.Audio
         private int _deviceIndex = -1;
         private bool _disposed = false;
 
-        public TAudio(ResourceManager manager, int deviceIndex = -1) : base(manager)
+        public TAudio(ResourceManager manager, int deviceIndex = -1)
+            : base(manager)
         {
             BassManager.Init();
             BassManager.Register(this);
@@ -233,7 +238,8 @@ namespace Line.Framework.Resource.Audio
             {
                 lock (_lock)
                 {
-                    if (_deviceIndex == value) return;
+                    if (_deviceIndex == value)
+                        return;
                     // 确保目标设备已初始化
                     BassManager.EnsureDeviceInitialized(value);
                     _deviceIndex = value;
@@ -245,7 +251,8 @@ namespace Line.Framework.Resource.Audio
 
         public override void Create(string id, Stream stream)
         {
-            if (stream == null) throw new ArgumentNullException(nameof(stream));
+            if (stream == null)
+                throw new ArgumentNullException(nameof(stream));
             lock (_lock)
             {
                 var resource = new AudioResource(stream, this);
@@ -257,7 +264,10 @@ namespace Line.Framework.Resource.Audio
         internal void RemoveResourceFromManager(string id)
         {
             Manager.DisposeResource(id);
-            lock (_lock) { _resources.Remove(id); }
+            lock (_lock)
+            {
+                _resources.Remove(id);
+            }
         }
 
         internal void SaveStateAndRelease()
@@ -284,7 +294,8 @@ namespace Line.Framework.Resource.Audio
         {
             lock (_lock)
             {
-                if (_disposed) return;
+                if (_disposed)
+                    return;
                 foreach (var id in _resources.Keys.ToList())
                     Manager.DisposeResource(id);
                 _resources.Clear();
@@ -297,7 +308,10 @@ namespace Line.Framework.Resource.Audio
         public static class Device
         {
             public static List<DeviceInfo> GetAllDevices() => AudioDevices.GetAllDevices();
-            public static DeviceInfo GetDeviceInfo(int deviceIndex) => AudioDevices.GetDeviceInfo(deviceIndex);
+
+            public static DeviceInfo GetDeviceInfo(int deviceIndex) =>
+                AudioDevices.GetDeviceInfo(deviceIndex);
+
             public static void EnsureInit() => BassManager.Init();
         }
     }
@@ -339,7 +353,8 @@ namespace Line.Framework.Resource.Audio
                 lock (_lock)
                 {
                     _volume = Math.Clamp(value, 0f, 1f);
-                    if (_loaded) ApplyAllAttributes();
+                    if (_loaded)
+                        ApplyAllAttributes();
                 }
             }
         }
@@ -352,7 +367,8 @@ namespace Line.Framework.Resource.Audio
                 lock (_lock)
                 {
                     _speed = value > 0 ? value : 0.1f;
-                    if (_loaded) ApplyAllAttributes();
+                    if (_loaded)
+                        ApplyAllAttributes();
                 }
             }
         }
@@ -365,7 +381,8 @@ namespace Line.Framework.Resource.Audio
                 lock (_lock)
                 {
                     _pitch = value;
-                    if (_loaded) ApplyAllAttributes();
+                    if (_loaded)
+                        ApplyAllAttributes();
                 }
             }
         }
@@ -484,7 +501,7 @@ namespace Line.Framework.Resource.Audio
             string ext = ".tmp";
             if (inputStream is FileStream fs && !string.IsNullOrEmpty(fs.Name))
                 ext = Path.GetExtension(fs.Name) ?? ".tmp";
-            _tempFilePath = Path.GetTempFileName() + ext;
+            _tempFilePath = Path.GetRandomFileName() + ext;
             using (var file = File.Create(_tempFilePath))
                 inputStream.CopyTo(file);
         }
@@ -493,7 +510,8 @@ namespace Line.Framework.Resource.Audio
         {
             lock (_lock)
             {
-                if (!_loaded) Load();
+                if (!_loaded)
+                    Load();
                 if (_tempoStream != 0)
                 {
                     if (!Bass.ChannelPlay(_tempoStream))
@@ -528,7 +546,8 @@ namespace Line.Framework.Resource.Audio
         {
             lock (_lock)
             {
-                if (_loaded) return;
+                if (_loaded)
+                    return;
                 if (string.IsNullOrEmpty(_tempFilePath) || !File.Exists(_tempFilePath))
                     throw new FileNotFoundException($"File {_tempFilePath} not found");
 
@@ -536,7 +555,9 @@ namespace Line.Framework.Resource.Audio
                 if (_sourceStream == 0)
                 {
                     Log.Error($"Cannot create decode stream ,code: {Bass.LastError}");
-                    throw new InvalidOperationException($"Cannot create decode stream ,code: {Bass.LastError}");
+                    throw new InvalidOperationException(
+                        $"Cannot create decode stream ,code: {Bass.LastError}"
+                    );
                 }
 
                 _tempoStream = BassFx.TempoCreate(_sourceStream, BassFlags.Default);
@@ -545,7 +566,9 @@ namespace Line.Framework.Resource.Audio
                     Log.Error($"Cannot create Tempo stream ,code: {Bass.LastError}");
                     Bass.StreamFree(_sourceStream);
                     _sourceStream = 0;
-                    throw new InvalidOperationException($"Cannot create Tempo stream ,code: {Bass.LastError}");
+                    throw new InvalidOperationException(
+                        $"Cannot create Tempo stream ,code: {Bass.LastError}"
+                    );
                 }
 
                 if (_savedPosition > 0)
@@ -563,15 +586,20 @@ namespace Line.Framework.Resource.Audio
 
         public object GetHandle()
         {
-            lock (_lock) { return this; }
+            lock (_lock)
+            {
+                return this;
+            }
         }
 
         public void Release()
         {
             lock (_lock)
             {
-                if (!_loaded) return;
-                if (IsPlaying) return;
+                if (!_loaded)
+                    return;
+                if (IsPlaying)
+                    return;
 
                 long pos = Bass.ChannelGetPosition(_tempoStream);
                 if (pos >= 0)
@@ -598,7 +626,8 @@ namespace Line.Framework.Resource.Audio
                 if (_loaded)
                 {
                     long pos = Bass.ChannelGetPosition(_tempoStream);
-                    if (pos >= 0) _savedPosition = pos;
+                    if (pos >= 0)
+                        _savedPosition = pos;
 
                     if (_tempoStream != 0)
                     {
@@ -615,8 +644,14 @@ namespace Line.Framework.Resource.Audio
 
                 if (!string.IsNullOrEmpty(_tempFilePath) && File.Exists(_tempFilePath))
                 {
-                    try { File.Delete(_tempFilePath); }
-                    catch (Exception ex) { Log.Warning($"Cannot delete the tmp file:{ex.Message}"); }
+                    try
+                    {
+                        File.Delete(_tempFilePath);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning($"Cannot delete the tmp file:{ex.Message}");
+                    }
                     _tempFilePath = null;
                 }
             }
@@ -628,7 +663,8 @@ namespace Line.Framework.Resource.Audio
         /// </summary>
         internal void ApplyDevice()
         {
-            if (!_loaded || _tempoStream == 0) return;
+            if (!_loaded || _tempoStream == 0)
+                return;
             int targetDevice = _owner.DeviceIndex;
             // 确保目标设备已初始化（BassManager 会处理）
             BassManager.EnsureDeviceInitialized(targetDevice);
@@ -641,7 +677,8 @@ namespace Line.Framework.Resource.Audio
         /// </summary>
         internal void ApplyAllAttributes()
         {
-            if (!_loaded || _tempoStream == 0) return;
+            if (!_loaded || _tempoStream == 0)
+                return;
 
             float finalVol = _owner.MasterVolume * _volume;
             Bass.ChannelSetAttribute(_tempoStream, ChannelAttribute.Volume, finalVol);
@@ -657,38 +694,41 @@ namespace Line.Framework.Resource.Audio
             // 但为了保证一致性，仍调用一次（但可能影响性能，可选择性调用）
             // 此处不重复调用 ApplyDevice，因为设备一般不随属性变化。
         }
+
         // ----- 自然倍速辅助（静态方法） -----
-/// <summary>
-/// 根据速度倍率计算自然音高（半音），公式：Pitch = 12 * log2(Speed)
-/// </summary>
-public static float SpeedToPitch(float speed)
-{
-    if (speed <= 0) return 0;
-    return 12f * (float)Math.Log2(speed);
-}
+        /// <summary>
+        /// 根据速度倍率计算自然音高（半音），公式：Pitch = 12 * log2(Speed)
+        /// </summary>
+        public static float SpeedToPitch(float speed)
+        {
+            if (speed <= 0)
+                return 0;
+            return 12f * (float)Math.Log2(speed);
+        }
 
-/// <summary>
-/// 根据音高（半音）反推速度倍率，公式：Speed = 2^(Pitch/12)
-/// </summary>
-public static float PitchToSpeed(float pitch)
-{
-    return (float)Math.Pow(2.0, pitch / 12.0);
-}
+        /// <summary>
+        /// 根据音高（半音）反推速度倍率，公式：Speed = 2^(Pitch/12)
+        /// </summary>
+        public static float PitchToSpeed(float pitch)
+        {
+            return (float)Math.Pow(2.0, pitch / 12.0);
+        }
 
-/// <summary>
-/// 实例方法：设置自然倍速，同时调整音高到对应的自然音高
-/// </summary>
-public void SetNaturalSpeed(float speed)
-{
-    if (speed <= 0) speed = 0.1f; // 避免无效值
-    this.Speed = speed;
-    this.Pitch = SpeedToPitch(speed);
-}
+        /// <summary>
+        /// 实例方法：设置自然倍速，同时调整音高到对应的自然音高
+        /// </summary>
+        public void SetNaturalSpeed(float speed)
+        {
+            if (speed <= 0)
+                speed = 0.1f; // 避免无效值
+            this.Speed = speed;
+            this.Pitch = SpeedToPitch(speed);
+        }
     }
 
     public static class ResourceManagerAudioExtensions
     {
-        public static IAudioController? GetAudioController(this ResourceManager manager, string id)
+        public static IAudioController GetAudioController(this ResourceManager manager, string id)
         {
             var obj = manager.GetResource(id);
             return obj as IAudioController;

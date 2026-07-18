@@ -6,7 +6,7 @@ namespace Line.Framework.Input;
 
 public class InputManager
 {
-    private readonly BaseWindow _window;
+    private readonly Window _window;
     public Sdl3Mouse Mouse { get; } = new();
     public Sdl3Keyboard Keyboard { get; } = new();
     public Sdl3TouchDevice Touch { get; } = new();
@@ -22,7 +22,7 @@ public class InputManager
 
     public string GetClipBoardText() => GetClipboardText();
 
-    public InputManager(BaseWindow window)
+    public InputManager(Window window)
     {
         _window = window;
         SubscribeEvents();
@@ -194,9 +194,9 @@ public class Sdl3TouchDevice : ITouchDevice
 {
     public Dictionary<ulong, ICursor> Touches { get; set; } = new();
 
-    public ICursor GetTouch(ulong id)
+    public ICursor GetTouch(ulong Id)
     {
-        if (Touches.TryGetValue(id, out var result))
+        if (Touches.TryGetValue(Id, out var result))
             return result;
         return null;
     }
