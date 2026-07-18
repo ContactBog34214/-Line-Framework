@@ -27,6 +27,9 @@ jobs:
 
     - name: Restore dependencies
       run: dotnet restore ./Line.Framework/ -p:RestorePackagesWithLockFile=false -p:RestoreLockedMode=false
-      
+
     - name: Build
+      run: dotnet build ./Line.Framework/
+      
+    - name: Pack
       run: dotnet pack -c Release ./Line.Framework/ -o ./packages
