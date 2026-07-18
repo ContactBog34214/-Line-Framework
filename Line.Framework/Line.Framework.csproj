@@ -8,10 +8,12 @@
     <Nullable>disable</Nullable>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>Line.Framework</PackageId>
-    <Version>2026.101.1</Version>
+    <Version>2026.101.3</Version>
     <Authors>SmellyFish</Authors>
     <Description>A Game Framework</Description>
     <PackageOutputPath>./nupkg</PackageOutputPath>
+    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+    <RestoreLockedMode>false</RestoreLockedMode>
   </PropertyGroup>
 
   <ItemGroup>
