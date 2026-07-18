@@ -4,10 +4,6 @@ namespace Line.Framework.Input;
 
 public interface IMouse:ICursor
 {
-    /// <summary>
-    /// 作为像素
-    /// </summary>
-    Vector2 Position { get; }
     Vector2 WheelDelta { get; }
     bool IsMouseButtonDown(MouseButton Button);
 }
