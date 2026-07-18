@@ -1,0 +1,67 @@
+# .github/workflows/release.yml
+name: .NET Build and Publish
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - '**/*.csproj'        # 仅当项目文件变更时才触发，避免频繁运行
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+        - uses: actions/checkout@v4
+          with:
+            fetch-depth: 0
+    
+        - name: Setup .NET
+          uses: actions/setup-dotnet@v5
+          with:
+            dotnet-version: 10.0.x
+    
+        - name: Remove lock file if exists
+          run: rm -f ./Line.Framework/packages.lock.json
+
+        - name: Restore dependencies
+          run: dotnet restore ./Line.Framework/ -p:RestorePackagesWithLockFile=false -p:RestoreLockedMode=false
+
+        - name: Build
+          run: dotnet build ./Line.Framework/ -o ./Line.Framework/bin/Release/net10.0/
+      
+        - name: Pack
+          run: dotnet pack -c Release ./Line.Framework/ -o ./packages
+
+      # 1. 从 .csproj 读取版本号
+        - name: Get version from csproj
+          id: get_version
+          run: |
+            VERSION=$(grep -oP '(?<=<Version>).*?(?=</Version>)' ./Line.Framework/Line.Framework.csproj)
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      # 2. 自动创建 Git Tag（防止重复运行）
+        - name: Create and push tag
+          run: |
+            git config user.name github-actions
+            git config user.email github-actions@github.com
+            git tag v${{ steps.get_version.outputs.version }} || echo "Tag already exists"
+            git push origin v${{ steps.get_version.outputs.version }} || echo "Tag push failed (maybe exists)"
+
+      # 3. 上传到 GitHub Releases
+        - name: Create GitHub Release and upload assets
+          uses: softprops/action-gh-release@v2
+          with:
+            tag_name: v${{ steps.get_version.outputs.version }}
+            name: Release v${{ steps.get_version.outputs.version }}
+            files: ./packages/*.nupkg
+            generate_release_notes: true
+
+        - name: Push to NuGet.org via Trusted Publishing
+          run: |
+            dotnet nuget push ./packages/*.nupkg \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
