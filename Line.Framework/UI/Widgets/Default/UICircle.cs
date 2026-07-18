@@ -15,7 +15,7 @@ public class UICircle : UIWidget
             if (value >= 3)
                 field = value;
             else
-                throw new Exception($"Precision cannot be {value}");
+                throw new InvalidDataException($"Precision cannot be {value}");
         }
     } = 20;
     public Vector2 Middle { get; set; } = new(0.5f);

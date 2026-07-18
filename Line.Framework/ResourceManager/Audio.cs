@@ -48,10 +48,10 @@ namespace Line.Framework.Resource.Audio
             {
                 if (_initialized) return;
                 if (!Bass.Init())
-                    throw new InvalidOperationException($"Bass 默认设备初始化失败，错误码: {Bass.LastError}");
+                    throw new InvalidOperationException($"Bass init failed {Bass.LastError}");
                 _initializedDevices.Add(-1);
                 _initialized = true;
-                Log.Debug("[BassManager] Bass 默认设备初始化成功");
+                Log.Debug("Bass inited");
             }
         }
 
@@ -76,14 +76,14 @@ namespace Line.Framework.Resource.Audio
 
                 // 检查设备是否存在
                 if (!Bass.GetDeviceInfo(deviceIndex, out var info) || !info.IsEnabled)
-                    throw new InvalidOperationException($"设备 {deviceIndex} 不存在或不可用");
+                    throw new InvalidOperationException($"Device {deviceIndex} is not available");
 
                 // 尝试初始化该设备
                 if (!Bass.Init(deviceIndex))
-                    throw new InvalidOperationException($"初始化设备 {deviceIndex} 失败，错误码: {Bass.LastError}");
+                    throw new InvalidOperationException($"Bass init failed {Bass.LastError}");
 
                 _initializedDevices.Add(deviceIndex);
-                Log.Debug($"[BassManager] 设备 {deviceIndex} 初始化成功");
+                Log.Debug($"Bass inited");
             }
         }
 
@@ -95,7 +95,6 @@ namespace Line.Framework.Resource.Audio
                 if (_audioInstances.Any(wr => wr.TryGetTarget(out var t) && t == instance))
                     return;
                 _audioInstances.Add(new WeakReference<TAudio>(instance));
-                Log.Debug("[BassManager] 注册 TAudio 实例");
             }
         }
 
@@ -104,7 +103,6 @@ namespace Line.Framework.Resource.Audio
             lock (_lock)
             {
                 _audioInstances.RemoveAll(wr => !wr.TryGetTarget(out var t) || t == instance);
-                Log.Debug("[BassManager] 注销 TAudio 实例");
             }
         }
 
@@ -128,7 +126,7 @@ namespace Line.Framework.Resource.Audio
                 Bass.Free();
                 _initializedDevices.Clear();
                 _initialized = false;
-                Log.Debug("[BassManager] Bass 已释放");
+                Log.Debug("Bass released");
             }
         }
     }
@@ -184,7 +182,6 @@ namespace Line.Framework.Resource.Audio
             _deviceIndex = deviceIndex;
             // 确保初始设备已初始化
             BassManager.EnsureDeviceInitialized(_deviceIndex);
-            Log.Debug($"[TAudio] 实例已创建，设备: {_deviceIndex}");
         }
 
         public float MasterVolume
@@ -242,7 +239,6 @@ namespace Line.Framework.Resource.Audio
                     _deviceIndex = value;
                     foreach (var res in _resources.Values)
                         res.ApplyDevice();
-                    Log.Debug($"[TAudio] 切换设备至 {_deviceIndex}");
                 }
             }
         }
@@ -252,12 +248,9 @@ namespace Line.Framework.Resource.Audio
             if (stream == null) throw new ArgumentNullException(nameof(stream));
             lock (_lock)
             {
-                if (_resources.ContainsKey(id))
-                    throw new InvalidOperationException($"资源 ID '{id}' 已存在");
                 var resource = new AudioResource(stream, this);
                 _resources.Add(id, resource);
                 Manager.AddResource(id, resource);
-                Log.Debug($"[TAudio] 创建音频资源: {id}");
             }
         }
 
@@ -273,7 +266,6 @@ namespace Line.Framework.Resource.Audio
             {
                 foreach (var res in _resources.Values)
                     res.Release();
-                Log.Debug("[TAudio] 保存状态并释放所有资源");
             }
         }
 
@@ -285,7 +277,6 @@ namespace Line.Framework.Resource.Audio
                     res.Load();
                 foreach (var res in _resources.Values)
                     res.ApplyAllAttributes();
-                Log.Debug("[TAudio] 重新加载所有资源并应用属性");
             }
         }
 
@@ -299,7 +290,6 @@ namespace Line.Framework.Resource.Audio
                 _resources.Clear();
                 BassManager.Unregister(this);
                 _disposed = true;
-                Log.Debug("[TAudio] 实例已释放");
             }
             GC.SuppressFinalize(this);
         }
@@ -489,7 +479,7 @@ namespace Line.Framework.Resource.Audio
         {
             _owner = owner ?? throw new ArgumentNullException(nameof(owner));
             if (!inputStream.CanRead)
-                throw new ArgumentException("流不可读", nameof(inputStream));
+                throw new ArgumentException("Stream cannot be read", nameof(inputStream));
 
             string ext = ".tmp";
             if (inputStream is FileStream fs && !string.IsNullOrEmpty(fs.Name))
@@ -507,7 +497,7 @@ namespace Line.Framework.Resource.Audio
                 if (_tempoStream != 0)
                 {
                     if (!Bass.ChannelPlay(_tempoStream))
-                        Log.Warning($"[AudioResource] 播放失败，错误码: {Bass.LastError}");
+                        Log.Warning($"Cannot play the audio ,code:{Bass.LastError}");
                 }
             }
         }
@@ -540,22 +530,22 @@ namespace Line.Framework.Resource.Audio
             {
                 if (_loaded) return;
                 if (string.IsNullOrEmpty(_tempFilePath) || !File.Exists(_tempFilePath))
-                    throw new InvalidOperationException("临时文件不存在");
+                    throw new FileNotFoundException($"File {_tempFilePath} not found");
 
                 _sourceStream = Bass.CreateStream(_tempFilePath, 0, 0, BassFlags.Decode);
                 if (_sourceStream == 0)
                 {
-                    Log.Error($"[AudioResource] 创建解码流失败，错误码: {Bass.LastError}");
-                    throw new InvalidOperationException($"创建解码流失败，错误码: {Bass.LastError}");
+                    Log.Error($"Cannot create decode stream ,code: {Bass.LastError}");
+                    throw new InvalidOperationException($"Cannot create decode stream ,code: {Bass.LastError}");
                 }
 
                 _tempoStream = BassFx.TempoCreate(_sourceStream, BassFlags.Default);
                 if (_tempoStream == 0)
                 {
-                    Log.Error($"[AudioResource] 创建 Tempo 流失败，错误码: {Bass.LastError}");
+                    Log.Error($"Cannot create Tempo stream ,code: {Bass.LastError}");
                     Bass.StreamFree(_sourceStream);
                     _sourceStream = 0;
-                    throw new InvalidOperationException($"创建 Tempo 流失败，错误码: {Bass.LastError}");
+                    throw new InvalidOperationException($"Cannot create Tempo stream ,code: {Bass.LastError}");
                 }
 
                 if (_savedPosition > 0)
@@ -567,7 +557,7 @@ namespace Line.Framework.Resource.Audio
                 ApplyAllAttributes();
 
                 _loaded = true;
-                Log.Debug($"[AudioResource] 加载成功，Tempo 句柄: {_tempoStream}");
+                Log.Debug($"Loaded,Tempo handle: {_tempoStream}");
             }
         }
 
@@ -598,7 +588,6 @@ namespace Line.Framework.Resource.Audio
                     _sourceStream = 0;
                 }
                 _loaded = false;
-                Log.Debug($"[AudioResource] 已释放，位置保存: {_savedPosition}");
             }
         }
 
@@ -627,10 +616,9 @@ namespace Line.Framework.Resource.Audio
                 if (!string.IsNullOrEmpty(_tempFilePath) && File.Exists(_tempFilePath))
                 {
                     try { File.Delete(_tempFilePath); }
-                    catch (Exception ex) { Log.Warning($"[AudioResource] 删除临时文件失败: {ex.Message}"); }
+                    catch (Exception ex) { Log.Warning($"Cannot delete the tmp file:{ex.Message}"); }
                     _tempFilePath = null;
                 }
-                Log.Debug("[AudioResource] 已 Dispose");
             }
             GC.SuppressFinalize(this);
         }
@@ -645,7 +633,7 @@ namespace Line.Framework.Resource.Audio
             // 确保目标设备已初始化（BassManager 会处理）
             BassManager.EnsureDeviceInitialized(targetDevice);
             if (!Bass.ChannelSetDevice(_tempoStream, targetDevice))
-                Log.Warning($"[AudioResource] 设置设备 {targetDevice} 失败，错误码: {Bass.LastError}");
+                Log.Warning($"Cannot change device of {targetDevice} Code:{Bass.LastError}");
         }
 
         /// <summary>

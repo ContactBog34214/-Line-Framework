@@ -102,7 +102,7 @@ public class ResourceManager : IDisposable
             }
             catch (Exception ex)
             {
-                Log.Error($" [ResourceManager]Release faild:{ex}");
+                Log.Error($"Release faild:{ex}");
             }
         }
     }
@@ -163,7 +163,7 @@ public class ResourceManager : IDisposable
         }
         catch (Exception ex)
         {
-            Log.Error($"[ResourceManager] {ex}");
+            Log.Error($"{ex}");
         }
     }
 
