@@ -24,7 +24,7 @@ jobs:
         cache: true
         
     - name: Restore dependencies
-      run: dotnet restore ./Line.Framework/ --no-cache
+      run: dotnet restore ./Line.Framework/ --no-cache -p:RestorePackagesWithLockFile=false
       
     - name: Build
       run: dotnet pack -c Release ./Line.Framework/ -o ./packages
