@@ -29,7 +29,7 @@ jobs:
       run: dotnet restore ./Line.Framework/ -p:RestorePackagesWithLockFile=false -p:RestoreLockedMode=false
 
     - name: Build
-      run: dotnet build ./Line.Framework/
+      run: dotnet build ./Line.Framework/ -o ./Line.Framework/bin/Release/net10.0/
       
     - name: Pack
       run: dotnet pack -c Release ./Line.Framework/ -o ./packages
