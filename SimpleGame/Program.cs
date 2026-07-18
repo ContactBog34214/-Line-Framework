@@ -47,15 +47,15 @@ public static class SimpleGame
 
         //Exp
         Log.Debug("Loaded Font");
-        font = Host.Resource.GetResource("Font") as Font;
+        font = Host.Resource?.GetResource("Font") as Font;
         font?.Size = FontSize;
 
-        Host.Resource.Create(
+        Host.Resource?.Create(
             "Image",
             "Icon",
             assembly.GetManifestResourceStream("SimpleGame.assets.-L-F.png")
         );
-        Host.Resource.Create(
+        Host.Resource?.Create(
             "Image",
             "Cursor",
             assembly.GetManifestResourceStream("SimpleGame.assets.cursor.png")
