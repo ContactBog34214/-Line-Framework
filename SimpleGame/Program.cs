@@ -78,6 +78,7 @@ public static class SimpleGame
             Anchor = new(0.5f),
             color = new(153f / 255f, 153f / 255f, 1, 1),
             Parent = Background,
+            TouchMode = TouchModes.All,
         };
         var Image = new UIImage(Host.Resource)
         {
@@ -87,6 +88,7 @@ public static class SimpleGame
             Anchor = new(0.5f),
             Parent = spinnerBox,
             TextureId = "Icon",
+            TouchMode = TouchModes.None,
         };
 
         var cs = new UIImage(Host.Resource)
@@ -98,7 +100,7 @@ public static class SimpleGame
             Parent = Host.Root,
             TextureId = "Cursor",
             Z = 32767,
-            CanTouch = false,
+            TouchMode = TouchModes.None,
         };
 
         var title = new UIText(Host.Resource)
@@ -160,7 +162,7 @@ public static class SimpleGame
         };
 
         VisualTouch();
-        Host.Scale = 1.2f;
+        Host.Scale = 1f;
     }
 
     static void FPSPrinter()
@@ -219,7 +221,7 @@ public static class SimpleGame
             Parent = Host.Root,
             Z = 1000,
             color = new(0, 0, 0, 0),
-            CanTouch = false,
+            TouchMode = TouchModes.None,
         };
 
         Host.Input.FingerDown += (a) =>

@@ -76,7 +76,7 @@ public abstract class UIWidget : UINode
 
     internal float oz = 0;
     internal Vector2 s { get; set; } = new(0, 0);
-    public bool CanTouch { get; set; } = true;
+    public TouchModes TouchMode { get; set; } = TouchModes.All;
     internal Vector2 p { get; set; } = new(0, 0);
     internal bool syncOK = false;
     internal float o { get; set; } = 1;
@@ -89,17 +89,18 @@ public abstract class UIWidget : UINode
     public Vector2 MousePosition(Vector2 mousePixel)
     {
         var P = GetPositionOnScreen();
+        var s = GetSizeOnScreen();
         //到相对
-        var tmp = mousePixel - P;
+        var tmp = mousePixel - P - Anchor * s;
 
         //旋转
         double r = (double)Rotation % 360d;
-        r = 180d - r;
+        r = -r;
         double cos = Math.Cos(r * Math.PI / 180f);
         double sin = Math.Sin(r * Math.PI / 180f);
         tmp = new((float)(tmp.X * cos - tmp.Y * sin), (float)(tmp.Y * cos + tmp.X * sin));
 
-        return -tmp;
+        return tmp + Anchor * s;
     }
 
     public virtual bool HitTest(Vector2 mousePixel)
@@ -117,9 +118,18 @@ public abstract class UIWidget : UINode
             i--;
             if (i < 0)
                 break;
-            if (Children[i].CanTouch && Children[i].HitTest(Point))
+            if (Children[i].HitTest(Point))
             {
-                return FindWidgetPointTouched(Children[i], Point);
+                switch (Children[i].TouchMode)
+                {
+                    case (TouchModes.All):
+                        return FindWidgetPointTouched(Children[i], Point);
+                    case (TouchModes.Children):
+                        var t = FindWidgetPointTouched(Children[i], Point);
+                        if (t != null && t != Children[i])
+                            return t;
+                        break;
+                }
             }
         }
         return w;
@@ -133,11 +143,19 @@ public abstract class UIWidget : UINode
             i--;
             if (i < 0)
                 break;
-            if (Children[i].CanTouch && Children[i].HitTest(Point))
+            if (Children[i].HitTest(Point))
             {
-                if (Children[i] == t)
-                    return true;
-                return IsWidgetPointTouched(Children[i], t, Point);
+                switch (Children[i].TouchMode)
+                {
+                    case (TouchModes.All):
+                        if (Children[i] == t)
+                            return true;
+                        return IsWidgetPointTouched(Children[i], t, Point);
+                    case (TouchModes.Children):
+                        if (Children[i] == t)
+                            return false;
+                        return IsWidgetPointTouched(Children[i], t, Point);
+                }
             }
         }
         return false;
@@ -151,4 +169,11 @@ public class RendererContextArgs
     public double width { get; set; }
     public double height { get; set; }
     public UIDrawCollector Collector { get; set; }
+}
+
+public enum TouchModes
+{
+    None,
+    Children,
+    All,
 }
