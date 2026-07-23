@@ -23,11 +23,11 @@ public enum GraphicBackend
 
 public class Window : IDisposable
 {
-
     public WindowsRenderer RendererClass { get; private set; }
     public nint WindowHandle { get; init; }
     public InputManager Input { get; init; }
     public GraphicsDevice Dev { get; init; }
+    public bool CanQuit { get; set; } = true;
     public bool EnableMouseRelative
     {
         get => SDL.GetWindowRelativeMouseMode(WindowHandle);
@@ -423,10 +423,7 @@ public class Window : IDisposable
                 FocusLost?.Invoke();
             }
         );
-        OnCloseWindow = (ev) =>
-        {
-            Dispose();
-        };
+        OnCloseWindow = Dispose;
     }
 
     public TAudio Audio { get; private set; }
@@ -450,18 +447,20 @@ public class Window : IDisposable
             }
         }
     } = true;
-    public Action<SDL.Event> OnCloseWindow
+    public Action OnCloseWindow
     {
         get;
         set
         {
             if (value == null)
                 throw new InvalidOperationException($"Action cannot be null");
-            EventPool.TryRemove(SDL.EventType.WindowCloseRequested, out field);
+            EventPool.TryRemove(SDL.EventType.WindowCloseRequested, out _onCloseWindow);
             field = value;
-            EventPool.TryAdd(SDL.EventType.WindowCloseRequested, field);
+            _onCloseWindow = a => field();
+            EventPool.TryAdd(SDL.EventType.WindowCloseRequested, _onCloseWindow);
         }
     }
+    private Action<SDL.Event> _onCloseWindow;
 
     internal ConcurrentDictionary<SDL.EventType, Action<SDL.Event>> EventPool { get; } = new();
     public event Action FocusGained;
@@ -540,8 +539,14 @@ public class Window : IDisposable
                                 SDL.SetEventFilter(
                                     (a, ref b) =>
                                     {
-                                        return b.Window.WindowID == WindowID
-                                            || b.TFinger.WindowID == WindowID;
+                                        return (
+                                                b.Window.WindowID == WindowID
+                                                || b.TFinger.WindowID == WindowID
+                                            )
+                                            && (
+                                                b.Type != (uint)SDL.EventType.WindowCloseRequested
+                                                || CanQuit
+                                            );
                                     },
                                     (nint)WindowID
                                 );
@@ -671,11 +676,11 @@ public class Window : IDisposable
 
     public static FullScreenMode[] GetFullScreenModes(uint display)
     {
-        var s=SDL.GetFullscreenDisplayModes(display,out int _);
-        List<FullScreenMode> tmp=[];
+        var s = SDL.GetFullscreenDisplayModes(display, out int _);
+        List<FullScreenMode> tmp = [];
         foreach (var item in s)
         {
-            tmp.Add(new(new(item.W,item.H),item.RefreshRate,item.PixelDensity));
+            tmp.Add(new(new(item.W, item.H), item.RefreshRate, item.PixelDensity));
         }
         return tmp.ToArray();
     }
