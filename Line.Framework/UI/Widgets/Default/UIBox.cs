@@ -6,7 +6,7 @@ namespace Line.Framework.UI.DefaultWidget;
 public class UIBox : UIWidget
 {
     public RgbaFloat color { get; set; } = new(0, 0, 0, 1);
-    Action<RendererContextArgs> RenderAction;
+    readonly Action<RendererContextArgs> RenderAction;
 
     public override void RendererContext(RendererContextArgs args)
     {
@@ -20,21 +20,6 @@ public class UIBox : UIWidget
         RenderAction = (RendererContextArgs args) =>
         {
             var collector = args.Collector;
-            /*
-            collector.DrawRect(
-                new Rectangle
-                {
-                    X = 0,
-                    Y = 0,
-                    Height = (float)args.height,
-                    Width = (float)args.width,
-                },
-                0,
-                anchor,
-                color,
-                this
-            );
-            */
             var s = GetSizeOnScreen();
             if (s.X <= 0 && s.Y <= 0)
             {
