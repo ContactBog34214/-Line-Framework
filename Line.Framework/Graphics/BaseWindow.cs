@@ -27,7 +27,7 @@ public class Window : IDisposable
     public nint WindowHandle { get; init; }
     public InputManager Input { get; init; }
     public GraphicsDevice Dev { get; init; }
-    public bool CanQuit { get; set; } = true;
+    public Action RequestQuit { get; set; }
     public bool EnableMouseRelative
     {
         get => SDL.GetWindowRelativeMouseMode(WindowHandle);
@@ -423,7 +423,7 @@ public class Window : IDisposable
                 FocusLost?.Invoke();
             }
         );
-        OnCloseWindow = Dispose;
+        RequestQuit = Dispose;
     }
 
     public TAudio Audio { get; private set; }
@@ -447,21 +447,6 @@ public class Window : IDisposable
             }
         }
     } = true;
-    public Action OnCloseWindow
-    {
-        get;
-        set
-        {
-            if (value == null)
-                throw new InvalidOperationException($"Action cannot be null");
-            EventPool.TryRemove(SDL.EventType.WindowCloseRequested, out _onCloseWindow);
-            field = value;
-            _onCloseWindow = a => field();
-            EventPool.TryAdd(SDL.EventType.WindowCloseRequested, _onCloseWindow);
-        }
-    }
-    private Action<SDL.Event> _onCloseWindow;
-
     internal ConcurrentDictionary<SDL.EventType, Action<SDL.Event>> EventPool { get; } = new();
     public event Action FocusGained;
     public event Action FocusLost;
@@ -539,14 +524,13 @@ public class Window : IDisposable
                                 SDL.SetEventFilter(
                                     (a, ref b) =>
                                     {
+                                        if (b.Type == (uint)SDL.EventType.WindowCloseRequested)
+                                            RequestQuit?.Invoke();
                                         return (
                                                 b.Window.WindowID == WindowID
                                                 || b.TFinger.WindowID == WindowID
                                             )
-                                            && (
-                                                b.Type != (uint)SDL.EventType.WindowCloseRequested
-                                                || CanQuit
-                                            );
+                                            && b.Type != (uint)SDL.EventType.WindowCloseRequested;
                                     },
                                     (nint)WindowID
                                 );
