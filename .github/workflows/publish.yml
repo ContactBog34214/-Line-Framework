@@ -48,6 +48,7 @@ jobs:
             if git rev-parse "v${{ steps.get_version.outputs.version }}" >/dev/null 2>&1; then
                 echo "Tag already exists, skipping creation."
                 echo "exists=true" >> $GITHUB_OUTPUT
+                exit 1
             else
                 echo "exists=false" >> $GITHUB_OUTPUT
             fi
