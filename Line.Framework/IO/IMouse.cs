@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Line.Framework.Input;
+namespace Line.Framework.IO;
 
 public interface IMouse:ICursor
 {

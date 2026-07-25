@@ -3,6 +3,7 @@ using System.Numerics;
 using System.Reflection;
 using Line.Framework;
 using Line.Framework.Graphics;
+using Line.Framework.IO;
 using Line.Framework.Resource.Graphic;
 using Line.Framework.UI;
 using Line.Framework.UI.DefaultWidget;
