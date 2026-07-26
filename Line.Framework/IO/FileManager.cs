@@ -260,7 +260,26 @@ public class FileManager
             );
         }
     }
+    public bool DirectoryExists(string Path)
+    {
+        Path = FormatPath(Path);
+        string path = System.IO.Path.Combine(MapDir, Path);
+        return Directory.Exists(path);
+    }
 
+        public bool FileExists(string Path)
+    {
+        Path = FormatPath(Path);
+        string path = System.IO.Path.Combine(MapDir, Path);
+        return File.Exists(path);
+    }
+
+        public bool PathExists(string Path)
+    {
+        Path = FormatPath(Path);
+        string path = System.IO.Path.Combine(MapDir, Path);
+        return System.IO.Path.Exists(path);
+    }
     public async Task MoveDirectoryAsync(string Path, string TargetPath)
     {
         Path = FormatPath(Path);
