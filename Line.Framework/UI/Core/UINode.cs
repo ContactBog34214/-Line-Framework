@@ -1,6 +1,8 @@
+using Line.Framework;
+
 namespace Line.Framework.UI;
 
-public abstract class UINode : IDisposable
+public abstract class UINode : IDisposable, IName
 {
     public string Name { get; set; }
 
@@ -65,10 +67,8 @@ public abstract class UINode : IDisposable
         {
             i.Dispose();
         }
-        DisposeHook?.Invoke();
     }
 
-    public Action DisposeHook;
     public float Z { get; set; } = 0;
 
     public UINode FindRoot()

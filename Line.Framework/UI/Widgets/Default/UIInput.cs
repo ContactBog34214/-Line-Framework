@@ -1,6 +1,6 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Line.Framework.Input;
+using Line.Framework.IO;
 using Line.Framework.Resource;
 using SDL3;
 using Veldrid;

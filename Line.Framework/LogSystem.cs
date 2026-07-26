@@ -22,18 +22,20 @@ internal class LogEntry
     public LogLevel Level { get; }
     public string Message { get; }
     public DateTime Time { get; }
+    public string Source { get; }
 
-    public LogEntry(LogLevel level, string message)
+    public LogEntry(LogLevel level, string message,string source)
     {
         Level = level;
         Message = message;
         Time = DateTime.Now;
+        Source=source;
     }
 
     // 格式化输出： [2025-04-08 14:30:21.123][Info] 玩家上线
     public override string ToString()
     {
-        return $"[{Time:yyyy-MM-dd HH:mm:ss.fff}][{Level}] {Message}";
+        return $"[{Time:yyyy-MM-dd HH:mm:ss.fff}][{Source}/{Level}] {Message}";
     }
 }
 
@@ -81,23 +83,22 @@ public static class Log
     }
 
     // ---------- 公开的日志 API ----------
-    public static void Debug(string msg, [CallerMemberName] string member = "") =>
-        Enqueue(LogLevel.Debug, $"[{member}] {msg}");
+    public static void Debug(object msg, [CallerMemberName] string member = "") =>
+        Enqueue(LogLevel.Debug, $"{msg}",member);
 
-    public static void Info(string msg, [CallerMemberName] string member = "") =>
-        Enqueue(LogLevel.Info, $"[{member}] {msg}");
+    public static void Info(object msg, [CallerMemberName] string member = "") =>
+        Enqueue(LogLevel.Info, $"{msg}",member);
 
-    public static void Warning(string msg, [CallerMemberName] string member = "") =>
-        Enqueue(LogLevel.Warning, $"[{member}] {msg}");
+    public static void Warning(object msg, [CallerMemberName] string member = "") =>
+        Enqueue(LogLevel.Warning, $"{msg}",member);
+    public static void Error(object msg, [CallerMemberName] string member = "") =>
+        Enqueue(LogLevel.Error, $"{msg}",member);
 
-    public static void Error(string msg, [CallerMemberName] string member = "") =>
-        Enqueue(LogLevel.Error, $"[{member}] {msg}");
-
-    private static void Enqueue(LogLevel level, string msg)
+    private static void Enqueue(LogLevel level, string msg,string source)
     {
         if (level < s_minLevel)
             return; // 低于设定级别直接丢弃
-        s_queue.Enqueue(new LogEntry(level, msg));
+        s_queue.Enqueue(new LogEntry(level, msg,source));
     }
 
     // 异步处理队列

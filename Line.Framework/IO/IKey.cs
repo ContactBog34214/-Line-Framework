@@ -1,4 +1,4 @@
-namespace Line.Framework.Input;
+namespace Line.Framework.IO;
 
 public interface IKey
 {

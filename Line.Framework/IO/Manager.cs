@@ -2,7 +2,7 @@ using System.Numerics;
 using Line.Framework.Graphics;
 using static SDL3.SDL;
 
-namespace Line.Framework.Input;
+namespace Line.Framework.IO;
 
 public class InputManager
 {

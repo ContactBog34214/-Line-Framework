@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Numerics;
-using Line.Framework.Input;
+using Line.Framework.IO;
 using Line.Framework.Resource;
 using Line.Framework.Resource.Audio;
 using Line.Framework.Resource.Graphic;
@@ -21,8 +21,9 @@ public enum GraphicBackend
     OpenGL,
 }
 
-public class Window : IDisposable
+public class Window : IDisposable, IName
 {
+    public string Name => Title;
     public WindowsRenderer RendererClass { get; private set; }
     public nint WindowHandle { get; init; }
     public InputManager Input { get; init; }
@@ -428,10 +429,7 @@ public class Window : IDisposable
 
     public TAudio Audio { get; private set; }
     public uint WindowID { get; init; }
-    public bool IsFocus
-    {
-        get => SDL.GetKeyboardFocus() == WindowHandle;
-    }
+    public bool IsFocus => SDL.GetKeyboardFocus() == WindowHandle;
     public bool ShowCursor
     {
         get => field && EnableMouseRelative;
