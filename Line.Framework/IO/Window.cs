@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Numerics;
+using Line.Framework.Graphics;
 using Line.Framework.IO;
 using Line.Framework.Resource;
 using Line.Framework.Resource.Audio;
@@ -11,15 +12,7 @@ using Veldrid;
 using Veldrid.OpenGL;
 using Veldrid.StartupUtilities;
 
-namespace Line.Framework.Graphics;
-
-public enum GraphicBackend
-{
-    Metal,
-    Direct3D,
-    Vulkan,
-    OpenGL,
-}
+namespace Line.Framework.IO;
 
 public class Window : IDisposable, IName
 {

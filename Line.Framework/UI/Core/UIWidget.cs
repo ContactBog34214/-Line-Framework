@@ -1,12 +1,13 @@
 using System.Numerics;
+using Line.Framework.Types;
 
 namespace Line.Framework.UI;
 
 public abstract class UIWidget : UINode
 {
-    public Coord2 Position { get; set; } = new();
-    public Coord2 Size { get; set; } = new();
-    public Vector2 Anchor { get; set; } = new(0, 0);
+    public DynamicValue<Coord2> Position { get; set; } = new(new Coord2());
+    public DynamicValue<Coord2> Size { get; set; } = new(new Coord2());
+    public DynamicValue<Vector2> Anchor { get; set; } = new(new Vector2(0,0));
     public bool visible { get; set; } = true;
 
     public Vector2 GetPositionOnScreen()
@@ -18,30 +19,31 @@ public abstract class UIWidget : UINode
             si = i.GetSizeOnScreen() * i.Anchor;
         }
         return new(
-            s.X * Position.scale.X
-                + Position.offset.X
-                - GetSizeOnScreen().X * Anchor.X
+            s.X * Position.Value.scale.X
+                + Position.Value.offset.X
+                - GetSizeOnScreen().X * Anchor.Value.X
                 + p.X
                 - si.X,
-            s.Y * Position.scale.Y + Position.offset.Y - GetSizeOnScreen().Y * Anchor.Y + p.Y - si.Y
+            s.Y * Position.Value.scale.Y + Position.Value.offset.Y - GetSizeOnScreen().Y * Anchor.Value.Y + p.Y - si.Y
         );
     }
 
     public Vector2 GetSizeOnScreen()
     {
-        return new(s.X * Size.scale.X + Size.offset.X, s.Y * Size.scale.Y + Size.offset.Y);
+        return new(s.X * Size.Value.scale.X + Size.Value.offset.X, s.Y * Size.Value.scale.Y + Size.Value.offset.Y);
     }
 
     public Vector2[] GetClipArea(Vector2 source)
     {
         var p = GetPositionOnScreen();
         var s = GetSizeOnScreen();
+        Vector2 ac=Anchor;
         Vector2[] vert =
         [
-            new(-Anchor.X * s.X, -Anchor.Y * s.Y),
-            new(-Anchor.X * s.X, (1 - Anchor.Y) * s.Y),
-            new((1 - Anchor.X) * s.X, (1 - Anchor.Y) * s.Y),
-            new((1 - Anchor.X) * s.X, -Anchor.Y * s.Y),
+            new(-ac.X * s.X, -ac.Y * s.Y),
+            new(-ac.X * s.X, (1 - ac.Y) * s.Y),
+            new((1 - ac.X) * s.X, (1 - ac.Y) * s.Y),
+            new((1 - ac.X) * s.X, -ac.Y * s.Y),
         ];
 
         for (int i = 0; i < vert.Length; i++)
@@ -59,7 +61,7 @@ public abstract class UIWidget : UINode
             target *= Scale;
 
             //映射回前面
-            target += Anchor * s;
+            target += ac * s;
 
             //到绝对
             target += p;

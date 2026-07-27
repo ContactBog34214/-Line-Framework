@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using System.Numerics;
 using System.Text;
+using Line.Framework.IO;
+using Line.Framework.Types;
 using Line.Framework.UI;
 using Veldrid;
 using Veldrid.SPIRV;
@@ -8,6 +10,14 @@ using BufferDescription = Veldrid.BufferDescription;
 using Rectangle = System.Drawing.RectangleF;
 
 namespace Line.Framework.Graphics;
+
+public enum GraphicBackend
+{
+    Metal,
+    Direct3D,
+    Vulkan,
+    OpenGL,
+}
 
 public class WindowsRenderer
 {
@@ -305,8 +315,8 @@ void main()
                         if (t == null)
                             return;
                         target.s = new(
-                            t.Size.offset.X + t.Size.scale.X * t.s.X,
-                            t.Size.offset.Y + t.Size.scale.Y * t.s.Y
+                            t.Size.Value.offset.X + t.Size.Value.scale.X * t.s.X,
+                            t.Size.Value.offset.Y + t.Size.Value.scale.Y * t.s.Y
                         );
                     }
                     catch
@@ -323,8 +333,8 @@ void main()
                         else
                         {
                             target.p = new(
-                                t.Position.offset.X + t.Position.scale.X * t.s.X + t.p.X,
-                                t.Position.offset.Y + t.Position.scale.Y * t.s.Y + t.p.Y
+                                t.Position.Value.offset.X + t.Position.Value.scale.X * t.s.X + t.p.X,
+                                t.Position.Value.offset.Y + t.Position.Value.scale.Y * t.s.Y + t.p.Y
                             );
                         }
                     }
@@ -369,15 +379,15 @@ void main()
                         new RendererContextArgs
                         {
                             X =
-                                target.Position.offset.X
-                                + target.Position.scale.X * source.X
+                                target.Position.Value.offset.X
+                                + target.Position.Value.scale.X * source.X
                                 + target.p.X,
                             Y =
-                                target.Position.offset.Y
-                                + target.Position.scale.Y * source.Y
+                                target.Position.Value.offset.Y
+                                + target.Position.Value.scale.Y * source.Y
                                 + target.p.Y,
-                            width = target.Size.offset.X + target.Size.scale.X * source.X,
-                            height = target.Size.offset.Y + target.Size.scale.Y * source.Y,
+                            width = target.Size.Value.offset.X + target.Size.Value.scale.X * source.X,
+                            height = target.Size.Value.offset.Y + target.Size.Value.scale.Y * source.Y,
                             Collector = collector,
                         }
                     );
