@@ -251,7 +251,7 @@ public static class SimpleGame
                 Name = $"_PerTest",
                 Z = -100,
                 Parent = root,
-                visible = true,
+                Visible = true,
             };
         }
     }

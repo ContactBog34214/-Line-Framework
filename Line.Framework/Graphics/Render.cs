@@ -239,7 +239,7 @@ void main()
             if (!visited.Add(node))
                 return; // 已访问或正在访问
 
-            if (!node.visible)
+            if (!node.Visible)
                 return;
 
             node.oz = i++;
@@ -309,60 +309,12 @@ void main()
                     var t = target.Parent as UIWidget;
                     if (t != null && !t.syncOK)
                         syncer(t);
-                    //同步渲染区大小
-                    try
-                    {
-                        if (t == null)
-                            return;
-                        target.s = new(
-                            t.Size.Value.offset.X + t.Size.Value.scale.X * t.s.X,
-                            t.Size.Value.offset.Y + t.Size.Value.scale.Y * t.s.Y
-                        );
-                    }
-                    catch
-                    {
-                        target.s = new(window.Size.X, window.Size.Y);
-                    }
-                    //同步移位
-                    try
-                    {
-                        if (t is UIScreen a)
-                        {
-                            target.p = new(0, 0);
-                        }
-                        else
-                        {
-                            target.p = new(
-                                t.Position.Value.offset.X + t.Position.Value.scale.X * t.s.X + t.p.X,
-                                t.Position.Value.offset.Y + t.Position.Value.scale.Y * t.s.Y + t.p.Y
-                            );
-                        }
-                    }
-                    catch
-                    {
-                        target.s = new(0, 0);
-                    }
-                    //同步透明度
-                    try
-                    {
-                        if (t is UIScreen a)
-                        {
-                            target.o = target.Opacity;
-                        }
-                        else
-                        {
-                            target.o = target.Opacity * t.o;
-                        }
-                    }
-                    catch
-                    {
-                        target.o = target.Opacity;
-                    }
                     //同步剪切链
                     try
                     {
                         target.ClipList.Clear();
-                        target.ClipList.AddRange(t.ClipList);
+                        if (t != null)
+                            target.ClipList.AddRange(t.ClipList);
                         target.ClipList.Add(target.GetClipArea(screenSize));
                     }
                     catch
@@ -380,14 +332,18 @@ void main()
                         {
                             X =
                                 target.Position.Value.offset.X
-                                + target.Position.Value.scale.X * source.X
-                                + target.p.X,
+                                + target.Position.Value.scale.X * source.Value.X
+                                + target.p.Value.X,
                             Y =
                                 target.Position.Value.offset.Y
-                                + target.Position.Value.scale.Y * source.Y
-                                + target.p.Y,
-                            width = target.Size.Value.offset.X + target.Size.Value.scale.X * source.X,
-                            height = target.Size.Value.offset.Y + target.Size.Value.scale.Y * source.Y,
+                                + target.Position.Value.scale.Y * source.Value.Y
+                                + target.p.Value.Y,
+                            width =
+                                target.Size.Value.offset.X
+                                + target.Size.Value.scale.X * source.Value.X,
+                            height =
+                                target.Size.Value.offset.Y
+                                + target.Size.Value.scale.Y * source.Value.Y,
                             Collector = collector,
                         }
                     );

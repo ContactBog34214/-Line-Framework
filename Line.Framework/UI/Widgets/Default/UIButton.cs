@@ -61,7 +61,7 @@ public class UIButton : UIWidget
     {
         Press = (a) =>
         {
-            if (visible && Enabled && IsWidgetPointTouched(root, this, input.Mouse.Position))
+            if (Visible && Enabled && IsWidgetPointTouched(root, this, input.Mouse.Position))
             {
                 Pressing.Add(a);
                 UpdateState(a);
