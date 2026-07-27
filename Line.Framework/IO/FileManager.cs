@@ -493,6 +493,11 @@ public class FileManager
                     Array.Empty<byte>()
                 );
             }
+            else
+            {
+                if (File.Exists(System.IO.Path.Combine(HashPath, ".Comp")))
+                    File.Delete(System.IO.Path.Combine(HashPath, ".Comp"));
+            }
             Task t = File.WriteAllBytesAsync(hashFilePath, Byte);
             await File.WriteAllBytesAsync(hashRefPath, Array.Empty<byte>());
             await t;
