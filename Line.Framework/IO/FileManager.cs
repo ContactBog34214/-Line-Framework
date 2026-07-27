@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -6,9 +8,109 @@ namespace Line.Framework.IO;
 
 public class FileManager
 {
+    private readonly Stopwatch Base = new();
     public string WorkDir { get; private set; }
     private ConcurrentDictionary<string, string> MapCache { get; } = new();
+    private ConcurrentDictionary<string, HashCacheType> HashCache { get; } = new();
+
+    private record HashCacheType(byte[] Data, long LastGetTime);
+
     internal string MapDir => Path.Combine(WorkDir, "Map");
+    public bool CompressFile { get; set; } = true;
+    public bool? AllowCache
+    {
+        get
+        {
+            if (field == null)
+                return GlobalAllowCache;
+            return field;
+        }
+        set;
+    } = null;
+    public static bool GlobalAllowCache { get; set; } = true;
+    public ulong MaximumCacheSize { get; set; } = (long)1024 * 1024 * 512;
+    public TimeSpan MaximumCacheAge { get; set; } = new(0, 1, 0);
+    public long CacheTotalSize { get; private set; } = 0;
+    private Thread cacheManagerThread;
+
+    public void ForceClearCache()
+    {
+        MapCache.Clear();
+        HashCache.Clear();
+        CacheTotalSize = 0;
+    }
+
+    private void CacheCollectorControlor()
+    {
+        WeakReference<FileManager> fm = new(this);
+        while (true)
+        {
+            Thread.Sleep(5000);
+            if (fm.TryGetTarget(out _))
+                CacheCollector();
+            else
+                return;
+        }
+    }
+
+    public void CacheCollector()
+    {
+        long size = 0; //顺便算个大小
+        long modifiedSize = CacheTotalSize;
+        if (AllowCache ?? GlobalAllowCache)
+        {
+            var hashes = HashCache
+                .OrderBy(c => c.Value.LastGetTime)
+                .Select(kvp => kvp.Key)
+                .ToArray();
+            foreach (var i in hashes)
+            {
+                HashCache.TryGetValue(i, out var val);
+                if (val == null)
+                {
+                    HashCache.Remove(i, out _);
+                    continue;
+                }
+                if (
+                    Base.ElapsedMilliseconds - val.LastGetTime > MaximumCacheAge.TotalMilliseconds
+                    || modifiedSize > (long)MaximumCacheSize
+                )
+                {
+                    HashCache.Remove(i, out var c);
+                    modifiedSize -= c.Data.Length;
+                    continue;
+                }
+                size += val.Data.Length;
+            }
+            CacheTotalSize = size;
+        }
+        else
+        {
+            HashCache.Clear();
+            CacheTotalSize = 0;
+        }
+    }
+
+    public static byte[] Compress(byte[] data)
+    {
+        using var ms = new MemoryStream();
+        using (var brotli = new BrotliStream(ms, CompressionLevel.Optimal))
+        {
+            brotli.Write(data, 0, data.Length);
+        }
+        return ms.ToArray();
+    }
+
+    public static byte[] Decompress(byte[] compressed)
+    {
+        using var input = new MemoryStream(compressed);
+        using var output = new MemoryStream();
+        using (var brotli = new BrotliStream(input, CompressionMode.Decompress))
+        {
+            brotli.CopyTo(output);
+        }
+        return output.ToArray();
+    }
 
     public async Task ClearMap()
     {
@@ -33,7 +135,7 @@ public class FileManager
             string m = System.IO.Path.Combine(MapDir, realPath);
             string Hash = "";
             if (!MapCache.TryGetValue(realPath, out Hash))
-                Hash = await System.IO.File.ReadAllTextAsync(m);
+                Hash = await File.ReadAllTextAsync(m);
             MapCache.TryAdd(realPath, Hash);
             return Hash;
         }
@@ -53,8 +155,30 @@ public class FileManager
     {
         if (Hash.Length != 64)
             throw new InvalidDataException($"{Hash} is not a Hash");
-        string path = System.IO.Path.Combine(WorkDir, GetHashPath(Hash), "Data");
-        return await System.IO.File.ReadAllBytesAsync(path);
+        if ((AllowCache ?? GlobalAllowCache) && HashCache.TryGetValue(Hash, out var hc))
+        {
+            HashCacheType modified = new(hc.Data, Base.ElapsedMilliseconds);
+            HashCache.TryUpdate(Hash, modified, hc);
+            return hc.Data;
+        }
+
+        string path = Path.Combine(WorkDir, GetHashPath(Hash));
+        byte[] data = await File.ReadAllBytesAsync(Path.Combine(path, "Data"));
+        if (File.Exists(Path.Combine(path, ".Comp")))
+            try
+            {
+                data = Decompress(data);
+            }
+            catch (Exception ex)
+            {
+                throw new IOException($"Cannot decompress data", ex);
+            }
+        if (AllowCache ?? GlobalAllowCache)
+        {
+            HashCacheType modified = new(data, Base.ElapsedMilliseconds);
+            HashCache.TryAdd(Hash, modified);
+        }
+        return data;
     }
 
     public static string FormatPath(string Path)
@@ -78,20 +202,16 @@ public class FileManager
     {
         if (Hash.Length != 64)
             throw new InvalidDataException($"{Hash} is not Hash");
-        return System.IO.Path.Combine(
-            Hash.Substring(0, 2),
-            Hash.Substring(2, 2),
-            Hash.Substring(4)
-        );
+        return Path.Combine(Hash.Substring(0, 2), Hash.Substring(2, 2), Hash.Substring(4));
     }
 
     public async Task CreateFileAsync(string Path)
     {
         var f = FormatPath(Path);
         string m = System.IO.Path.Combine(MapDir, f);
-        if (System.IO.File.Exists(m))
+        if (File.Exists(m))
             return;
-        await System.IO.File.WriteAllTextAsync(m, await WriteAllBytesAsyncForHash([], f));
+        await File.WriteAllTextAsync(m, await WriteAllBytesAsyncForHash([], f));
     }
 
     public void CreateFile(string Path) =>
@@ -100,14 +220,14 @@ public class FileManager
     public void CreateDirectory(string Path)
     {
         string m = System.IO.Path.Combine(MapDir, FormatPath(Path));
-        System.IO.Directory.CreateDirectory(m);
+        Directory.CreateDirectory(m);
     }
 
     public async Task WriteAllTextAsync(string Path, string Text)
     {
         Path = FormatPath(Path);
         string path = System.IO.Path.Combine(MapDir, Path);
-        await System.IO.File.WriteAllTextAsync(
+        await File.WriteAllTextAsync(
             path,
             await WriteAllBytesAsyncForHash(Encoding.UTF8.GetBytes(Text), Path)
         );
@@ -123,7 +243,7 @@ public class FileManager
     {
         Path = FormatPath(Path);
         string path = System.IO.Path.Combine(MapDir, Path);
-        await System.IO.File.WriteAllTextAsync(path, await WriteAllBytesAsyncForHash(Byte, Path));
+        await File.WriteAllTextAsync(path, await WriteAllBytesAsyncForHash(Byte, Path));
     }
 
     public void WriteAllBytes(string Path, byte[] Bytes) =>
@@ -260,6 +380,7 @@ public class FileManager
             );
         }
     }
+
     public bool DirectoryExists(string Path)
     {
         Path = FormatPath(Path);
@@ -267,19 +388,20 @@ public class FileManager
         return Directory.Exists(path);
     }
 
-        public bool FileExists(string Path)
+    public bool FileExists(string Path)
     {
         Path = FormatPath(Path);
         string path = System.IO.Path.Combine(MapDir, Path);
         return File.Exists(path);
     }
 
-        public bool PathExists(string Path)
+    public bool PathExists(string Path)
     {
         Path = FormatPath(Path);
         string path = System.IO.Path.Combine(MapDir, Path);
         return System.IO.Path.Exists(path);
     }
+
     public async Task MoveDirectoryAsync(string Path, string TargetPath)
     {
         Path = FormatPath(Path);
@@ -357,18 +479,33 @@ public class FileManager
             }
         }
         var HashPath = System.IO.Path.Combine(WorkDir, GetHashPath(TextHash));
-        if (!System.IO.Directory.Exists(HashPath))
+        if (!Directory.Exists(HashPath))
         {
-            System.IO.Directory.CreateDirectory(HashPath);
+            Directory.CreateDirectory(HashPath);
             var hashFilePath = System.IO.Path.Combine(HashPath, "Data");
             var hashRefPath = System.IO.Path.Combine(HashPath, "Refs");
-            var t = System.IO.File.WriteAllBytesAsync(hashFilePath, Byte);
-            await System.IO.File.WriteAllBytesAsync(hashRefPath, Array.Empty<byte>());
+
+            if (CompressFile)
+            {
+                Byte = Compress(Byte);
+                await File.WriteAllBytesAsync(
+                    System.IO.Path.Combine(HashPath, ".Comp"),
+                    Array.Empty<byte>()
+                );
+            }
+            Task t = File.WriteAllBytesAsync(hashFilePath, Byte);
+            await File.WriteAllBytesAsync(hashRefPath, Array.Empty<byte>());
             await t;
         }
         if (Path != null)
             await AddDataRefToHash(Path, TextHash);
-
+        HashCache.TryGetValue(TextHash, out var hc);
+        HashCacheType modified = new(Byte, Base.ElapsedMilliseconds);
+        if (AllowCache ?? GlobalAllowCache)
+            if (hc != null)
+                HashCache.TryUpdate(TextHash, modified, hc);
+            else
+                HashCache.TryAdd(TextHash, modified);
         return TextHash;
     }
 
@@ -378,6 +515,9 @@ public class FileManager
     {
         this.WorkDir = WorkDir;
         Directory.CreateDirectory(Path.Combine(WorkDir, "Map"));
+        Base.Start();
+        cacheManagerThread = new(CacheCollectorControlor);
+        cacheManagerThread.Start();
     }
 
     public async Task<bool> TryDeleteHash(string Hash)
@@ -386,19 +526,19 @@ public class FileManager
             return false;
         var HashPath = GetHashPath(Hash);
         HashPath = Path.Combine(WorkDir, HashPath);
-        if (System.IO.Directory.Exists(HashPath))
+        if (Directory.Exists(HashPath))
         {
-            var hashRefPath = System.IO.Path.Combine(HashPath, "Refs");
-            if (System.IO.File.Exists(hashRefPath))
+            var hashRefPath = Path.Combine(HashPath, "Refs");
+            if (File.Exists(hashRefPath))
             {
-                List<string> refs = (await System.IO.File.ReadAllLinesAsync(hashRefPath)).ToList();
+                List<string> refs = (await File.ReadAllLinesAsync(hashRefPath)).ToList();
                 bool Modified = false;
                 bool Ref = false;
                 for (int i = 0; i < refs.Count; i++)
                 {
                     var item = refs[i];
                     if (
-                        !System.IO.File.Exists(System.IO.Path.Combine(MapDir, item))
+                        !File.Exists(Path.Combine(MapDir, item))
                         || (await GetFileHash(item)) != Hash
                     )
                     {
@@ -410,9 +550,9 @@ public class FileManager
                     Ref = true;
                 }
                 if (Modified)
-                    await System.IO.File.WriteAllLinesAsync(hashRefPath, refs);
+                    await File.WriteAllLinesAsync(hashRefPath, refs);
                 if (!Ref)
-                    System.IO.Directory.Delete(HashPath, true);
+                    Directory.Delete(HashPath, true);
                 return !Ref;
             }
         }
@@ -425,11 +565,11 @@ public class FileManager
         {
             Path = FormatPath(Path);
             string path = System.IO.Path.Combine(WorkDir, GetHashPath(TargetHash), "Refs");
-            List<string> refs = (await System.IO.File.ReadAllLinesAsync(path)).ToList();
+            List<string> refs = (await File.ReadAllLinesAsync(path)).ToList();
             if (refs.Contains(Path))
                 return;
             refs.Add(Path);
-            await System.IO.File.WriteAllLinesAsync(path, refs);
+            await File.WriteAllLinesAsync(path, refs);
         }
     }
 
@@ -440,11 +580,11 @@ public class FileManager
             {
                 Path = FormatPath(Path);
                 string path = System.IO.Path.Combine(WorkDir, GetHashPath(TargetHash), "Refs");
-                List<string> refs = (await System.IO.File.ReadAllLinesAsync(path)).ToList();
+                List<string> refs = (await File.ReadAllLinesAsync(path)).ToList();
                 if (!refs.Contains(Path))
                     return;
                 refs.Remove(Path);
-                await System.IO.File.WriteAllLinesAsync(path, refs);
+                await File.WriteAllLinesAsync(path, refs);
             }
     }
 
