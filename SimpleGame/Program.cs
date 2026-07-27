@@ -1,10 +1,12 @@
 ﻿using System.Diagnostics;
 using System.Numerics;
 using System.Reflection;
+using System.Text;
 using Line.Framework;
 using Line.Framework.Graphics;
 using Line.Framework.IO;
 using Line.Framework.Resource.Graphic;
+using Line.Framework.Types;
 using Line.Framework.UI;
 using Line.Framework.UI.DefaultWidget;
 using SDL3;
@@ -66,7 +68,7 @@ public static class SimpleGame
         var Background = new UIBox
         {
             Name = "Background",
-            Size = new(new(), new(1, 1)),
+            Size = new Coord2(new(), new(1, 1)),
             color = new(202f / 255f, 233f / 255f, 1, 1),
             Parent = Host.Root,
         };
@@ -74,9 +76,9 @@ public static class SimpleGame
         var spinnerBox = new UIBox
         {
             Name = "SpinnerBox",
-            Position = new(new(), new(0.5f)),
-            Size = new(new(SpinnerBoxSize), new()),
-            Anchor = new(0.5f),
+            Position = new Coord2(new(), new(0.5f)),
+            Size = new Coord2(new(SpinnerBoxSize), new()),
+            Anchor = new Vector2(0.5f),
             color = new(153f / 255f, 153f / 255f, 1, 1),
             Parent = Background,
             TouchMode = TouchModes.All,
@@ -84,9 +86,9 @@ public static class SimpleGame
         var Image = new UIImage(Host.Resource)
         {
             Name = "SpinnerImage",
-            Position = new(new(), new(0.5f)),
-            Size = new(new(), new(1)),
-            Anchor = new(0.5f),
+            Position = new Coord2(new(), new(0.5f)),
+            Size = new Coord2(new(), new(1)),
+            Anchor = new Vector2(0.5f),
             Parent = spinnerBox,
             TextureId = "Icon",
             TouchMode = TouchModes.None,
@@ -95,9 +97,9 @@ public static class SimpleGame
         var cs = new UIImage(Host.Resource)
         {
             Name = "Cursor",
-            Position = new(new(), new()),
-            Size = new(new(32), new()),
-            Anchor = new(0.5f),
+            Position = new Coord2(new(), new()),
+            Size = new Coord2(new(32), new()),
+            Anchor = new Vector2(0.5f),
             Parent = Host.Root,
             TextureId = "Cursor",
             Z = 32767,
@@ -107,8 +109,8 @@ public static class SimpleGame
         var title = new UIText(Host.Resource)
         {
             Name = "Title",
-            Position = new(new(0, 100), new(0.5f, 0)),
-            Anchor = new(0.5f),
+            Position = new Coord2(new(0, 100), new(0.5f, 0)),
+            Anchor = new Vector2(0.5f),
             Parent = Background,
             color = new(105f / 255f, 110f / 255f, 1, 1),
             FontId = "Font",
@@ -117,14 +119,14 @@ public static class SimpleGame
             Text = "-Line-Framework\nExample",
             Z = 1,
         };
-        title.Size = new(title.GetTextSize(title.Text) / new Vector2(1, 1), new());
+        title.Size = new Coord2(title.GetTextSize(title.Text) / new Vector2(1, 1), new());
 
         Host.OnUpdate += (a, b) =>
         {
             float r = sw.ElapsedMilliseconds / 1000f % SpinnerBoxSpeed * 360f / SpinnerBoxSpeed;
             spinnerBox.Rotation = r;
             Image.Rotation = r;
-            cs.Position = new(Host.Input.Mouse.Position, new());
+            cs.Position = new Coord2(Host.Input.Mouse.Position, new());
         };
 
         Host.FramePerSecond = 5000;
@@ -150,9 +152,9 @@ public static class SimpleGame
         var input = new UIInput(Host.Resource)
         {
             Name = "Input",
-            Position = new(new(0, -120), new(0.5f, 1)),
-            Size = new(new(400, 160), new()),
-            Anchor = new(0.5f),
+            Position = new Coord2(new(0, -120), new(0.5f, 1)),
+            Size = new Coord2(new(400, 160), new()),
+            Anchor = new Vector2(0.5f),
             Parent = Host.Root,
             Z = 100,
             FontId = "Font",
@@ -164,6 +166,47 @@ public static class SimpleGame
 
         VisualTouch();
         Host.Scale = 1f;
+        FileManager fm = new("/home/smellyfish/Documents/Projects/FMTest");
+        fm.CompressFile = true;
+        fm.CreateFile("test.file");
+        var dt = GenerateTestData(4096);
+        fm.WriteAllText("test.file", dt);
+        fm.ForceClearCache();
+        Log.Info(fm.ReadAllText("test.file") == dt);
+
+        Stopwatch sw1 = new();
+        fm.AllowCache=true;
+        fm.ForceClearCache();
+        sw1.Start();
+        for (int i = 0; i < 32; i++)
+        {
+            string text = fm.ReadAllText("test.file");
+            if (text != dt)
+            {
+                Log.Error($"值不匹配:{i}");
+            }
+        }
+        sw1.Stop();
+        Log.Info(sw1.ElapsedMilliseconds/1000f);
+    }
+
+    static string GenerateTestData(int repeatCount)
+    {
+        var lines = new[]
+        {
+            "Hello, this is a test string for compression algorithms.",
+            "It contains repeated sentences to achieve high compression ratio.",
+            "You can modify the content or repeat count to suit your test.",
+            "Brotli, GZip, and LZMA all perform well on such data.",
+            "The quick brown fox jumps over the lazy dog.",
+        };
+        var sb = new StringBuilder();
+        for (int i = 0; i < repeatCount; i++)
+        {
+            foreach (var line in lines)
+                sb.AppendLine(line);
+        }
+        return sb.ToString();
     }
 
     static void FPSPrinter()
@@ -171,8 +214,8 @@ public static class SimpleGame
         var perText = new UIText(Host.Resource)
         {
             Name = "PerfText",
-            Position = new(new(), new(1)),
-            Anchor = new(1),
+            Position = new Coord2(new(), new(1)),
+            Anchor = new Vector2(1),
             Parent = Host.Root,
             XAlignment = Alignment.Right,
             YAlignment = Alignment.Right,
@@ -195,7 +238,7 @@ public static class SimpleGame
             Renderfps += (Rf - Renderfps) / 200f;
             perText.Text =
                 $"{(int)Renderfps}/{Host.FramePerSecond}FPS\n{(int)(UpdateMs * 100f) / 100f}/{(int)(1000f / Host.UpdatePerSecond * 100f) / 100f}Ms";
-            perText.Size = new(perText.GetTextSize(perText.Text), new());
+            perText.Size = new Coord2(perText.GetTextSize(perText.Text), new());
         };
     }
 
@@ -208,7 +251,7 @@ public static class SimpleGame
                 Name = $"_PerTest",
                 Z = -100,
                 Parent = root,
-                visible = true,
+                Visible = true,
             };
         }
     }
@@ -218,7 +261,7 @@ public static class SimpleGame
         var TouchC = new UIBox()
         {
             Name = "TouchC",
-            Size = new(new(), new(1)),
+            Size = new Coord2(new(), new(1)),
             Parent = Host.Root,
             Z = 1000,
             color = new(0, 0, 0, 0),
@@ -230,9 +273,9 @@ public static class SimpleGame
             _ = new UICircle()
             {
                 Name = $"{a.Id}",
-                Position = new(a.Finger.Position, new()),
-                Size = new(new(25, 25), new()),
-                Anchor = new(0.5f),
+                Position = new Coord2(a.Finger.Position, new()),
+                Size = new Coord2(new(25, 25), new()),
+                Anchor = new Vector2(0.5f),
                 Parent = TouchC,
                 Z = a.Id,
                 color = new(1, 1, 1, 0.5f),
@@ -243,7 +286,7 @@ public static class SimpleGame
             var tg = TouchC.FindChildren($"{a.Id}");
             if (tg.Count > 0 && tg[0] is UICircle b)
             {
-                b.Position = new(a.Finger.Position, new());
+                b.Position = new Coord2(a.Finger.Position, new());
             }
         };
         Host.Input.FingerUp += (a) =>

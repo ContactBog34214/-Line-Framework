@@ -1,13 +1,14 @@
 using System.Numerics;
+using Line.Framework.Types;
 
 namespace Line.Framework.UI;
 
 public abstract class UIWidget : UINode
 {
-    public Coord2 Position { get; set; } = new();
-    public Coord2 Size { get; set; } = new();
-    public Vector2 Anchor { get; set; } = new(0, 0);
-    public bool visible { get; set; } = true;
+    public DynamicValue<Coord2> Position { get; set; } = new(new Coord2());
+    public DynamicValue<Coord2> Size { get; set; } = new(new Coord2());
+    public DynamicValue<Vector2> Anchor { get; set; } = new(new Vector2(0, 0));
+    public bool Visible { get; set; } = true;
 
     public Vector2 GetPositionOnScreen()
     {
@@ -18,30 +19,38 @@ public abstract class UIWidget : UINode
             si = i.GetSizeOnScreen() * i.Anchor;
         }
         return new(
-            s.X * Position.scale.X
-                + Position.offset.X
-                - GetSizeOnScreen().X * Anchor.X
-                + p.X
+            s.Value.X * Position.Value.scale.X
+                + Position.Value.offset.X
+                - GetSizeOnScreen().X * Anchor.Value.X
+                + p.Value.X
                 - si.X,
-            s.Y * Position.scale.Y + Position.offset.Y - GetSizeOnScreen().Y * Anchor.Y + p.Y - si.Y
+            s.Value.Y * Position.Value.scale.Y
+                + Position.Value.offset.Y
+                - GetSizeOnScreen().Y * Anchor.Value.Y
+                + p.Value.Y
+                - si.Y
         );
     }
 
     public Vector2 GetSizeOnScreen()
     {
-        return new(s.X * Size.scale.X + Size.offset.X, s.Y * Size.scale.Y + Size.offset.Y);
+        return new(
+            s.Value.X * Size.Value.scale.X + Size.Value.offset.X,
+            s.Value.Y * Size.Value.scale.Y + Size.Value.offset.Y
+        );
     }
 
     public Vector2[] GetClipArea(Vector2 source)
     {
         var p = GetPositionOnScreen();
         var s = GetSizeOnScreen();
+        Vector2 ac = Anchor;
         Vector2[] vert =
         [
-            new(-Anchor.X * s.X, -Anchor.Y * s.Y),
-            new(-Anchor.X * s.X, (1 - Anchor.Y) * s.Y),
-            new((1 - Anchor.X) * s.X, (1 - Anchor.Y) * s.Y),
-            new((1 - Anchor.X) * s.X, -Anchor.Y * s.Y),
+            new(-ac.X * s.X, -ac.Y * s.Y),
+            new(-ac.X * s.X, (1 - ac.Y) * s.Y),
+            new((1 - ac.X) * s.X, (1 - ac.Y) * s.Y),
+            new((1 - ac.X) * s.X, -ac.Y * s.Y),
         ];
 
         for (int i = 0; i < vert.Length; i++)
@@ -59,7 +68,7 @@ public abstract class UIWidget : UINode
             target *= Scale;
 
             //映射回前面
-            target += Anchor * s;
+            target += ac * s;
 
             //到绝对
             target += p;
@@ -74,12 +83,42 @@ public abstract class UIWidget : UINode
 
     public virtual void RendererContext(RendererContextArgs args) { }
 
-    internal float oz = 0;
-    internal Vector2 s { get; set; } = new(0, 0);
+    protected UIWidget()
+    {
+        s = new(() =>
+        {
+            if (Parent is UIWidget t)
+                return new(
+                    t.Size.Value.offset.X + t.Size.Value.scale.X * t.s.Value.X,
+                    t.Size.Value.offset.Y + t.Size.Value.scale.Y * t.s.Value.Y
+                );
+            return new Vector2(0);
+        });
+        o = new(() =>
+        {
+            if (Parent is UIWidget a)
+                return a.o * Opacity;
+            return Opacity;
+        });
+        p = new(() =>
+        {
+            if (Parent is UIWidget t)
+                return new(
+                    t.Position.Value.offset.X
+                        + t.Position.Value.scale.X * t.s.Value.X
+                        + t.p.Value.X,
+                    t.Position.Value.offset.Y + t.Position.Value.scale.Y * t.s.Value.Y + t.p.Value.Y
+                );
+            return new Vector2(0, 0);
+        });
+    }
+
+    internal float oz=0;
+    internal DynamicValue<Vector2> s { get; set; } = new Vector2(0, 0);
     public TouchModes TouchMode { get; set; } = TouchModes.All;
-    internal Vector2 p { get; set; } = new(0, 0);
+    internal DynamicValue<Vector2> p { get; set; } = new Vector2(0, 0);
     internal bool syncOK = false;
-    internal float o { get; set; } = 1;
+    internal DynamicValue<float> o { get; set; } = 1;
     internal List<Vector2[]> ClipList = [];
     public float Rotation { get; set; } = 0;
     public float Opacity { get; set; } = 1;

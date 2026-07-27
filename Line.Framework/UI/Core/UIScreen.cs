@@ -1,5 +1,8 @@
 using System.Numerics;
 using Line.Framework.Graphics;
+using Line.Framework.IO;
+using Line.Framework.Types;
+using Line.Framework.UI;
 
 namespace Line.Framework.UI;
 
@@ -18,8 +21,15 @@ public class UIScreen : UIWidget
         UpdateScreenSize(screenWidth, screenHeight);
         // 锚点设为左上角 (0,0)
         Anchor = Vector2.Zero;
-        visible = true;
+        Visible = true;
         Z = 0;
+        s = new(() =>
+        {
+            return new(_screenWidth, _screenHeight);
+        });
+        p = new Vector2(0, 0);
+        o = 1;
+        oz = 0;
     }
 
     public void UpdateScreenSize(int width, int height)
@@ -27,12 +37,16 @@ public class UIScreen : UIWidget
         _screenWidth = width;
         _screenHeight = height;
         // 将 Size 设置为绝对像素值（scale=0, offset=宽高）
-        Size = new Coord2 { scale = Vector2.Zero, offset = new Vector2(width, height)*window.Scale };
+        Size = new Coord2
+        {
+            scale = Vector2.Zero,
+            offset = new Vector2(width, height) * window.Scale,
+        };
     }
 
     public override bool HitTest(Vector2 mousePixel)
     {
-        return visible;
+        return Visible;
     }
 
     // 可选：提供屏幕尺寸属性供子控件进行百分比布局计算

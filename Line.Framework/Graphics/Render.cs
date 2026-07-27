@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using System.Numerics;
 using System.Text;
+using Line.Framework.IO;
+using Line.Framework.Types;
 using Line.Framework.UI;
 using Veldrid;
 using Veldrid.SPIRV;
@@ -8,6 +10,14 @@ using BufferDescription = Veldrid.BufferDescription;
 using Rectangle = System.Drawing.RectangleF;
 
 namespace Line.Framework.Graphics;
+
+public enum GraphicBackend
+{
+    Metal,
+    Direct3D,
+    Vulkan,
+    OpenGL,
+}
 
 public class WindowsRenderer
 {
@@ -229,7 +239,7 @@ void main()
             if (!visited.Add(node))
                 return; // 已访问或正在访问
 
-            if (!node.visible)
+            if (!node.Visible)
                 return;
 
             node.oz = i++;
@@ -299,60 +309,12 @@ void main()
                     var t = target.Parent as UIWidget;
                     if (t != null && !t.syncOK)
                         syncer(t);
-                    //同步渲染区大小
-                    try
-                    {
-                        if (t == null)
-                            return;
-                        target.s = new(
-                            t.Size.offset.X + t.Size.scale.X * t.s.X,
-                            t.Size.offset.Y + t.Size.scale.Y * t.s.Y
-                        );
-                    }
-                    catch
-                    {
-                        target.s = new(window.Size.X, window.Size.Y);
-                    }
-                    //同步移位
-                    try
-                    {
-                        if (t is UIScreen a)
-                        {
-                            target.p = new(0, 0);
-                        }
-                        else
-                        {
-                            target.p = new(
-                                t.Position.offset.X + t.Position.scale.X * t.s.X + t.p.X,
-                                t.Position.offset.Y + t.Position.scale.Y * t.s.Y + t.p.Y
-                            );
-                        }
-                    }
-                    catch
-                    {
-                        target.s = new(0, 0);
-                    }
-                    //同步透明度
-                    try
-                    {
-                        if (t is UIScreen a)
-                        {
-                            target.o = target.Opacity;
-                        }
-                        else
-                        {
-                            target.o = target.Opacity * t.o;
-                        }
-                    }
-                    catch
-                    {
-                        target.o = target.Opacity;
-                    }
                     //同步剪切链
                     try
                     {
                         target.ClipList.Clear();
-                        target.ClipList.AddRange(t.ClipList);
+                        if (t != null)
+                            target.ClipList.AddRange(t.ClipList);
                         target.ClipList.Add(target.GetClipArea(screenSize));
                     }
                     catch
@@ -369,15 +331,19 @@ void main()
                         new RendererContextArgs
                         {
                             X =
-                                target.Position.offset.X
-                                + target.Position.scale.X * source.X
-                                + target.p.X,
+                                target.Position.Value.offset.X
+                                + target.Position.Value.scale.X * source.Value.X
+                                + target.p.Value.X,
                             Y =
-                                target.Position.offset.Y
-                                + target.Position.scale.Y * source.Y
-                                + target.p.Y,
-                            width = target.Size.offset.X + target.Size.scale.X * source.X,
-                            height = target.Size.offset.Y + target.Size.scale.Y * source.Y,
+                                target.Position.Value.offset.Y
+                                + target.Position.Value.scale.Y * source.Value.Y
+                                + target.p.Value.Y,
+                            width =
+                                target.Size.Value.offset.X
+                                + target.Size.Value.scale.X * source.Value.X,
+                            height =
+                                target.Size.Value.offset.Y
+                                + target.Size.Value.scale.Y * source.Value.Y,
                             Collector = collector,
                         }
                     );
