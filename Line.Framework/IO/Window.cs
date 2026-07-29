@@ -34,6 +34,15 @@ public class Window : IDisposable, IName
                 SDL.HideCursor();
         }
     }
+    public float MouseSpeedScale
+    {
+        get;
+        set
+        {
+            if (value > 0)
+                field = value;
+        }
+    } = 1;
     public Vector2 Size
     {
         get
@@ -512,6 +521,11 @@ public class Window : IDisposable, IName
                             UpdateMs = milliseconds;
                             while (true)
                             {
+                                if (IsFocus)
+                                    SDL.SetHint(
+                                        SDL.Hints.MouseRelativeSpeedScale,
+                                        MouseSpeedScale.ToString()
+                                    );
                                 SDL.SetEventFilter(
                                     (a, ref b) =>
                                     {
