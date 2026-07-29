@@ -123,12 +123,14 @@ public static class SimpleGame
 
         Host.OnUpdate += (a, b) =>
         {
+            cs.Position = new Coord2(Host.Input.Mouse.Position, new());
+        };
+        Host.OnRender += (a, b) =>
+        {
             float r = sw.ElapsedMilliseconds / 1000f % SpinnerBoxSpeed * 360f / SpinnerBoxSpeed;
             spinnerBox.Rotation = r;
             Image.Rotation = r;
-            cs.Position = new Coord2(Host.Input.Mouse.Position, new());
         };
-
         Host.FramePerSecond = 5000;
         Host.FocusGained += () =>
         {
@@ -148,6 +150,7 @@ public static class SimpleGame
         Host.ShowCursor = false;
         Host.ParallelRender = true;
         Host.EnableMouseRelative = true;
+        Host.MouseSpeedScale=1;
 
         var input = new UIInput(Host.Resource)
         {
@@ -166,6 +169,7 @@ public static class SimpleGame
 
         VisualTouch();
         Host.Scale = 1f;
+        /*
         FileManager fm = new("/home/smellyfish/Documents/Projects/FMTest");
         fm.CompressFile = true;
         fm.CreateFile("test.file");
@@ -188,6 +192,7 @@ public static class SimpleGame
         }
         sw1.Stop();
         Log.Info(sw1.ElapsedMilliseconds/1000f);
+        */
     }
 
     static string GenerateTestData(int repeatCount)
