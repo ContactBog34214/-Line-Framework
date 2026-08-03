@@ -1,5 +1,4 @@
 using System.Numerics;
-using Line.Framework.Graphics;
 using static SDL3.SDL;
 
 namespace Line.Framework.IO;
