@@ -22,7 +22,7 @@ public class UIScreen : UIWidget
         // 锚点设为左上角 (0,0)
         Anchor = Vector2.Zero;
         Visible = true;
-        Z = 0;
+        Index = 0;
         s = new(() =>
         {
             return new(_screenWidth, _screenHeight);

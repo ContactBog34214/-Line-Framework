@@ -1,8 +1,9 @@
 using Line.Framework;
+using Line.Framework.Types;
 
 namespace Line.Framework.UI;
 
-public abstract class UINode : IDisposable, IName
+public abstract class UINode : IDisposable, IName, IIndexable
 {
     public string Name { get; set; }
 
@@ -15,7 +16,7 @@ public abstract class UINode : IDisposable, IName
     }
 
     //对外的只读
-    private protected readonly List<UINode> _children = [];
+    private protected readonly List<UINode> _children = new();
     public List<UINode> Children
     {
         get => _children;
@@ -69,7 +70,16 @@ public abstract class UINode : IDisposable, IName
         }
     }
 
-    public float Z { get; set; } = 0;
+    public float Index
+    {
+        get;
+        set
+        {
+            field = value;
+            var idx = Parent?._children.IndexOf(this) ?? -1;
+            Parent?._children?.Add(this);
+        }
+    } = 0;
 
     public UINode FindRoot()
     {
