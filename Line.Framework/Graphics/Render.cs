@@ -245,7 +245,7 @@ void main()
             node.oz = i++;
             widgets.Add(node);
 
-            var sortedChildren = node.Children.Where(c => c != null).OrderBy(c => c.Z);
+            var sortedChildren = node.Children.Where(c => c != null).OrderBy(c => c.Index);
 
             foreach (var child in sortedChildren)
             {

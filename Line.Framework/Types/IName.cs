@@ -1,4 +1,4 @@
-namespace Line.Framework;
+namespace Line.Framework.Types;
 
 public interface IName
 {

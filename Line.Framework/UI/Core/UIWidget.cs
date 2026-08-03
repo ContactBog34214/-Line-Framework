@@ -151,7 +151,7 @@ public abstract class UIWidget : UINode
 
     public static UIWidget FindWidgetPointTouched(UIWidget w, Vector2 Point)
     {
-        UIWidget[] Children = w.Children.OfType<UIWidget>().OrderBy(c => c.Z).ToArray();
+        UIWidget[] Children = w.Children.OfType<UIWidget>().OrderBy(c => c.Index).ToArray();
         for (int i = Children.Length; ; )
         {
             i--;
@@ -176,7 +176,7 @@ public abstract class UIWidget : UINode
 
     public static bool IsWidgetPointTouched(UIWidget w, UIWidget t, Vector2 Point)
     {
-        UIWidget[] Children = w.Children.OfType<UIWidget>().OrderBy(c => c.Z).ToArray();
+        UIWidget[] Children = w.Children.OfType<UIWidget>().OrderBy(c => c.Index).ToArray();
         for (int i = Children.Length; ; )
         {
             i--;

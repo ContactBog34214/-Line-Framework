@@ -6,6 +6,7 @@ using Line.Framework.IO;
 using Line.Framework.Resource;
 using Line.Framework.Resource.Audio;
 using Line.Framework.Resource.Graphic;
+using Line.Framework.Types;
 using Line.Framework.UI;
 using SDL3;
 using Veldrid;

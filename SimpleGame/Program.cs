@@ -102,7 +102,7 @@ public static class SimpleGame
             Anchor = new Vector2(0.5f),
             Parent = Host.Root,
             TextureId = "Cursor",
-            Z = 32767,
+            Index = 32767,
             TouchMode = TouchModes.None,
         };
 
@@ -117,7 +117,7 @@ public static class SimpleGame
             XAlignment = Alignment.Center,
             YAlignment = Alignment.Right,
             Text = "-Line-Framework\nExample",
-            Z = 1,
+            Index = 1,
         };
         title.Size = new Coord2(title.GetTextSize(title.Text) / new Vector2(1, 1), new());
 
@@ -159,7 +159,7 @@ public static class SimpleGame
             Size = new Coord2(new(400, 160), new()),
             Anchor = new Vector2(0.5f),
             Parent = Host.Root,
-            Z = 100,
+            Index = 100,
             FontId = "Font",
             CursorColor = new(1, 1, 1, 0.5f),
             FontScale = 1f,
@@ -226,7 +226,7 @@ public static class SimpleGame
             YAlignment = Alignment.Right,
             color = new(0, 0, 1, 1),
             FontId = "Font",
-            Z = 65536,
+            Index = 65536,
             FontScale = 0.5f,
         };
 
@@ -254,7 +254,7 @@ public static class SimpleGame
             _ = new UIBox()
             {
                 Name = $"_PerTest",
-                Z = -100,
+                Index = -100,
                 Parent = root,
                 Visible = true,
             };
@@ -268,7 +268,7 @@ public static class SimpleGame
             Name = "TouchC",
             Size = new Coord2(new(), new(1)),
             Parent = Host.Root,
-            Z = 1000,
+            Index = 1000,
             color = new(0, 0, 0, 0),
             TouchMode = TouchModes.None,
         };
@@ -282,7 +282,7 @@ public static class SimpleGame
                 Size = new Coord2(new(25, 25), new()),
                 Anchor = new Vector2(0.5f),
                 Parent = TouchC,
-                Z = a.Id,
+                Index = a.Id,
                 color = new(1, 1, 1, 0.5f),
             };
         };
