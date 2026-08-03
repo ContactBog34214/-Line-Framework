@@ -8,7 +8,7 @@ public abstract class UIWidget : UINode
     public DynamicValue<Coord2> Position { get; set; } = new(new Coord2());
     public DynamicValue<Coord2> Size { get; set; } = new(new Coord2());
     public DynamicValue<Vector2> Anchor { get; set; } = new(new Vector2(0, 0));
-    public bool Visible { get; set; } = true;
+    public DynamicValue<bool> Visible { get; set; } = true;
 
     public Vector2 GetPositionOnScreen()
     {
@@ -113,17 +113,17 @@ public abstract class UIWidget : UINode
         });
     }
 
-    internal float oz=0;
-    internal DynamicValue<Vector2> s { get; set; } = new Vector2(0, 0);
+    internal float oz = 0;
+    internal DynamicValue<Vector2> s { get; set; }
     public TouchModes TouchMode { get; set; } = TouchModes.All;
-    internal DynamicValue<Vector2> p { get; set; } = new Vector2(0, 0);
+    internal DynamicValue<Vector2> p { get; set; }
     internal bool syncOK = false;
-    internal DynamicValue<float> o { get; set; } = 1;
+    internal DynamicValue<float> o { get; set; }
     internal List<Vector2[]> ClipList = [];
-    public float Rotation { get; set; } = 0;
-    public float Opacity { get; set; } = 1;
+    public DynamicValue<float> Rotation { get; set; } = 0;
+    public DynamicValue<float> Opacity { get; set; } = 1;
 
-    public Vector2 Scale { get; set; } = new(1, 1);
+    public DynamicValue<Vector2> Scale { get; set; } = new Vector2(1);
 
     public Vector2 MousePosition(Vector2 mousePixel)
     {
