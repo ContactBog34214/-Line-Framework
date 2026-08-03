@@ -116,8 +116,9 @@ public static class SimpleGame
             FontId = "Font",
             XAlignment = Alignment.Center,
             YAlignment = Alignment.Right,
-            Text = "-Line-Framework\nExample",
+            Text = "-Line- Framework\nExample",
             Index = 1,
+            FontSize = 60,
         };
         title.Size = new Coord2(title.GetTextSize(title.Text) / new Vector2(1, 1), new());
 
@@ -142,6 +143,7 @@ public static class SimpleGame
         };
 
         Host.UpdatePerSecond = 1000;
+        Host.ParallelRender = false;
 
         FPSPrinter();
 
@@ -150,7 +152,7 @@ public static class SimpleGame
         Host.ShowCursor = false;
         Host.ParallelRender = true;
         Host.EnableMouseRelative = true;
-        Host.MouseSpeedScale=1;
+        Host.MouseSpeedScale = 1;
 
         var input = new UIInput(Host.Resource)
         {
@@ -162,7 +164,7 @@ public static class SimpleGame
             Index = 100,
             FontId = "Font",
             CursorColor = new(1, 1, 1, 0.5f),
-            FontScale = 1f,
+            FontSize = 50,
             Text = "Wowabcdefghijklmnopq\nwow",
             Offset = new(0),
         };
@@ -227,7 +229,7 @@ public static class SimpleGame
             color = new(0, 0, 1, 1),
             FontId = "Font",
             Index = 65536,
-            FontScale = 0.5f,
+            FontSize = 40,
         };
 
         float Renderfps = 0;

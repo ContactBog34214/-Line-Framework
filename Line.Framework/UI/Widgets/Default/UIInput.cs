@@ -264,7 +264,7 @@ public class UIInput : UIWidget
     public string FontId { get; set; } = "";
     public RgbaFloat TextColor { get; set; } = new(1, 1, 1, 1);
     public RgbaFloat HintColor { get; set; } = new(0.7f, 0.7f, 0.7f, 0.5f);
-    public float FontScale { get; set; } = 1;
+    public float FontSize { get; set; } = 1;
     readonly UIText TextWidget;
     readonly UIText HintWidget;
     ICursor pressed = null;
@@ -419,8 +419,8 @@ public class UIInput : UIWidget
         HintWidget?.color = HintColor;
         TextWidget?.FontId = FontId;
         HintWidget?.FontId = FontId;
-        TextWidget?.FontScale = FontScale;
-        HintWidget?.FontScale = FontScale;
+        TextWidget?.FontSize = FontSize;
+        HintWidget?.FontSize = FontSize;
         TextWidget?.Text = Text;
         HintWidget?.Text = Hint;
     }
