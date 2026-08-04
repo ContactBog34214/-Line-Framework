@@ -38,7 +38,7 @@ public sealed class UIText : UIWidget
         get;
         set
         {
-            if (0 < value)
+            if (0 <= value)
                 field = value;
             else
                 throw new InvalidDataException($"FontSize cannot be {value}");
