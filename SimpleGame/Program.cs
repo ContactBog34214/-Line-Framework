@@ -51,7 +51,7 @@ public static class SimpleGame
         //Exp
         Log.Debug("Loaded Font");
         font = Host.Resource?.GetResource("Font") as Font;
-        font?.Size = FontSize;
+        font?.Size = (uint)Host.Size.Y;
 
         Host.Resource?.Create(
             "Image",
@@ -112,13 +112,13 @@ public static class SimpleGame
             Position = new Coord2(new(0, 100), new(0.5f, 0)),
             Anchor = new Vector2(0.5f),
             Parent = Background,
-            color = new(105f / 255f, 110f / 255f, 1, 1),
+            color = new RgbaFloat(105f / 255f, 110f / 255f, 1f, 1f),
             FontId = "Font",
             XAlignment = Alignment.Center,
             YAlignment = Alignment.Right,
             Text = "-Line- Framework\nExample",
             Index = 1,
-            FontSize = 60,
+            FontSize = 100,
         };
         title.Size = new Coord2(title.GetTextSize(title.Text) / new Vector2(1, 1), new());
 
@@ -163,7 +163,7 @@ public static class SimpleGame
             Parent = Host.Root,
             Index = 100,
             FontId = "Font",
-            CursorColor = new(1, 1, 1, 0.5f),
+            CursorColor = new(1f, 1f, 1f, 0.5f),
             FontSize = 50,
             Text = "Wowabcdefghijklmnopq\nwow",
             Offset = new(0),
@@ -226,7 +226,7 @@ public static class SimpleGame
             Parent = Host.Root,
             XAlignment = Alignment.Right,
             YAlignment = Alignment.Right,
-            color = new(0, 0, 1, 1),
+            color = new RgbaFloat(0f, 0f, 0f, 1f),
             FontId = "Font",
             Index = 65536,
             FontSize = 40,
@@ -285,7 +285,7 @@ public static class SimpleGame
                 Anchor = new Vector2(0.5f),
                 Parent = TouchC,
                 Index = a.Id,
-                color = new(1, 1, 1, 0.5f),
+                color = new(1f, 1f, 1f, 0.5f),
             };
         };
         Host.Input.FingerMove += (a) =>

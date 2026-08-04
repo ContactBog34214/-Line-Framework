@@ -7,7 +7,7 @@ namespace Line.Framework.UI.DefaultWidget;
 
 public class UIButton : UIWidget
 {
-    public RgbaFloat color { get; set; } = new(0, 0, 0, 0);
+    public RgbaFloat color { get; set; } = new(0, 0, 0, 0f);
     public event EventHandler<UIButton, ICursor> WhenPress;
     public event EventHandler<UIButton, ICursor> WhenClick;
     public int ClickMaximumTime { get; set; } = 200;

@@ -8,7 +8,7 @@ namespace Line.Framework.UI.DefaultWidget;
 public class UIImage : UIWidget
 {
     public RgbaFloat BackgroundColor { get; set; } = new(0, 0, 0, 0);
-    public RgbaFloat Color { get; set; } = new(1, 1, 1, 1);
+    public RgbaFloat Color { get; set; } = new(1, 1, 1, 1f);
     public string TextureId { get; set; }
     internal ResourceManager Manager;
     readonly Action<RendererContextArgs> RenderAction;
