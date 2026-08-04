@@ -6,7 +6,7 @@ namespace Line.Framework.UI.DefaultWidget;
 
 public class UICircle : UIWidget
 {
-    public RgbaFloat color { get; set; } = new(0, 0, 0, 1);
+    public RgbaFloat color { get; set; } = new(0, 0, 0, 1f);
     public uint Precision
     {
         get;

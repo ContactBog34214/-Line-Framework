@@ -5,7 +5,7 @@ namespace Line.Framework.UI.DefaultWidget;
 
 public class UIBox : UIWidget
 {
-    public RgbaFloat color { get; set; } = new(0, 0, 0, 1);
+    public RgbaFloat color { get; set; } = new(0, 0, 0, 1f);
     readonly Action<RendererContextArgs> RenderAction;
 
     public override void RendererContext(RendererContextArgs args)
