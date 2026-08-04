@@ -4,6 +4,7 @@ using Line.Framework.IO;
 using Line.Framework.Resource;
 using SDL3;
 using Veldrid;
+using RgbaFloat = Line.Framework.Types.RgbaFloat;
 
 namespace Line.Framework.UI.DefaultWidget;
 
@@ -259,10 +260,10 @@ public class UIInput : UIWidget
     public bool AllowPaste { get; set; } = true;
     public bool Enabled { get; set; } = true;
     public string Hint { get; set; } = "Type something...";
-    public RgbaFloat CursorColor { get; set; } = new(1, 1, 1, 1);
+    public RgbaFloat CursorColor { get; set; } = new(1, 1, 1, 1f);
     public float CursorWidth { get; set; } = 5;
     public string FontId { get; set; } = "";
-    public RgbaFloat TextColor { get; set; } = new(1, 1, 1, 1);
+    public RgbaFloat TextColor { get; set; } = new(1, 1, 1, 1f);
     public RgbaFloat HintColor { get; set; } = new(0.7f, 0.7f, 0.7f, 0.5f);
     public float FontSize { get; set; } = 1;
     readonly UIText TextWidget;

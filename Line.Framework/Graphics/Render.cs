@@ -8,6 +8,7 @@ using Veldrid;
 using Veldrid.SPIRV;
 using BufferDescription = Veldrid.BufferDescription;
 using Rectangle = System.Drawing.RectangleF;
+using RgbaFloat = Veldrid.RgbaFloat;
 
 namespace Line.Framework.Graphics;
 
@@ -97,7 +98,7 @@ void main()
         public float Opacity { get; set; }
         public List<Vector2[]> Clips { get; set; } = new();
 
-        public Vertex(Vector2 p, RgbaFloat c, Coord2 u, Texture t, ResourceSet rs, float o)
+        public Vertex(Vector2 p, Types.RgbaFloat c, Coord2 u, Texture t, ResourceSet rs, float o)
         {
             Position = p;
             Color = c;
@@ -631,7 +632,7 @@ void main()
         }
         cl.SetFramebuffer(window.Dev.SwapchainFramebuffer);
 
-        cl.ClearColorTarget(0, RgbaFloat.Black);
+        cl.ClearColorTarget(0, Veldrid.RgbaFloat.Black);
         cl.SetPipeline(_pipeline);
         cl.SetVertexBuffer(0, _vertexBuffer);
 

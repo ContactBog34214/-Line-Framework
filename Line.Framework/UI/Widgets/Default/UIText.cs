@@ -2,26 +2,28 @@ using System.Numerics;
 using Line.Framework.Graphics;
 using Line.Framework.Resource;
 using Line.Framework.Resource.Graphic;
+using Line.Framework.Types;
 using Veldrid;
+using RgbaFloat = Line.Framework.Types.RgbaFloat;
 
 namespace Line.Framework.UI.DefaultWidget;
 
 public sealed class UIText : UIWidget
 {
     public List<Texture> FontTexture { get; private set; } = [];
-    public string FontId { get; set; }
+    public DynamicValue<string> FontId { get; set; }
     public List<char> NullChar
     {
         get => (rm.GetResource(FontId) as Font)?.NullChar ?? [];
     }
-    public RgbaFloat color { get; set; } = new(1, 1, 1, 1);
-    public string Text
+    public DynamicValue<RgbaFloat> color { get; set; } = new RgbaFloat(1, 1, 1, 1);
+    public DynamicValue<string> Text
     {
         get => _text;
         set => SetText(value);
     }
     string _text = "";
-    public float FontScale
+    public double FontScale
     {
         get
         {
@@ -30,20 +32,10 @@ public sealed class UIText : UIWidget
                 return 0;
             //            字体大小 = 缩放 * 实际大小
             // 字体大小 / 实际大小 = 缩放
-            return FontSize / f.Size;
+            return FontSize / (double)f.Size;
         }
     }
-    public float FontSize
-    {
-        get;
-        set
-        {
-            if (0 <= value)
-                field = value;
-            else
-                throw new InvalidDataException($"FontSize cannot be {value}");
-        }
-    } = 48;
+    public DynamicValue<float> FontSize { get; set; } = 48;
 
     private readonly Dictionary<char, FontTexture> _charCache = new();
 
@@ -79,7 +71,7 @@ public sealed class UIText : UIWidget
         return new(s.X, Height * (AllLinesBeforeCur.Length - ot));
     }
 
-    void SetText(string s)
+    void SetText(DynamicValue<string> s)
     {
         if (s == _text)
             return;
@@ -110,7 +102,7 @@ public sealed class UIText : UIWidget
             Vector2 baselinePos = new Vector2(0, 0);
             var s = _text.Split('\n');
 
-            baselinePos.Y = -font.Ascender * FontScale;
+            baselinePos.Y = (float)(-font.Ascender * FontScale);
             if (YAlignment == Alignment.Center)
                 baselinePos.Y += ((float)args.height - s.Length * lineHeight) / 2f;
             if (YAlignment == Alignment.Right)
@@ -153,11 +145,11 @@ public sealed class UIText : UIWidget
                 }
 
                 // 计算字形矩形的左上角（屏幕坐标）
-                float left = baselinePos.X + cache.BearingX;
-                float top;
+                float left = (float)(baselinePos.X + cache.BearingX * FontScale);
+                double top;
                 top = baselinePos.Y + cache.BearingY * FontScale;
-                Vector2 position = new Vector2(left, top);
-                Vector2 size = new Vector2(cache.Width, cache.Height) * FontScale;
+                Vector2 position = new Vector2(left, (float)top);
+                Vector2 size = new Vector2(cache.Width, cache.Height) * (float)FontScale;
 
                 if (cache.Texture != null && cache.ResourceSet != null)
                 {
@@ -165,7 +157,7 @@ public sealed class UIText : UIWidget
                 }
 
                 // 前进到下一个字符
-                baselinePos.X += cache.Advance * FontScale * LetterSpacing;
+                baselinePos.X += (float)(cache.Advance * FontScale * LetterSpacing);
             }
         };
     }
@@ -181,7 +173,7 @@ public sealed class UIText : UIWidget
         // 参考之前的 renderAText 逻辑，但直接使用屏幕坐标，不再乘缩放
         var tl = new WindowsRenderer.Vertex(
             position + Offset,
-            color,
+            color.Value,
             new(new(), new(0, 0)),
             cache.Texture,
             cache.ResourceSet,
@@ -258,7 +250,7 @@ public sealed class UIText : UIWidget
                     cache = font.GetFontTexture(c);
                     _charCache[c] = cache;
                 }
-                advance = cache.Advance * FontScale * LetterSpacing;
+                advance = (float)(cache.Advance * FontScale * LetterSpacing);
             }
             currentWidth += advance;
         }
