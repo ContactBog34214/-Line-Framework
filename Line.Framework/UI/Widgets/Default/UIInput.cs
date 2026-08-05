@@ -262,7 +262,7 @@ public class UIInput : UIWidget
     public string Hint { get; set; } = "Type something...";
     public RgbaFloat CursorColor { get; set; } = new(1, 1, 1, 1f);
     public float CursorWidth { get; set; } = 5;
-    public string FontId { get; set; } = "";
+    public List<string> FontId { get; set; } = [];
     public RgbaFloat TextColor { get; set; } = new(1, 1, 1, 1f);
     public RgbaFloat HintColor { get; set; } = new(0.7f, 0.7f, 0.7f, 0.5f);
     public float FontSize { get; set; } = 1;

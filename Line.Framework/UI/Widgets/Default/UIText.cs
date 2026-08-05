@@ -11,39 +11,92 @@ namespace Line.Framework.UI.DefaultWidget;
 public sealed class UIText : UIWidget
 {
     public List<Texture> FontTexture { get; private set; } = [];
-    public DynamicValue<string> FontId { get; set; }
-    public List<char> NullChar
-    {
-        get => (rm.GetResource(FontId) as Font)?.NullChar ?? [];
-    }
+    public TrackableList<string> FontId { get; set; } = new();
     public DynamicValue<RgbaFloat> color { get; set; } = new RgbaFloat(1, 1, 1, 1);
+    private Dictionary<char, Font> _charCache = new();
     public DynamicValue<string> Text
     {
         get => _text;
         set => SetText(value);
     }
     string _text = "";
-    public double FontScale
-    {
-        get
-        {
-            var f = rm.GetResource(FontId) as Font;
-            if (f == null)
-                return 0;
-            //            字体大小 = 缩放 * 实际大小
-            // 字体大小 / 实际大小 = 缩放
-            return FontSize / (double)f.Size;
-        }
-    }
     public DynamicValue<float> FontSize { get; set; } = 48;
-
-    private readonly Dictionary<char, FontTexture> _charCache = new();
 
     public override void RendererContext(RendererContextArgs args)
     {
-        if (RenderAction == null)
+        if ((FontId?.Count ?? 0) <= 0)
             return;
-        RenderAction(args);
+        if (FontId?.IsDirty ?? false)
+        {
+            _charCache.Clear();
+            FontId.ResetDirty();
+        }
+        var collector = args.Collector;
+        if (rm == null)
+            return;
+        Font font = null;
+        double FontScale = 0;
+        UseFontIndex(0, out font, out FontScale);
+
+        // ---------- 坐标系配置 ----------
+        // 如果屏幕 Y 轴向下为正（左上角原点），设为 true；Y 轴向上为正（左下角原点），设为 false
+
+        // 基线起始位置（屏幕坐标）
+        float lineHeight = FontSize / 1.4f;
+        Vector2 baselinePos = new Vector2(0, 0);
+        var s = _text.Split('\n');
+
+        baselinePos.Y = (float)(-font.Ascender * FontScale);
+        if (YAlignment == Alignment.Center)
+            baselinePos.Y += ((float)args.height - s.Length * lineHeight) / 2f;
+        if (YAlignment == Alignment.Right)
+            baselinePos.Y += (float)args.height - s.Length * lineHeight;
+        void ResetOffset(string str)
+        {
+            if (XAlignment == Alignment.Left)
+                baselinePos.X = 0;
+            if (XAlignment == Alignment.Center)
+                baselinePos.X = ((float)args.width - GetTextSize(str).X) / 2;
+            if (XAlignment == Alignment.Right)
+                baselinePos.X = (float)args.width - GetTextSize(str).X;
+        }
+        uint i = 0;
+        ResetOffset(s[i]);
+        foreach (char c in _text)
+        {
+            SelectFont(c, out font, out FontScale);
+            if (c == '\n')
+            {
+                i++;
+                ResetOffset(s[i]);
+                baselinePos.Y += lineHeight;
+                continue;
+            }
+
+            if (c == ' ')
+            {
+                float spaceWidth = FontSize * font.SpaceWidth;
+                baselinePos.X += spaceWidth * LetterSpacing;
+                continue;
+            }
+
+            var cache = font.GetFontTexture(c);
+
+            // 计算字形矩形的左上角（屏幕坐标）
+            float left = (float)(baselinePos.X + cache.BearingX * FontScale);
+            double top;
+            top = baselinePos.Y + cache.BearingY * FontScale;
+            Vector2 position = new Vector2(left, (float)top);
+            Vector2 size = new Vector2(cache.Width, cache.Height) * (float)FontScale;
+
+            if (cache.Texture != null && cache.ResourceSet != null)
+            {
+                DrawCharacter(position, size, cache, collector);
+            }
+
+            // 前进到下一个字符
+            baselinePos.X += (float)(cache.Advance * FontScale * LetterSpacing);
+        }
     }
 
     public Vector2 GetWhereIndexCharIs(string Text, int Index)
@@ -78,88 +131,48 @@ public sealed class UIText : UIWidget
         _text = s;
     }
 
-    readonly Action<RendererContextArgs> RenderAction;
+    private void UseFontIndex(int Index, out Font font, out double FontScale)
+    {
+        font = null;
+        FontScale = 0;
+        if (Index <= 0 && FontId.Count <= Index)
+            return;
+        var tmp = rm.GetResource(FontId[Index]) as Font;
+        if (tmp == null)
+            return;
+        font = tmp;
+        FontScale = FontSize / (double)font.Size;
+    }
+
+    private void SelectFont(char c, out Font font, out double FontScale)
+    {
+        if (_charCache.TryGetValue(c, out font))
+        {
+            FontScale = FontSize / (double)font.Size;
+            return;
+        }
+        font = null;
+        FontScale = 0;
+        if ((FontId?.Count ?? 0) == 0)
+            return;
+        foreach (var i in FontId)
+        {
+            font = rm.GetResource(i) as Font;
+            if (font == null)
+                continue;
+            FontScale = FontSize / (double)font.Size;
+            var g = font.GetFontTexture(c);
+            if ((g?.Width ?? 0) * (g?.Height ?? 0) > 0)
+            {
+                _charCache.TryAdd(c, font);
+                return;
+            }
+        }
+    }
 
     public UIText(ResourceManager manager)
     {
         rm = manager;
-
-        RenderAction = (args) =>
-        {
-            using var nullWriter = new StreamWriter(Stream.Null);
-            var collector = args.Collector;
-            if (manager == null)
-                return;
-            var font = rm.GetResource(FontId) as Font;
-            if (font == null)
-                return;
-
-            // ---------- 坐标系配置 ----------
-            // 如果屏幕 Y 轴向下为正（左上角原点），设为 true；Y 轴向上为正（左下角原点），设为 false
-
-            // 基线起始位置（屏幕坐标）
-            float lineHeight = FontSize / 1.4f;
-            Vector2 baselinePos = new Vector2(0, 0);
-            var s = _text.Split('\n');
-
-            baselinePos.Y = (float)(-font.Ascender * FontScale);
-            if (YAlignment == Alignment.Center)
-                baselinePos.Y += ((float)args.height - s.Length * lineHeight) / 2f;
-            if (YAlignment == Alignment.Right)
-                baselinePos.Y += (float)args.height - s.Length * lineHeight;
-            void ResetOffset(string str)
-            {
-                if (XAlignment == Alignment.Left)
-                    baselinePos.X = 0;
-                if (XAlignment == Alignment.Center)
-                    baselinePos.X = ((float)args.width - GetTextSize(str).X) / 2;
-                if (XAlignment == Alignment.Right)
-                    baselinePos.X = (float)args.width - GetTextSize(str).X;
-            }
-            uint i = 0;
-            ResetOffset(s[i]);
-            foreach (char c in _text)
-            {
-                if (c == '\n')
-                {
-                    i++;
-                    ResetOffset(s[i]);
-                    baselinePos.Y += lineHeight;
-                    continue;
-                }
-
-                if (c == ' ')
-                {
-                    float spaceWidth = FontSize * font.SpaceWidth;
-                    baselinePos.X += spaceWidth * LetterSpacing;
-                    continue;
-                }
-
-                if (NullChar.Contains(c))
-                    continue;
-
-                if (!_charCache.TryGetValue(c, out var cache))
-                {
-                    cache = font.GetFontTexture(c);
-                    _charCache[c] = cache;
-                }
-
-                // 计算字形矩形的左上角（屏幕坐标）
-                float left = (float)(baselinePos.X + cache.BearingX * FontScale);
-                double top;
-                top = baselinePos.Y + cache.BearingY * FontScale;
-                Vector2 position = new Vector2(left, (float)top);
-                Vector2 size = new Vector2(cache.Width, cache.Height) * (float)FontScale;
-
-                if (cache.Texture != null && cache.ResourceSet != null)
-                {
-                    DrawCharacter(position, size, cache, collector);
-                }
-
-                // 前进到下一个字符
-                baselinePos.X += (float)(cache.Advance * FontScale * LetterSpacing);
-            }
-        };
     }
 
     private void DrawCharacter(
@@ -211,7 +224,9 @@ public sealed class UIText : UIWidget
 
     public Vector2 GetTextSize(string s)
     {
-        var font = rm.GetResource(FontId) as Font;
+        if ((FontId?.Count ?? 0) == 0)
+            return Vector2.Zero;
+        UseFontIndex(0, out var font, out var FontScale);
         if (font == null)
             return Vector2.One;
 
@@ -234,22 +249,14 @@ public sealed class UIText : UIWidget
 
             // 字符前进量（与渲染完全一致）
             float advance;
+            SelectFont(c, out font, out FontScale);
             if (c == ' ')
             {
                 advance = font.SpaceWidth * FontSize * LetterSpacing;
             }
-            else if (NullChar.Contains(c))
-            {
-                continue;
-            }
             else
             {
-                // 确保字符已缓存（否则临时获取度量）
-                if (!_charCache.TryGetValue(c, out var cache))
-                {
-                    cache = font.GetFontTexture(c);
-                    _charCache[c] = cache;
-                }
+                var cache = font.GetFontTexture(c);
                 advance = (float)(cache.Advance * FontScale * LetterSpacing);
             }
             currentWidth += advance;
