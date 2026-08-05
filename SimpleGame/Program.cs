@@ -20,8 +20,8 @@ public static class SimpleGame
     static Stopwatch sw = new();
     static readonly float SpinnerBoxSpeed = 3.5f;
     static readonly float SpinnerBoxSize = 400;
-    static readonly uint FontSize = 100;
     static Font font;
+    static List<string> Fonts = ["GenJyuuGothic", "Noto"];
 
     public static void Main()
     {
@@ -45,13 +45,26 @@ public static class SimpleGame
         Host.Resource.Create(
             "Font",
             "Font",
-            assembly.GetManifestResourceStream("SimpleGame.assets.GenJyuuGothic-Normal-2.ttf")
+            assembly.GetManifestResourceStream("SimpleGame.assets.Font.ttf")
         );
-
-        //Exp
-        Log.Debug("Loaded Font");
         font = Host.Resource?.GetResource("Font") as Font;
         font?.Size = (uint)Host.Size.Y;
+        Host.Resource.Create(
+            "Font",
+            "GenJyuuGothic",
+            assembly.GetManifestResourceStream("SimpleGame.assets.GenJyuuGothic-Normal-2.ttf")
+        );
+        font = Host.Resource?.GetResource("GenJyuuGothic") as Font;
+        font?.Size = (uint)Host.Size.Y;
+        Host.Resource.Create(
+            "Font",
+            "Noto",
+            assembly.GetManifestResourceStream("SimpleGame.assets.NotoSansSC.ttf")
+        );
+        font = Host.Resource?.GetResource("Noto") as Font;
+        font?.Size = (uint)Host.Size.Y;
+
+        Log.Debug("Loaded Font");
 
         Host.Resource?.Create(
             "Image",
@@ -113,7 +126,7 @@ public static class SimpleGame
             Anchor = new Vector2(0.5f),
             Parent = Background,
             color = new RgbaFloat(105f / 255f, 110f / 255f, 1f, 1f),
-            FontId = "Font",
+            FontId = Fonts,
             XAlignment = Alignment.Center,
             YAlignment = Alignment.Right,
             Text = "-Line- Framework\nExample",
@@ -162,10 +175,10 @@ public static class SimpleGame
             Anchor = new Vector2(0.5f),
             Parent = Host.Root,
             Index = 100,
-            FontId = "Font",
+            FontId = Fonts,
             CursorColor = new(1f, 1f, 1f, 0.5f),
             FontSize = 50,
-            Text = "Wowabcdefghijklmnopq\nwow",
+            Text = "使用字体列表为 Mono,Font\n测试字体回退功能",
             Offset = new(0),
         };
 
@@ -226,8 +239,8 @@ public static class SimpleGame
             Parent = Host.Root,
             XAlignment = Alignment.Right,
             YAlignment = Alignment.Right,
-            color = new RgbaFloat(0f, 0f, 0f, 1f),
-            FontId = "Font",
+            color = new RgbaFloat(0f, 0f, 1f, 1f),
+            FontId = Fonts,
             Index = 65536,
             FontSize = 40,
         };
