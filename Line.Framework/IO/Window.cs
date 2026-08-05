@@ -491,9 +491,9 @@ public class Window : IDisposable, IName
                 while (Exists)
                 {
                     //防止冻结
-                    if (UpdatePerSecond <= 0)
+                    if (UpdatePerSecond <= 0 && UpdatePerSecond != -1)
                     {
-                        UpdatePerSecond = 1;
+                        UpdatePerSecond = -1;
                     }
                     try
                     {
@@ -501,6 +501,8 @@ public class Window : IDisposable, IName
                         milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
                         double delay = milliseconds - UpdateMs;
                         double wait = 1000d / UpdatePerSecond;
+                        if (UpdatePerSecond == -1)
+                            wait = 0;
                         if (delay < wait)
                         {
                             if (wait - delay > 4)
@@ -509,7 +511,7 @@ public class Window : IDisposable, IName
                             }
                             else
                             {
-                                Thread.SpinWait((int)(wait - delay) / 4);
+                                Thread.SpinWait(2);
                             }
                             tick = sw.ElapsedTicks;
                             milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
@@ -586,9 +588,9 @@ public class Window : IDisposable, IName
             //正式渲染
             void render()
             {
-                if (FramePerSecond <= 0)
+                if (FramePerSecond <= 0 && FramePerSecond != -1)
                 {
-                    FramePerSecond = 1;
+                    FramePerSecond = -1;
                 }
                 try
                 {
@@ -596,6 +598,8 @@ public class Window : IDisposable, IName
                     milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
                     double delay = milliseconds - RenderMs;
                     double wait = 1000d / FramePerSecond;
+                    if (FramePerSecond == -1)
+                        wait = 0;
                     if (delay < wait)
                     {
                         if (wait - delay > 4)
@@ -604,7 +608,7 @@ public class Window : IDisposable, IName
                         }
                         else
                         {
-                            Thread.SpinWait((int)(wait - delay) / 4);
+                            Thread.SpinWait(2);
                         }
                         tick = sw.ElapsedTicks;
                         milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
