@@ -37,7 +37,7 @@ public class InputManager
         _window.EventPool.TryAdd(EventType.FingerDown, OnFingerDown);
         _window.EventPool.TryAdd(EventType.FingerUp, OnFingerUp);
         _window.EventPool.TryAdd(EventType.FingerMotion, OnFingerMove);
-        _window.OnUpdate += (a, b) =>
+        _window.OnUpdate += (_) =>
         {
             OnMouseMove();
         };
