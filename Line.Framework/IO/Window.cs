@@ -110,9 +110,9 @@ public class Window : IDisposable, IName
     public UIDrawCollector Collector { get; init; }
     public GraphicBackend RenderBackend { get; init; }
 
-    public event EventHandler<double> OnRender;
+    public event Action<double> OnRender;
 
-    public event EventHandler<double> OnUpdate;
+    public event Action<double> OnUpdate;
 
     public static GraphicBackend BackendSelector()
     {
@@ -520,7 +520,7 @@ public class Window : IDisposable, IName
                         if (delay >= wait)
                         {
                             SDL.PumpEvents();
-                            OnUpdate?.Invoke(this, delay);
+                            OnUpdate?.Invoke(delay);
                             UpdateMs = milliseconds;
                             while (true)
                             {
@@ -616,7 +616,7 @@ public class Window : IDisposable, IName
                     }
                     if (delay >= wait)
                     {
-                        OnRender?.Invoke(this, delay);
+                        OnRender?.Invoke(delay);
                         RenderMs = milliseconds;
                         RendererContext();
                         Dev.SwapBuffers();

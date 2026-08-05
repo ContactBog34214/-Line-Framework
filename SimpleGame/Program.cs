@@ -135,11 +135,11 @@ public static class SimpleGame
         };
         title.Size = new Coord2(title.GetTextSize(title.Text) / new Vector2(1, 1), new());
 
-        Host.OnUpdate += (a, b) =>
+        Host.OnUpdate += (b) =>
         {
             cs.Position = new Coord2(Host.Input.Mouse.Position, new());
         };
-        Host.OnRender += (a, b) =>
+        Host.OnRender += (b) =>
         {
             float r = sw.ElapsedMilliseconds / 1000f % SpinnerBoxSpeed * 360f / SpinnerBoxSpeed;
             spinnerBox.Rotation = r;
@@ -248,11 +248,11 @@ public static class SimpleGame
         float Renderfps = 0;
         float UpdateMs = 0;
         float Rf = 0;
-        Host.OnRender += (a, b) =>
+        Host.OnRender += (b) =>
         {
             Rf = 1000f / (float)b;
         };
-        Host.OnUpdate += (a, b) =>
+        Host.OnUpdate += (b) =>
         {
             UpdateMs += ((float)b - UpdateMs) / 200f;
             Renderfps += (Rf - Renderfps) / 200f;
