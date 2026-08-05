@@ -651,10 +651,8 @@ public class Window : IDisposable, IName
 
     public void Dispose()
     {
-        MainThread?.Interrupt();
-        RendererClass = null;
         SDL.DestroyWindow(WindowHandle);
-        UpdateThread?.Interrupt();
+        RendererClass = null;
         Resource?.Dispose();
         commandList?.Dispose();
         try

@@ -160,7 +160,7 @@ public static class SimpleGame
 
         FPSPrinter();
 
-        //PerTest(200000,Host.Root);
+        PerTest(2000,Host.Root);
 
         Host.ShowCursor = false;
         Host.ParallelRender = true;
@@ -269,7 +269,7 @@ public static class SimpleGame
             _ = new UIBox()
             {
                 Name = $"_PerTest",
-                Index = -100,
+                Index = 100,
                 Parent = root,
                 Visible = true,
             };
