@@ -80,6 +80,7 @@ public sealed class UIText : UIWidget
                 continue;
             }
 
+            if(font==null)continue;
             var cache = font.GetFontTexture(c);
 
             // 计算字形矩形的左上角（屏幕坐标）
@@ -89,7 +90,7 @@ public sealed class UIText : UIWidget
             Vector2 position = new Vector2(left, (float)top);
             Vector2 size = new Vector2(cache.Width, cache.Height) * (float)FontScale;
 
-            if (cache.Texture != null && cache.ResourceSet != null)
+            if (cache?.Texture != null && cache?.ResourceSet != null)
             {
                 DrawCharacter(position, size, cache, collector);
             }
@@ -162,7 +163,7 @@ public sealed class UIText : UIWidget
                 continue;
             FontScale = FontSize / (double)font.Size;
             var g = font.GetFontTexture(c);
-            if ((g?.Width ?? 0) * (g?.Height ?? 0) > 0)
+            if ((g?.Width ?? 0) * (g?.Height ?? 0) > 0||c==' ')
             {
                 _charCache.TryAdd(c, font);
                 return;
@@ -256,6 +257,7 @@ public sealed class UIText : UIWidget
             }
             else
             {
+                if(font==null)continue;
                 var cache = font.GetFontTexture(c);
                 advance = (float)(cache.Advance * FontScale * LetterSpacing);
             }
