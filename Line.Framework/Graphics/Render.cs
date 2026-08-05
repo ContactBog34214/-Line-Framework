@@ -297,9 +297,9 @@ void main()
         ws.AddRange(trees(window.Root));
 
         //各种同步然后请求渲染内容
-        for (int i = 0; i < ws.Count; i++)
+        for (int it = 0; it < ws.Count; it++)
         {
-            var item = ws[i];
+            var item = ws[it];
             if (item is UIWidget target && target.RendererContext != null)
             {
                 HashSet<UIWidget> visited = new();
@@ -325,36 +325,47 @@ void main()
                     visited.Remove(target);
                 }
                 syncer(target);
-                var source = target.s;
-                try
-                {
-                    target.RendererContext(
-                        new RendererContextArgs
-                        {
-                            X =
-                                target.Position.Value.offset.X
-                                + target.Position.Value.scale.X * source.Value.X
-                                + target.p.Value.X,
-                            Y =
-                                target.Position.Value.offset.Y
-                                + target.Position.Value.scale.Y * source.Value.Y
-                                + target.p.Value.Y,
-                            width =
-                                target.Size.Value.offset.X
-                                + target.Size.Value.scale.X * source.Value.X,
-                            height =
-                                target.Size.Value.offset.Y
-                                + target.Size.Value.scale.Y * source.Value.Y,
-                            Collector = collector,
-                        }
-                    );
-                }
-                catch (Exception ex)
-                {
-                    Log.Error($"{ex}");
-                }
             }
         }
+        Parallel.For(
+            0,
+            ws.Count,
+            i =>
+            {
+                var item = ws[i];
+                if (item is UIWidget target && target.RendererContext != null)
+                {
+                    var source = target.s;
+                    try
+                    {
+                        target.RendererContext(
+                            new RendererContextArgs
+                            {
+                                X =
+                                    target.Position.Value.offset.X
+                                    + target.Position.Value.scale.X * source.Value.X
+                                    + target.p.Value.X,
+                                Y =
+                                    target.Position.Value.offset.Y
+                                    + target.Position.Value.scale.Y * source.Value.Y
+                                    + target.p.Value.Y,
+                                width =
+                                    target.Size.Value.offset.X
+                                    + target.Size.Value.scale.X * source.Value.X,
+                                height =
+                                    target.Size.Value.offset.Y
+                                    + target.Size.Value.scale.Y * source.Value.Y,
+                                Collector = collector,
+                            }
+                        );
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error($"{ex}");
+                    }
+                }
+            }
+        );
 
         //开始正式渲染
         // 1. 确保 Pipeline 已创建
@@ -380,7 +391,6 @@ void main()
 
         void CTV(UIDrawCollector.DrawCommand i, int idx)
         {
-            i?.Source?.syncOK = false;
             try
             {
                 List<Vertex> tasks = [];
@@ -632,7 +642,7 @@ void main()
         }
         cl.SetFramebuffer(window.Dev.SwapchainFramebuffer);
 
-        cl.ClearColorTarget(0, Veldrid.RgbaFloat.Black);
+        cl.ClearColorTarget(0, new(0,0,0,0));
         cl.SetPipeline(_pipeline);
         cl.SetVertexBuffer(0, _vertexBuffer);
 

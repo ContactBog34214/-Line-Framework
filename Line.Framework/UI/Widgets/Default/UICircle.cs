@@ -1,29 +1,34 @@
 using System.Numerics;
 using Line.Framework.Graphics;
-using Veldrid;
+using Line.Framework.Types;
+using static Line.Framework.Graphics.WindowsRenderer;
 
 namespace Line.Framework.UI.DefaultWidget;
 
 public class UICircle : UIWidget
 {
     public RgbaFloat color { get; set; } = new(0, 0, 0, 1f);
-    public uint Precision
-    {
-        get;
-        set
-        {
-            if (value >= 3)
-                field = value;
-            else
-                throw new InvalidDataException($"Precision cannot be {value}");
-        }
-    } = 20;
+    public DynamicValue<uint> Precision { get; set; } = 20;
     public Vector2 Middle { get; set; } = new(0.5f);
+    private Vertex[] verticesCache = [];
+    private float lastP = 0;
+    private long Hash = 0;
 
     public override void RendererContext(RendererContextArgs args)
     {
         var cl = args.Collector;
-        var middle = new WindowsRenderer.Vertex(
+        if (Precision < 3)
+            return;
+        var HashCode = (long)color.GetHashCode() + Middle.GetHashCode() + Size.GetHashCode();
+        if (Hash == HashCode && lastP == Precision.Value)
+        {
+            cl.DrawVertex(verticesCache, this);
+            return;
+        }
+        Hash = HashCode;
+        lastP = Precision;
+        List<Vertex> v = [];
+        var middle = new Vertex(
             new((float)args.width * Middle.X, (float)args.height * Middle.Y),
             color,
             new(new(), new()),
@@ -49,7 +54,9 @@ public class UICircle : UIWidget
             v2p *= sz;
             var v2 = new WindowsRenderer.Vertex(v2p, color, new(new(), new()), null, null, 1f);
             cl.DrawVertex([middle, v1, v2], this);
+            v.AddRange([middle, v1, v2]);
         }
+        verticesCache = v.ToArray();
     }
 
     public override bool HitTest(Vector2 mousePixel)
