@@ -145,7 +145,7 @@ public static class SimpleGame
             spinnerBox.Rotation = r;
             Image.Rotation = r;
         };
-        Host.FramePerSecond = 5000;
+        Host.FramePerSecond = -1;
         Host.FocusGained += () =>
         {
             Host.VSync = false;
