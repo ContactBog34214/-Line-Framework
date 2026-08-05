@@ -48,8 +48,7 @@ public class UIDrawCollector
         AllCommands.AddRange(Rects);
         AllCommands.AddRange(Textures);
         AllCommands.AddRange(Verts);
-
-        AllCommands.Sort((a, b) => a.Z.CompareTo(b.Z));
+        AllCommands.OrderBy(a => a.Source.oz);
     }
 
     public void Clear()
@@ -102,13 +101,29 @@ public class UIDrawCollector
             }
         );
 
-    public void DrawVertex(WindowsRenderer.Vertex[] v, UIWidget source) =>
-        Verts.Add(
-            new()
-            {
-                Vert = v,
-                Z = source.oz,
-                Source = source,
-            }
-        );
+    private Object vertLock = new();
+
+    public void DrawVertex(WindowsRenderer.Vertex[] v, UIWidget source)
+    {
+        if (v.Length % 3 != 0)
+        {
+            var t = v.ToList();
+            bool two = v.Length % 3 == 2;
+            t.RemoveAt(t.Count - 1);
+            if (two)
+                t.RemoveAt(t.Count - 1);
+            v = t.ToArray();
+        }
+        lock (vertLock)
+        {
+            Verts.Add(
+                new()
+                {
+                    Vert = v,
+                    Z = source.oz,
+                    Source = source,
+                }
+            );
+        }
+    }
 }
