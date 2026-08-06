@@ -3,17 +3,19 @@ using Line.Framework.Graphics;
 using Line.Framework.Resource;
 using Line.Framework.Resource.Graphic;
 using Line.Framework.Types;
+using System.Collections.Concurrent;
+using Line.Framework.UI;
 using Veldrid;
 using RgbaFloat = Line.Framework.Types.RgbaFloat;
 
-namespace Line.Framework.UI.DefaultWidget;
+namespace Line.Framework.Default.UIWidgets;
 
 public sealed class UIText : UIWidget
 {
     public List<Texture> FontTexture { get; private set; } = [];
     public TrackableList<string> FontId { get; set; } = new();
     public DynamicValue<RgbaFloat> color { get; set; } = new RgbaFloat(1, 1, 1, 1);
-    private Dictionary<char, Font> _charCache = new();
+    private readonly ConcurrentDictionary<char, Font> _charCache = new();
     public DynamicValue<string> Text
     {
         get => _text;
@@ -22,7 +24,7 @@ public sealed class UIText : UIWidget
     string _text = "";
     public DynamicValue<float> FontSize { get; set; } = 48;
 
-    public override void RendererContext(RendererContextArgs args)
+    public override async Task RendererContext(RendererContextArgs args)
     {
         if ((FontId?.Count ?? 0) <= 0)
             return;
@@ -138,7 +140,7 @@ public sealed class UIText : UIWidget
         FontScale = 0;
         if (Index <= 0 && FontId.Count <= Index)
             return;
-        var tmp = rm.GetResource(FontId[Index]) as Font;
+        var tmp = rm.GetResource(FontId[Index]).GetAwaiter().GetResult() as Font;
         if (tmp == null)
             return;
         font = tmp;
@@ -158,12 +160,12 @@ public sealed class UIText : UIWidget
             return;
         foreach (var i in FontId)
         {
-            font = rm.GetResource(i) as Font;
+            font = rm.GetResource(i).GetAwaiter().GetResult() as Font;
             if (font == null)
                 continue;
             FontScale = FontSize / (double)font.Size;
             var g = font.GetFontTexture(c);
-            if ((g?.Width ?? 0) * (g?.Height ?? 0) > 0||c==' ')
+            if ((g?.Width ?? 0) * (g?.Height ?? 0) > 0 || c == ' ')
             {
                 _charCache.TryAdd(c, font);
                 return;
@@ -185,7 +187,7 @@ public sealed class UIText : UIWidget
     {
         // 构建顶点并提交给 collector
         // 参考之前的 renderAText 逻辑，但直接使用屏幕坐标，不再乘缩放
-        var tl = new WindowsRenderer.Vertex(
+        var tl = new Vertex(
             position + Offset,
             color.Value,
             new(new(), new(0, 0)),
@@ -193,7 +195,7 @@ public sealed class UIText : UIWidget
             cache.ResourceSet,
             1
         );
-        var tr = new WindowsRenderer.Vertex(
+        var tr = new Vertex(
             position + new Vector2(size.X, 0) + Offset,
             color,
             new(new(), new(1, 0)),
@@ -201,7 +203,7 @@ public sealed class UIText : UIWidget
             cache.ResourceSet,
             1
         );
-        var bl = new WindowsRenderer.Vertex(
+        var bl = new Vertex(
             position + new Vector2(0, size.Y) + Offset,
             color,
             new(new(), new(0, 1)),
@@ -209,7 +211,7 @@ public sealed class UIText : UIWidget
             cache.ResourceSet,
             1
         );
-        var br = new WindowsRenderer.Vertex(
+        var br = new Vertex(
             position + size + Offset,
             color,
             new(new(), new(1, 1)),

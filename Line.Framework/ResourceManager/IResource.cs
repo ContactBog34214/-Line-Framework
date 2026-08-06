@@ -4,6 +4,6 @@ public interface IResource : IDisposable
 {
     bool IsLoaded { get; }
     object GetHandle();
-    void Load();
-    void Release();
+    Task Load();
+    Task Release();
 }

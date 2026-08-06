@@ -7,27 +7,23 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Nullable>disable</Nullable>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <PackageId>Line.Framework</PackageId>
-    <Version>2026.111.0</Version>
+    <PackageId>Line.Framework.Default</PackageId>
+    <Version>2026.110.1</Version>
     <Authors>SmellyFish</Authors>
-    <Description>A Game Framework</Description>
+    <Description>Something based on -Line-Framework</Description>
     <PackageOutputPath>./nupkg</PackageOutputPath>
     <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
     <RestoreLockedMode>false</RestoreLockedMode>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="ManagedBass" Version="4.0.2" />
-    <PackageReference Include="ManagedBass.Fx" Version="4.0.2" />
-    <PackageReference Include="ppy.osu.Framework.NativeLibs" Version="2022.525.0" />
     <PackageReference Include="SDL3-CS" Version="3.4.10.5" />
-    <PackageReference Include="TagLibSharp" Version="2.3.0" />
     <PackageReference Include="Veldrid" Version="4.9.0" />
     <PackageReference Include="Veldrid.ImageSharp" Version="4.9.0" />
     <PackageReference Include="Veldrid.SPIRV" Version="1.0.15" />
-    <PackageReference Include="Veldrid.StartupUtilities" Version="4.9.0" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../Line.Framework/Line.Framework.csproj" />
   </ItemGroup>
 </Project>

@@ -2,11 +2,12 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using Line.Framework.IO;
 using Line.Framework.Resource;
+using Line.Framework.UI;
 using SDL3;
 using Veldrid;
 using RgbaFloat = Line.Framework.Types.RgbaFloat;
 
-namespace Line.Framework.UI.DefaultWidget;
+namespace Line.Framework.Default.UIWidgets;
 
 public class UIInput : UIWidget
 {
@@ -22,19 +23,16 @@ public class UIInput : UIWidget
             else if (Focus == this)
                 Focus = null;
             if (Focus != null)
-                SDL.StartTextInput((root as UIScreen)?.window.WindowHandle ?? nint.Zero);
+                (root as UIScreen)?.window.TextInput = true;
             else
-                SDL.StopTextInput((root as UIScreen)?.window.WindowHandle ?? nint.Zero);
+                (root as UIScreen)?.window.TextInput = false;
             if (Focused)
             {
-                (root as UIScreen)?.window.EventPool.TryAdd(SDL.EventType.TextInput, InputAction);
+                (root as UIScreen)?.window.Input.TextInput += InputAction;
                 SDL.RaiseWindow((root as UIScreen)?.window.WindowHandle ?? nint.Zero);
             }
             else
-                (root as UIScreen)?.window.EventPool.TryRemove(
-                    SDL.EventType.TextInput,
-                    out InputAction
-                );
+                (root as UIScreen)?.window.Input.TextInput -= InputAction;
         }
     }
 
@@ -164,14 +162,13 @@ public class UIInput : UIWidget
         }
     }
 
-    Action<SDL.Event> InputAction;
+    Action<string> InputAction;
 
-    void WhenInput(SDL.Event ev)
+    void WhenInput(string ev)
     {
         if (!Enabled)
             return;
-        string inputText = Marshal.PtrToStringUTF8(ev.Text.Text);
-        AddText(inputText);
+        AddText(ev);
     }
 
     void WhenScroll(IMouse mouse)
@@ -426,10 +423,10 @@ public class UIInput : UIWidget
         HintWidget?.Text = Hint;
     }
 
-    public override void RendererContext(RendererContextArgs args)
+    public override async Task RendererContext(RendererContextArgs args)
     {
         SyncChildrenAtt();
-        base.RendererContext(args);
+        await base.RendererContext(args);
         UIDrawCollector collector = new();
         bool usingHint = (Text?.Length ?? 0) == 0;
         RendererContextArgs Args = new()

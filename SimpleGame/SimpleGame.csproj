@@ -7,6 +7,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../Line.Framework.Default/Line.Framework.Default.csproj" />
     <ProjectReference Include="../Line.Framework/Line.Framework.csproj" />
   </ItemGroup>
   <ItemGroup>

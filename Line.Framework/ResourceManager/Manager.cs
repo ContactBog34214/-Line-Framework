@@ -25,16 +25,16 @@ public class ResourceManager : IDisposable
     public ResourceManager()
     {
         sw.Start();
-        _ = new Timer(OnReleaseTimer, null, 1500, 1500);
+        _ = new Timer(async (a) => await OnReleaseTimer(a), null, 1500, 1500);
     }
 
-    void OnReleaseTimer(object a)
+    async Task OnReleaseTimer(object a)
     {
         if (AutoReleaseResources)
-            ReleaseIdleResources();
+            await ReleaseIdleResources();
     }
 
-    public void AddResource(string id, IResource res)
+    public virtual void AddResource(string id, IResource res)
     {
         if (res == null)
         {
@@ -50,7 +50,7 @@ public class ResourceManager : IDisposable
         Rs.TryAdd(id, new((uint)sw.ElapsedMilliseconds, 0));
     }
 
-    public object GetResource(string id)
+    public virtual async Task<object> GetResource(string id)
     {
         if (id == null)
             return null;
@@ -72,14 +72,14 @@ public class ResourceManager : IDisposable
         return target.GetHandle();
     }
 
-    public List<string> GetAllResourceId()
+    public virtual List<string> GetAllResourceId()
     {
         List<string> a = [];
         a.AddRange(Resources.Keys);
         return a;
     }
 
-    public void ReleaseIdleResources()
+    public virtual async Task ReleaseIdleResources()
     {
         foreach (var i in Resources.Keys)
         {
@@ -118,7 +118,7 @@ public class ResourceManager : IDisposable
         Resources.Remove(id);
     }
 
-    public void AddType(string id, ResourceType t)
+    public virtual void AddType(string id, ResourceType t)
     {
         if (t == null)
         {
@@ -131,7 +131,7 @@ public class ResourceManager : IDisposable
         Types.TryAdd(id, t);
     }
 
-    public ResourceType GetResourceType(string id)
+    public virtual ResourceType GetResourceType(string id)
     {
         if (Types.TryGetValue(id, out var obj))
         {
@@ -140,14 +140,14 @@ public class ResourceManager : IDisposable
         return null;
     }
 
-    public List<string> GetAllTypeId()
+    public virtual List<string> GetAllTypeId()
     {
         List<string> a = [];
         a.AddRange(Types.Keys);
         return a;
     }
 
-    public void Create(string TypeId, string targetId, Stream stream)
+    public virtual async Task Create(string TypeId, string targetId, Stream stream)
     {
         if (!Types.TryGetValue(TypeId, out var t))
         {
@@ -159,7 +159,7 @@ public class ResourceManager : IDisposable
         }
         try
         {
-            t.Create(targetId, stream);
+            await t.Create(targetId, stream);
         }
         catch (Exception ex)
         {

@@ -1,7 +1,6 @@
 using System.Numerics;
 using Line.Framework.Graphics;
 using Veldrid;
-using static Line.Framework.Graphics.WindowsRenderer;
 using Rectangle = System.Drawing.RectangleF;
 
 namespace Line.Framework.UI;
@@ -23,13 +22,12 @@ public class UIDrawCollector
 
     public List<DrawCommand> AllCommands = new List<DrawCommand>();
 
-    public void Update()
-    {
-        AllCommands.Clear();
+        public void Update()
+        {
+            AllCommands.Clear();
 
-        AllCommands.AddRange(Verts);
-        AllCommands.OrderBy(a => a.Source.oz);
-    }
+            AllCommands.AddRange(Verts);
+        }
 
     public void Clear()
     {
@@ -119,7 +117,7 @@ public class UIDrawCollector
         DrawVertex([tr, bl, br], source);
     }
 
-    private Object vertLock = new();
+    private readonly Object vertLock = new();
 
     public void DrawVertex(Vertex[] v, UIWidget source)
     {

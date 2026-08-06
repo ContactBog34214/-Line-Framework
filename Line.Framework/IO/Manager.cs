@@ -1,11 +1,12 @@
 using System.Numerics;
+using System.Runtime.InteropServices;
 using static SDL3.SDL;
 
 namespace Line.Framework.IO;
 
 public class InputManager
 {
-    private readonly Window _window;
+    private readonly WindowType _window;
     public Sdl3Mouse Mouse { get; } = new();
     public Sdl3Keyboard Keyboard { get; } = new();
     public Sdl3TouchDevice Touch { get; } = new();
@@ -21,7 +22,7 @@ public class InputManager
 
     public string GetClipBoardText() => GetClipboardText();
 
-    public InputManager(Window window)
+    public InputManager(WindowType window)
     {
         _window = window;
         SubscribeEvents();
@@ -37,6 +38,7 @@ public class InputManager
         _window.EventPool.TryAdd(EventType.FingerDown, OnFingerDown);
         _window.EventPool.TryAdd(EventType.FingerUp, OnFingerUp);
         _window.EventPool.TryAdd(EventType.FingerMotion, OnFingerMove);
+        _window.EventPool.TryAdd(EventType.TextInput, OnTextInput);
         _window.OnUpdate += (_) =>
         {
             OnMouseMove();
@@ -49,6 +51,13 @@ public class InputManager
         Keyboard.Keys.Add(K);
         KeyDown?.Invoke(K);
     }
+
+    private void OnTextInput(Event evt)
+    {
+        TextInput?.Invoke(Marshal.PtrToStringUTF8(evt.Text.Text));
+    }
+
+    public event Action<string> TextInput;
 
     private void OnKeyUp(Event evt)
     {

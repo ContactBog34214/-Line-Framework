@@ -40,48 +40,7 @@ public abstract class UIWidget : UINode
         );
     }
 
-    public Vector2[] GetClipArea(Vector2 source)
-    {
-        var p = GetPositionOnScreen();
-        var s = GetSizeOnScreen();
-        Vector2 ac = Anchor;
-        Vector2[] vert =
-        [
-            new(-ac.X * s.X, -ac.Y * s.Y),
-            new(-ac.X * s.X, (1 - ac.Y) * s.Y),
-            new((1 - ac.X) * s.X, (1 - ac.Y) * s.Y),
-            new((1 - ac.X) * s.X, -ac.Y * s.Y),
-        ];
-
-        for (int i = 0; i < vert.Length; i++)
-        {
-            float cos = (float)Math.Cos(Rotation * Math.PI / 180f);
-            float sin = (float)Math.Sin(Rotation * Math.PI / 180f);
-
-            var target = vert[i];
-            //旋转
-            var pos = target;
-            target.X = pos.X * cos - pos.Y * sin;
-            target.Y = pos.Y * cos + pos.X * sin;
-
-            //缩放
-            target *= Scale;
-
-            //映射回前面
-            target += ac * s;
-
-            //到绝对
-            target += p;
-
-            //跑回NDC
-            target.X = 2 * target.X / source.X - 1;
-            target.Y = 1 - 2 * target.Y / source.Y;
-            vert[i] = target;
-        }
-        return vert;
-    }
-
-    public virtual void RendererContext(RendererContextArgs args) { }
+    public virtual async Task RendererContext(RendererContextArgs args) { }
 
     protected UIWidget()
     {

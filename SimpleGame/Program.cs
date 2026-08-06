@@ -8,8 +8,9 @@ using Line.Framework.IO;
 using Line.Framework.Resource.Graphic;
 using Line.Framework.Types;
 using Line.Framework.UI;
-using Line.Framework.UI.DefaultWidget;
+using Line.Framework.Default.UIWidgets;
 using SDL3;
+using Line.Framework.Default.Graphics;
 #pragma warning disable CS8618
 
 namespace SG;
@@ -23,7 +24,7 @@ public static class SimpleGame
     static Font font;
     static List<string> Fonts = ["GenJyuuGothic", "Noto"];
 
-    public static void Main()
+    public static async Task Main()
     {
         sw.Start();
         Log.SetMinLevel(LogLevel.Debug);
@@ -42,26 +43,26 @@ public static class SimpleGame
             UpdatePerSecond = 10000,
         };
 
-        Host.Resource.Create(
+        await Host.Resource.Create(
             "Font",
             "Font",
             assembly.GetManifestResourceStream("SimpleGame.assets.Font.ttf")
         );
-        font = Host.Resource?.GetResource("Font") as Font;
+        font = await Host.Resource?.GetResource("Font") as Font;
         font?.Size = (uint)Host.Size.Y;
-        Host.Resource.Create(
+        await Host.Resource.Create(
             "Font",
             "GenJyuuGothic",
             assembly.GetManifestResourceStream("SimpleGame.assets.GenJyuuGothic-Normal-2.ttf")
         );
-        font = Host.Resource?.GetResource("GenJyuuGothic") as Font;
+        font = await Host.Resource?.GetResource("GenJyuuGothic") as Font;
         font?.Size = (uint)Host.Size.Y;
-        Host.Resource.Create(
+        await Host.Resource.Create(
             "Font",
             "Noto",
             assembly.GetManifestResourceStream("SimpleGame.assets.NotoSansSC.ttf")
         );
-        font = Host.Resource?.GetResource("Noto") as Font;
+        font = await Host.Resource?.GetResource("Noto") as Font;
         font?.Size = (uint)Host.Size.Y;
 
         Log.Debug("Loaded Font");
@@ -105,6 +106,7 @@ public static class SimpleGame
             Parent = spinnerBox,
             TextureId = "Icon",
             TouchMode = TouchModes.None,
+            Index=16,
         };
 
         var cs = new UIImage(Host.Resource)

@@ -45,32 +45,40 @@ internal sealed class FontBackend : IDisposable
             _fontSizeInPixels = pixelSize;
             _fontScale = _font.ScaleInPixels(pixelSize);
 
-            var metricsA = _font.GetGlyphMetrics('A', _fontScale, _fontScale, 0, 0).GetAwaiter().GetResult();
+            var metricsA = _font
+                .GetGlyphMetrics('A', _fontScale, _fontScale, 0, 0)
+                .GetAwaiter()
+                .GetResult();
             // yOfs = distance from baseline to top of glyph (positive)
             _ascender = metricsA.Bounds.Y;
 
-            var metricsG = _font.GetGlyphMetrics('g', _fontScale, _fontScale, 0, 0).GetAwaiter().GetResult();
+            var metricsG = _font
+                .GetGlyphMetrics('g', _fontScale, _fontScale, 0, 0)
+                .GetAwaiter()
+                .GetResult();
             // Descender = baseline to bottom = yOfs - height
-            _descender = metricsG.Bounds.Height > 0 ? metricsG.Bounds.Y - metricsG.Bounds.Height : -pixelSize * 0.2f;
+            _descender =
+                metricsG.Bounds.Height > 0
+                    ? metricsG.Bounds.Y - metricsG.Bounds.Height
+                    : -pixelSize * 0.2f;
             _lineHeight = _ascender - _descender;
         }
     }
 
-    public Texture GetGlyphTexture(char c)
+    public async Task<Texture> GetGlyphTexture(char c)
     {
+        if (_disposed)
+            return CreateEmptyTexture();
+
+        var result = await _font.RenderGlyph(c, _fontScale, Color.White, Color.Transparent);
+        if (result == null || result.Width == 0 || result.Height == 0)
+            return CreateEmptyTexture();
+
+        uint width = (uint)result.Width;
+        uint height = (uint)result.Height;
+        byte[] pixelData = result.Pixels;
         lock (_lock)
         {
-            if (_disposed)
-                return CreateEmptyTexture();
-
-            var result = _font.RenderGlyph(c, _fontScale, Color.White, Color.Transparent).GetAwaiter().GetResult();
-            if (result == null || result.Width == 0 || result.Height == 0)
-                return CreateEmptyTexture();
-
-            uint width = (uint)result.Width;
-            uint height = (uint)result.Height;
-            byte[] pixelData = result.Pixels;
-
             Texture texture = _gd.ResourceFactory.CreateTexture(
                 TextureDescription.Texture2D(
                     width,
@@ -104,7 +112,10 @@ internal sealed class FontBackend : IDisposable
                 return;
             }
 
-            var result = _font.RenderGlyph(c, _fontScale, Color.White, Color.Transparent).GetAwaiter().GetResult();
+            var result = _font
+                .RenderGlyph(c, _fontScale, Color.White, Color.Transparent)
+                .GetAwaiter()
+                .GetResult();
             if (result == null || result.Width == 0 || result.Height == 0)
             {
                 width = height = 0;
@@ -115,7 +126,10 @@ internal sealed class FontBackend : IDisposable
             width = (uint)result.Width;
             height = (uint)result.Height;
 
-            var metrics = _font.GetGlyphMetrics(c, _fontScale, _fontScale, 0, 0).GetAwaiter().GetResult();
+            var metrics = _font
+                .GetGlyphMetrics(c, _fontScale, _fontScale, 0, 0)
+                .GetAwaiter()
+                .GetResult();
             _font.GetCodepointHMetrics(c, out int advanceWidth, out _);
             advance = (int)Math.Floor(advanceWidth * _fontScale);
             bearingX = metrics.Bounds.X;
@@ -190,7 +204,7 @@ public sealed class RFont : IResource
 
     public object GetHandle() => font;
 
-    public void Load()
+    public async Task Load()
     {
         if (IsLoaded)
             return;
@@ -200,7 +214,7 @@ public sealed class RFont : IResource
         }
     }
 
-    public void Release()
+    public async Task Release()
     {
         if (!IsLoaded)
             return;
@@ -212,7 +226,7 @@ public sealed class RFont : IResource
     {
         if (_disposed)
             return;
-        Release();
+        Release().GetAwaiter().GetResult();
         _disposed = true;
     }
 }
@@ -222,7 +236,7 @@ public sealed class TFont : ResourceType
     GraphicsDevice gd;
     ResourceLayout rl;
 
-    public override void Create(string id, Stream stream)
+    public override async Task Create(string id, Stream stream)
     {
         var t = new RFont(gd, rl, stream);
         Manager.AddResource(id, t);
@@ -317,7 +331,7 @@ public sealed class Font : IDisposable
             if (TextureCache.TryGetValue(c, out var cached))
                 return cached;
 
-            Texture r8Tex = backend.GetGlyphTexture(c);
+            Texture r8Tex = backend.GetGlyphTexture(c).GetAwaiter().GetResult();
             backend.GetCharMetrics(
                 c,
                 out uint w,
