@@ -1,14 +1,17 @@
 using System.Numerics;
 using Line.Framework.Graphics;
 using Veldrid;
+using static Line.Framework.Graphics.WindowsRenderer;
 using Rectangle = System.Drawing.RectangleF;
 
 namespace Line.Framework.UI;
 
 public class UIDrawCollector
 {
+
     public class DrawCommand
     {
+        public Vertex[] Vert;
         public float Z;
 
         public float Rotation;
@@ -16,94 +19,109 @@ public class UIDrawCollector
         public UIWidget Source;
     }
 
-    public class DrawRectCommand : DrawCommand
-    {
-        public Rectangle Rect;
-        public RgbaFloat Color;
-        public float Opacity;
-    }
-
-    public class DrawTextureCommand : DrawCommand
-    {
-        public Rectangle Rect;
-        public Texture Texture;
-        public RgbaFloat Tint;
-        public ResourceSet TextureResourceSet;
-    }
-
-    public class DrawVertCommand : DrawCommand
-    {
-        public WindowsRenderer.Vertex[] Vert;
-    }
-
-    public List<DrawRectCommand> Rects = [];
-    public List<DrawTextureCommand> Textures = [];
-    public List<DrawVertCommand> Verts = [];
+    public List<DrawCommand> Verts = [];
 
     public List<DrawCommand> AllCommands = new List<DrawCommand>();
 
     public void Update()
     {
         AllCommands.Clear();
-        AllCommands.AddRange(Rects);
-        AllCommands.AddRange(Textures);
+
         AllCommands.AddRange(Verts);
         AllCommands.OrderBy(a => a.Source.oz);
     }
 
     public void Clear()
     {
-        Rects.Clear();
-        Textures.Clear();
         Verts.Clear();
         AllCommands.Clear();
     }
 
-    public void DrawRect(
-        Rectangle rect,
-        float rotation,
-        Vector2 anchor,
-        RgbaFloat color,
-        UIWidget source
-    ) =>
-        Rects.Add(
-            new DrawRectCommand
-            {
-                Rect = rect,
-                Color = color,
-                Rotation = rotation,
-                Anchor = anchor,
-                Source = source,
-                Z = source.oz,
-            }
+    public void DrawRect(Rectangle rect, RgbaFloat color, UIWidget source)
+    {
+        var tl = new Vertex(
+            new Vector2(0, 0) + new Vector2(rect.X, rect.Y),
+            color,
+            new(new(), new(0, 0)),
+            null,
+            null,
+            1
         );
+        var tr = new Vertex(
+            new Vector2(rect.Width, 0) + new Vector2(rect.X, rect.Y),
+            color,
+            new(new(), new(1, 0)),
+            null,
+            null,
+            1
+        );
+        var bl = new Vertex(
+            new Vector2(0, rect.Height) + new Vector2(rect.X, rect.Y),
+            color,
+            new(new(), new(0, 1)),
+            null,
+            null,
+            1
+        );
+        var br = new Vertex(
+            new Vector2(rect.Width, rect.Height) + new Vector2(rect.X, rect.Y),
+            color,
+            new(new(), new(1, 1)),
+            null,
+            null,
+            1
+        );
+        DrawVertex([tl, tr, bl], source);
+        DrawVertex([tr, bl, br], source);
+    }
 
     public void DrawTexture(
         Rectangle rect,
-        float rotation,
-        Vector2 anchor,
         ResourceSet textureResourceSet,
         Texture texture,
-        RgbaFloat tint,
+        RgbaFloat color,
         UIWidget source
-    ) =>
-        Textures.Add(
-            new DrawTextureCommand
-            {
-                Rect = rect,
-                Texture = texture,
-                Tint = tint,
-                Rotation = rotation,
-                Anchor = anchor,
-                Source = source,
-                TextureResourceSet = textureResourceSet,
-                Z = source.oz,
-            }
+    )
+    {
+        var tl = new Vertex(
+            new Vector2(0, 0) + new Vector2(rect.X, rect.Y),
+            color,
+            new(new(), new(0, 0)),
+            texture,
+            textureResourceSet,
+            1
         );
+        var tr = new Vertex(
+            new Vector2(rect.Width, 0) + new Vector2(rect.X, rect.Y),
+            color,
+            new(new(), new(1, 0)),
+            texture,
+            textureResourceSet,
+            1
+        );
+        var bl = new Vertex(
+            new Vector2(0, rect.Height) + new Vector2(rect.X, rect.Y),
+            color,
+            new(new(), new(0, 1)),
+            texture,
+            textureResourceSet,
+            1
+        );
+        var br = new Vertex(
+            new Vector2(rect.Width, rect.Height) + new Vector2(rect.X, rect.Y),
+            color,
+            new(new(), new(1, 1)),
+            texture,
+            textureResourceSet,
+            1
+        );
+        DrawVertex([tl, tr, bl], source);
+        DrawVertex([tr, bl, br], source);
+    }
 
     private Object vertLock = new();
 
-    public void DrawVertex(WindowsRenderer.Vertex[] v, UIWidget source)
+    public void DrawVertex(Vertex[] v, UIWidget source)
     {
         if (v.Length % 3 != 0)
         {

@@ -507,7 +507,7 @@ public class UIInput : UIWidget
                 {
                     Height2 = TextWidget?.GetTextSize(" ").Y ?? 0;
                 }
-                if (EndHeight == EndHeight2)
+                if (Math.Abs(EndHeight - EndHeight2) < 0.5)
                 {
                     float[] h = [Height, Height2];
                     cl.DrawRect(
@@ -517,8 +517,6 @@ public class UIInput : UIWidget
                             Math.Abs(s2.X - s.X) + CursorWidth,
                             h.Max()
                         ),
-                        0,
-                        new(0),
                         color,
                         this
                     );
@@ -533,8 +531,6 @@ public class UIInput : UIWidget
                                 (float)args.width,
                                 EndHeight2 - Height2 - EndHeight
                             ),
-                            0,
-                            new(0),
                             color,
                             this
                         );
@@ -545,15 +541,11 @@ public class UIInput : UIWidget
                             (float)args.width - s.X + Offset.X,
                             Height
                         ),
-                        0,
-                        new(0),
                         color,
                         this
                     );
                     cl.DrawRect(
                         new(-Offset.X, EndHeight2 - Height2 - Offset.Y, s2.X + CursorWidth, Height),
-                        0,
-                        new(0),
                         color,
                         this
                     );
