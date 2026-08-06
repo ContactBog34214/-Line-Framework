@@ -1,9 +1,9 @@
 using System.Numerics;
 using Line.Framework.Graphics;
 using Line.Framework.Types;
-using static Line.Framework.Graphics.WindowsRenderer;
+using Line.Framework.UI;
 
-namespace Line.Framework.UI.DefaultWidget;
+namespace Line.Framework.Default.UIWidgets;
 
 public class UICircle : UIWidget
 {

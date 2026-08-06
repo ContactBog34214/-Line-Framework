@@ -8,7 +8,7 @@ using Line.Framework.IO;
 using Line.Framework.Resource.Graphic;
 using Line.Framework.Types;
 using Line.Framework.UI;
-using Line.Framework.UI.DefaultWidget;
+using Line.Framework.Default.UIWidgets;
 using SDL3;
 #pragma warning disable CS8618
 

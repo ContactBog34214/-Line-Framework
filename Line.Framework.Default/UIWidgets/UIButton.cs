@@ -1,9 +1,10 @@
 using System.Diagnostics;
 using Line.Framework.IO;
+using Line.Framework.UI;
 using Veldrid;
 using Rectangle = System.Drawing.RectangleF;
 
-namespace Line.Framework.UI.DefaultWidget;
+namespace Line.Framework.Default.UIWidgets;
 
 public class UIButton : UIWidget
 {

@@ -3,17 +3,18 @@ using Line.Framework.Graphics;
 using Line.Framework.Resource;
 using Line.Framework.Resource.Graphic;
 using Line.Framework.Types;
+using Line.Framework.UI;
 using Veldrid;
 using RgbaFloat = Line.Framework.Types.RgbaFloat;
 
-namespace Line.Framework.UI.DefaultWidget;
+namespace Line.Framework.Default.UIWidgets;
 
 public sealed class UIText : UIWidget
 {
     public List<Texture> FontTexture { get; private set; } = [];
     public TrackableList<string> FontId { get; set; } = new();
     public DynamicValue<RgbaFloat> color { get; set; } = new RgbaFloat(1, 1, 1, 1);
-    private Dictionary<char, Font> _charCache = new();
+    private readonly Dictionary<char, Font> _charCache = new();
     public DynamicValue<string> Text
     {
         get => _text;

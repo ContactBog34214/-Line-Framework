@@ -1,7 +1,8 @@
 using Line.Framework.Graphics;
+using Line.Framework.UI;
 using Veldrid;
 
-namespace Line.Framework.UI.DefaultWidget;
+namespace Line.Framework.Default.UIWidgets;
 
 public class UIBox : UIWidget
 {

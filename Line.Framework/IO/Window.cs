@@ -108,6 +108,17 @@ public class Window : IDisposable, IName
     } = 1;
     public CommandList commandList { get; init; }
     public UIDrawCollector Collector { get; init; }
+    public bool TextInput
+    {
+        get => SDL.TextInputActive(WindowHandle);
+        set
+        {
+            if (value)
+                SDL.StartTextInput(WindowHandle);
+            else
+                SDL.StopTextInput(WindowHandle);
+        }
+    }
     public GraphicBackend RenderBackend { get; init; }
 
     public event Action<double> OnRender;
