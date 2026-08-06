@@ -167,7 +167,7 @@ public class Window : IDisposable, IName
         }
         if (Y < 0)
         {
-            X = 0;
+            Y = 0;
         }
         if (Width <= 0)
         {
