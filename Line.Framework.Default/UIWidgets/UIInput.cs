@@ -423,10 +423,10 @@ public class UIInput : UIWidget
         HintWidget?.Text = Hint;
     }
 
-    public override void RendererContext(RendererContextArgs args)
+    public override async Task RendererContext(RendererContextArgs args)
     {
         SyncChildrenAtt();
-        base.RendererContext(args);
+        await base.RendererContext(args);
         UIDrawCollector collector = new();
         bool usingHint = (Text?.Length ?? 0) == 0;
         RendererContextArgs Args = new()

@@ -23,7 +23,7 @@ public sealed class UIText : UIWidget
     string _text = "";
     public DynamicValue<float> FontSize { get; set; } = 48;
 
-    public override void RendererContext(RendererContextArgs args)
+    public override async Task RendererContext(RendererContextArgs args)
     {
         if ((FontId?.Count ?? 0) <= 0)
             return;
@@ -139,7 +139,7 @@ public sealed class UIText : UIWidget
         FontScale = 0;
         if (Index <= 0 && FontId.Count <= Index)
             return;
-        var tmp = rm.GetResource(FontId[Index]) as Font;
+        var tmp = rm.GetResource(FontId[Index]).GetAwaiter().GetResult() as Font;
         if (tmp == null)
             return;
         font = tmp;
@@ -159,7 +159,7 @@ public sealed class UIText : UIWidget
             return;
         foreach (var i in FontId)
         {
-            font = rm.GetResource(i) as Font;
+            font = rm.GetResource(i).GetAwaiter().GetResult() as Font;
             if (font == null)
                 continue;
             FontScale = FontSize / (double)font.Size;

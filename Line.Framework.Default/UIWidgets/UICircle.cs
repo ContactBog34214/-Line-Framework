@@ -14,7 +14,7 @@ public class UICircle : UIWidget
     private float lastP = 0;
     private long Hash = 0;
 
-    public override void RendererContext(RendererContextArgs args)
+    public override async Task RendererContext(RendererContextArgs args)
     {
         var cl = args.Collector;
         if (Precision < 3)

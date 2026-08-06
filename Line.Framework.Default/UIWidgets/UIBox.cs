@@ -9,7 +9,7 @@ public class UIBox : UIWidget
     public RgbaFloat color { get; set; } = new(0, 0, 0, 1f);
     readonly Action<RendererContextArgs> RenderAction;
 
-    public override void RendererContext(RendererContextArgs args)
+    public override async Task RendererContext(RendererContextArgs args)
     {
         if (RenderAction == null)
             return;

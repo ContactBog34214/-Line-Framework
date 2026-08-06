@@ -26,7 +26,7 @@ public class UIButton : UIWidget
         base.Dispose();
     }
 
-    public override void RendererContext(RendererContextArgs args)
+    public override async Task RendererContext(RendererContextArgs args)
     {
         if (RenderAction == null)
             return;

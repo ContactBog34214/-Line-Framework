@@ -249,7 +249,7 @@ namespace Line.Framework.Resource.Audio
             }
         }
 
-        public override void Create(string id, Stream stream)
+        public override async Task Create(string id, Stream stream)
         {
             if (stream == null)
                 throw new ArgumentNullException(nameof(stream));
@@ -261,7 +261,7 @@ namespace Line.Framework.Resource.Audio
             }
         }
 
-        internal void RemoveResourceFromManager(string id)
+        internal async Task RemoveResourceFromManager(string id)
         {
             Manager.DisposeResource(id);
             lock (_lock)
@@ -275,7 +275,7 @@ namespace Line.Framework.Resource.Audio
             lock (_lock)
             {
                 foreach (var res in _resources.Values)
-                    res.Release();
+                    res.Release().GetAwaiter().GetResult();
             }
         }
 
@@ -284,7 +284,7 @@ namespace Line.Framework.Resource.Audio
             lock (_lock)
             {
                 foreach (var res in _resources.Values)
-                    res.Load();
+                    res.Load().GetAwaiter().GetResult();
                 foreach (var res in _resources.Values)
                     res.ApplyAllAttributes();
             }
@@ -511,7 +511,7 @@ namespace Line.Framework.Resource.Audio
             lock (_lock)
             {
                 if (!_loaded)
-                    Load();
+                    Load().GetAwaiter().GetResult();
                 if (_tempoStream != 0)
                 {
                     if (!Bass.ChannelPlay(_tempoStream))
@@ -542,7 +542,7 @@ namespace Line.Framework.Resource.Audio
             }
         }
 
-        public void Load()
+        public async Task Load()
         {
             lock (_lock)
             {
@@ -592,7 +592,7 @@ namespace Line.Framework.Resource.Audio
             }
         }
 
-        public void Release()
+        public async Task Release()
         {
             lock (_lock)
             {

@@ -23,7 +23,7 @@ public class RResourceSet : IResource
         return new ResourceSetArg(t,resourceSet);
     }
 
-    public void Load()
+    public async Task Load()
     {
         if (t == null)
             return;
@@ -34,7 +34,7 @@ public class RResourceSet : IResource
         );
     }
 
-    public void Release()
+    public async Task Release()
     {
         if (resourceSet == null)
             return;
@@ -44,7 +44,7 @@ public class RResourceSet : IResource
 
     public void Dispose()
     {
-        Release();
+        Release().GetAwaiter().GetResult();
         t.Dispose();
     }
 
@@ -68,7 +68,7 @@ public class TResourceSet : ResourceType
         Layout = layout;
     }
 
-    public override void Create(string id, Stream stream)
+    public override async Task Create(string id, Stream stream)
     {
         var tmp = new RResourceSet(stream, this);
         Manager.AddResource(id, tmp);
