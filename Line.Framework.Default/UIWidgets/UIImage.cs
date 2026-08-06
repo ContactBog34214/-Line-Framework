@@ -62,7 +62,7 @@ public class UIImage : UIWidget
 
         var ttl = new Vertex(new(0, 0), Color, new(new(), new(0, 0)), Texture, ResourceSet, 1);
         var ttr = new Vertex(
-            new((float)args.height, 0),
+            new((float)args.width, 0),
             Color,
             new(new(), new(1, 0)),
             Texture,
@@ -70,7 +70,7 @@ public class UIImage : UIWidget
             1
         );
         var tbl = new Vertex(
-            new(0, (float)args.width),
+            new(0, (float)args.height),
             Color,
             new(new(), new(0, 1)),
             Texture,
@@ -78,7 +78,7 @@ public class UIImage : UIWidget
             1
         );
         var tbr = new Vertex(
-            new((float)args.height, (float)args.width),
+            new((float)args.width, (float)args.height),
             Color,
             new(new(), new(1, 1)),
             Texture,

@@ -3,6 +3,7 @@ using Line.Framework.Graphics;
 using Line.Framework.Resource;
 using Line.Framework.Resource.Graphic;
 using Line.Framework.Types;
+using System.Collections.Concurrent;
 using Line.Framework.UI;
 using Veldrid;
 using RgbaFloat = Line.Framework.Types.RgbaFloat;
@@ -14,7 +15,7 @@ public sealed class UIText : UIWidget
     public List<Texture> FontTexture { get; private set; } = [];
     public TrackableList<string> FontId { get; set; } = new();
     public DynamicValue<RgbaFloat> color { get; set; } = new RgbaFloat(1, 1, 1, 1);
-    private readonly Dictionary<char, Font> _charCache = new();
+    private readonly ConcurrentDictionary<char, Font> _charCache = new();
     public DynamicValue<string> Text
     {
         get => _text;
@@ -164,7 +165,7 @@ public sealed class UIText : UIWidget
                 continue;
             FontScale = FontSize / (double)font.Size;
             var g = font.GetFontTexture(c);
-            if ((g?.Width ?? 0) * (g?.Height ?? 0) > 0||c==' ')
+            if ((g?.Width ?? 0) * (g?.Height ?? 0) > 0 || c == ' ')
             {
                 _charCache.TryAdd(c, font);
                 return;

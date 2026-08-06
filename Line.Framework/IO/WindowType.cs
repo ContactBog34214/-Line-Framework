@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Numerics;
 using Line.Framework.Graphics;
-using Line.Framework.IO;
 using Line.Framework.Resource;
 using Line.Framework.Resource.Audio;
 using Line.Framework.Resource.Graphic;
@@ -11,19 +10,17 @@ using Line.Framework.UI;
 using SDL3;
 using Veldrid;
 using Veldrid.OpenGL;
-using Veldrid.StartupUtilities;
 
 namespace Line.Framework.IO;
 
-public class Window : IDisposable, IName
+public abstract class WindowType : IDisposable, IName
 {
-    public string Name => Title;
-    public WindowsRenderer RendererClass { get; private set; }
-    public nint WindowHandle { get; init; }
-    public InputManager Input { get; init; }
-    public GraphicsDevice Dev { get; init; }
-    public Action RequestQuit { get; set; }
-    public bool EnableMouseRelative
+    public virtual string Name => Title;
+    public virtual nint WindowHandle { get; init; }
+    public virtual InputManager Input { get; init; }
+    public virtual GraphicsDevice Dev { get; init; }
+    public virtual Action RequestQuit { get; set; }
+    public virtual bool EnableMouseRelative
     {
         get => SDL.GetWindowRelativeMouseMode(WindowHandle);
         set
@@ -35,7 +32,7 @@ public class Window : IDisposable, IName
                 SDL.HideCursor();
         }
     }
-    public float MouseSpeedScale
+    public virtual float MouseSpeedScale
     {
         get;
         set
@@ -44,7 +41,7 @@ public class Window : IDisposable, IName
                 field = value;
         }
     } = 1;
-    public Vector2 Size
+    public virtual Vector2 Size
     {
         get
         {
@@ -70,8 +67,8 @@ public class Window : IDisposable, IName
             }
         }
     }
-    public UIScreen Root { get; init; }
-    public bool VSync
+    public virtual UIScreen Root { get; init; }
+    public virtual bool VSync
     {
         get;
         set
@@ -80,10 +77,10 @@ public class Window : IDisposable, IName
             field = value;
         }
     } = false;
-    public bool ParallelRender { get; set; } = true;
+    public virtual bool ParallelRender { get; set; } = true;
     private readonly Thread MainThread;
-    public float FramePerSecond { get; set; } = 240;
-    public bool FullScreen
+    public virtual float FramePerSecond { get; set; } = 240;
+    public virtual bool FullScreen
     {
         get;
         set
@@ -93,8 +90,8 @@ public class Window : IDisposable, IName
         }
     } = false;
 
-    public float UpdatePerSecond { get; set; } = 1000;
-    public float Scale
+    public virtual float UpdatePerSecond { get; set; } = 1000;
+    public virtual float Scale
     {
         get;
         set
@@ -106,9 +103,8 @@ public class Window : IDisposable, IName
             OnWindowResized();
         }
     } = 1;
-    public CommandList commandList { get; init; }
-    public UIDrawCollector Collector { get; init; }
-    public bool TextInput
+    public virtual UIDrawCollector Collector { get; init; }
+    public virtual bool TextInput
     {
         get => SDL.TextInputActive(WindowHandle);
         set
@@ -119,10 +115,11 @@ public class Window : IDisposable, IName
                 SDL.StopTextInput(WindowHandle);
         }
     }
-    public GraphicBackend RenderBackend { get; init; }
+    public virtual GraphicBackend RenderBackend { get; init; }
 
     public event Action<double> OnRender;
-
+    public abstract RendererType Renderer { get; }
+    public abstract ICompositor Compositor { get; }
     public event Action<double> OnUpdate;
 
     public static GraphicBackend BackendSelector()
@@ -161,7 +158,7 @@ public class Window : IDisposable, IName
         return (GraphicBackend)Choice;
     }
 
-    public Window(
+    protected WindowType(
         int X = 0,
         int Y = 0,
         int Width = 640,
@@ -192,8 +189,8 @@ public class Window : IDisposable, IName
         {
             Backend = BackendSelector();
         }
+
         Resource = new();
-        WindowCreateInfo CreateInfo = new WindowCreateInfo(X, Y, Width, Height, State, Title);
         //一个窗口
         if (Width < Height)
             SDL.SetHint(SDL.Hints.Orientations, "Portrait");
@@ -380,19 +377,10 @@ public class Window : IDisposable, IName
         Log.Debug($"GraphicsDevice:{Dev.BackendType} {Dev.ApiVersion}");
         Log.Debug($"GPU:{Dev.DeviceName}");
 
-        commandList = Dev.ResourceFactory.CreateCommandList();
         Collector = new();
-        RendererClass = new(Dev);
-        RendererContext = () =>
-        {
-            if (this != null && Collector != null)
-                RendererClass.UIRenderer(this, Collector);
-        };
         Root = new(this, 0, 0);
 
         //资源管理器
-        Resource.AddType("Image", new TResourceSet(Resource, Dev, RendererClass.TextureLayout));
-        Resource.AddType("Font", new TFont(Resource, Dev, RendererClass.TextureLayout));
         Audio = new TAudio(Resource);
         Resource.AddType("Audio", Audio);
         OnWindowResized();
@@ -441,10 +429,10 @@ public class Window : IDisposable, IName
         RequestQuit = Dispose;
     }
 
-    public TAudio Audio { get; private set; }
-    public uint WindowID { get; init; }
-    public bool IsFocus => SDL.GetKeyboardFocus() == WindowHandle;
-    public bool ShowCursor
+    public virtual TAudio Audio { get; private set; }
+    public virtual uint WindowID { get; init; }
+    public virtual bool IsFocus => SDL.GetKeyboardFocus() == WindowHandle;
+    public virtual bool ShowCursor
     {
         get => field && EnableMouseRelative;
         set
@@ -459,14 +447,15 @@ public class Window : IDisposable, IName
             }
         }
     } = true;
-    internal ConcurrentDictionary<SDL.EventType, Action<SDL.Event>> EventPool { get; } = new();
+    internal virtual ConcurrentDictionary<SDL.EventType, Action<SDL.Event>> EventPool { get; } =
+        new();
     public event Action FocusGained;
     public event Action FocusLost;
-    public bool Exists
+    public virtual bool Exists
     {
         get => SDL.GetWindowID(WindowHandle) != 0;
     }
-    public string Title
+    public virtual string Title
     {
         get => SDL.GetWindowTitle(WindowHandle) ?? "";
         set
@@ -597,7 +586,7 @@ public class Window : IDisposable, IName
             }
 
             //正式渲染
-            void render()
+            async Task render()
             {
                 if (FramePerSecond <= 0 && FramePerSecond != -1)
                 {
@@ -629,7 +618,7 @@ public class Window : IDisposable, IName
                     {
                         OnRender?.Invoke(delay);
                         RenderMs = milliseconds;
-                        RendererContext();
+                        RendererContext().GetAwaiter().GetResult();
                         Dev.SwapBuffers();
                     }
                 }
@@ -638,14 +627,14 @@ public class Window : IDisposable, IName
                     Log.Error($"{ex}");
                 }
             }
-            render();
+            render().GetAwaiter().GetResult();
         }
         Dispose();
     }
 
     Thread UpdateThread;
     private bool _resizePending = false;
-    public ResourceManager Resource { get; init; }
+    public virtual ResourceManager Resource { get; init; }
     private uint _newWidth,
         _newHeight;
 
@@ -658,14 +647,23 @@ public class Window : IDisposable, IName
         Root.UpdateScreenSize((int)_newWidth, (int)_newHeight);
     }
 
-    public Action RendererContext { get; init; }
+    public virtual async Task RendererContext()
+    {
+        if (this != null && Collector != null)
+        {
+            if (Compositor == null || Renderer == null)
+                return;
+            var cp = await Compositor?.Composite(Root);
+            if (cp != null)
+                Renderer?.Render(cp);
+        }
+    }
 
-    public void Dispose()
+    public virtual void Dispose()
     {
         SDL.DestroyWindow(WindowHandle);
-        RendererClass = null;
+        Renderer?.Dispose();
         Resource?.Dispose();
-        commandList?.Dispose();
         try
         {
             Dev?.Dispose();

@@ -6,7 +6,7 @@ namespace Line.Framework.IO;
 
 public class InputManager
 {
-    private readonly Window _window;
+    private readonly WindowType _window;
     public Sdl3Mouse Mouse { get; } = new();
     public Sdl3Keyboard Keyboard { get; } = new();
     public Sdl3TouchDevice Touch { get; } = new();
@@ -22,7 +22,7 @@ public class InputManager
 
     public string GetClipBoardText() => GetClipboardText();
 
-    public InputManager(Window window)
+    public InputManager(WindowType window)
     {
         _window = window;
         SubscribeEvents();

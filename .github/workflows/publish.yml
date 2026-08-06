@@ -24,54 +24,81 @@ jobs:
             dotnet-version: 10.0.x
     
         - name: Remove lock file if exists
-          run: rm -f ./Line.Framework/packages.lock.json
-
-        - name: Restore dependencies
-          run: dotnet restore ./Line.Framework/ -p:RestorePackagesWithLockFile=false -p:RestoreLockedMode=false
-
-        - name: Build
-          run: dotnet build ./Line.Framework/ -o ./Line.Framework/bin/Release/net10.0/
-      
-        - name: Pack
-          run: dotnet pack -c Release ./Line.Framework/ -o ./packages
-
-      # 1. 从 .csproj 读取版本号
-        - name: Get version from csproj
-          id: get_version
           run: |
-            VERSION=$(grep -oP '(?<=<Version>).*?(?=</Version>)' ./Line.Framework/Line.Framework.csproj)
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            rm -f ./Line.Framework/packages.lock.json || true
+            rm -f ./Line.Framework.Default/packages.lock.json || true
 
-        - name: Check if tag exists
-          id: check_tag
+        - name: Restore dependencies (all projects)
           run: |
-            if git rev-parse "v${{ steps.get_version.outputs.version }}" >/dev/null 2>&1; then
-                echo "Tag already exists, skipping creation."
+            dotnet restore ./Line.Framework/ -p:RestorePackagesWithLockFile=false -p:RestoreLockedMode=false
+            dotnet restore ./Line.Framework.Default/ -p:RestorePackagesWithLockFile=false -p:RestoreLockedMode=false
+
+        - name: Build projects
+          run: |
+            dotnet build ./Line.Framework/ -c Release -o ./Line.Framework/bin/Release/net10.0/
+            dotnet build ./Line.Framework.Default/ -c Release -o ./Line.Framework.Default/bin/Release/net10.0/
+
+        - name: Get core version from Line.Framework and apply to Default
+          id: get_versions
+          run: |
+            CORE_VER=$(grep -oP '(?<=<Version>).*?(?=</Version>)' ./Line.Framework/Line.Framework.csproj)
+            # 将 Default 的版本设置为 Core 版本（不直接修改 csproj，而是在打包时覆盖）
+            echo "core_version=$CORE_VER" >> $GITHUB_OUTPUT
+            echo "default_version=$CORE_VER" >> $GITHUB_OUTPUT
+
+        - name: Pack both projects (apply core version to Default)
+          run: |
+            dotnet pack -c Release ./Line.Framework/ -o ./packages
+            dotnet pack -c Release ./Line.Framework.Default/ -o ./packages /p:Version=${{ steps.get_versions.outputs.core_version }}
+
+        - name: Check if core tag exists
+          id: check_tag_core
+          run: |
+            if git rev-parse "v${{ steps.get_versions.outputs.core_version }}" >/dev/null 2>&1; then
                 echo "exists=true" >> $GITHUB_OUTPUT
-                exit 1
             else
                 echo "exists=false" >> $GITHUB_OUTPUT
             fi
 
-        - name: Create and push tag
-          if: steps.check_tag.outputs.exists == 'false'
+        - name: Check if default tag exists
+          id: check_tag_default
+          run: |
+            if git rev-parse "v${{ steps.get_versions.outputs.default_version }}" >/dev/null 2>&1; then
+                echo "exists=true" >> $GITHUB_OUTPUT
+            else
+                echo "exists=false" >> $GITHUB_OUTPUT
+            fi
+
+        - name: Create and push core tag
+          if: steps.check_tag_core.outputs.exists == 'false'
           run: |
             git config user.name github-actions
             git config user.email github-actions@github.com
-            git tag v${{ steps.get_version.outputs.version }}
-            git push origin v${{ steps.get_version.outputs.version }}
+            git tag v${{ steps.get_versions.outputs.core_version }}
+            git push origin v${{ steps.get_versions.outputs.core_version }}
+
+        - name: Create and push default tag
+          if: steps.check_tag_default.outputs.exists == 'false'
+          run: |
+            git config user.name github-actions
+            git config user.email github-actions@github.com
+            git tag v${{ steps.get_versions.outputs.default_version }}
+            git push origin v${{ steps.get_versions.outputs.default_version }}
 
         - name: Create GitHub Release
           uses: softprops/action-gh-release@v2
           with:
-            tag_name: v${{ steps.get_version.outputs.version }}
-            name: Release v${{ steps.get_version.outputs.version }}
+            tag_name: v${{ steps.get_versions.outputs.core_version }}
+            name: "Release (core) v${{ steps.get_versions.outputs.core_version }}"
             files: ./packages/*.nupkg
             generate_release_notes: true
 
-        - name: Push to NuGet.org via Trusted Publishing
+        - name: Push both packages to NuGet.org
           run: |
-            dotnet nuget push ./packages/*.nupkg \
-            --source https://api.nuget.org/v3/index.json \
-            --api-key ${{ secrets.NUGET_API_KEY }} \
-            --skip-duplicate
+            for pkg in ./packages/*.nupkg; do
+              echo "Pushing $pkg"
+              dotnet nuget push "$pkg" \
+                --source https://api.nuget.org/v3/index.json \
+                --api-key ${{ secrets.NUGET_API_KEY }} \
+                --skip-duplicate || true
+            done
