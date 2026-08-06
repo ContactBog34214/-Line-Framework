@@ -1,3 +1,5 @@
+using System.Drawing;
+using System.Numerics;
 using Veldrid;
 
 namespace Line.Framework.Resource.Graphic;
@@ -5,7 +7,7 @@ namespace Line.Framework.Resource.Graphic;
 internal sealed class FontBackend : IDisposable
 {
     private readonly GraphicsDevice _gd;
-    private LunarLabs.Fonts.Font _font;
+    private LunarLabsFonts.Font _font;
     private float _fontScale;
     private uint _fontSizeInPixels;
     private readonly object _lock = new object();
@@ -19,34 +21,6 @@ internal sealed class FontBackend : IDisposable
     public float Descender => _descender;
     public float LineHeight => _lineHeight;
 
-    /// <summary>
-    /// 将单通道灰度数据转换为RGBA格式
-    /// </summary>
-    /// <param name="grayscaleData">灰度数据（0-255）</param>
-    /// <param name="width">图像宽度</param>
-    /// <param name="height">图像高度</param>
-    /// <param name="color">要渲染的文字颜色</param>
-    /// <returns>RGBA格式的像素数据</returns>
-    private byte[] ConvertToRGBA(byte[] grayscaleData, int width, int height, RgbaFloat color)
-    {
-        byte[] rgbaData = new byte[width * height * 4];
-
-        for (int i = 0; i < grayscaleData.Length; i++)
-        {
-            byte alpha = grayscaleData[i]; // 灰度值直接作为透明度
-            byte r = (byte)(color.R * 255);
-            byte g = (byte)(color.G * 255);
-            byte b = (byte)(color.B * 255);
-
-            rgbaData[i * 4 + 0] = r; // R
-            rgbaData[i * 4 + 1] = g; // G
-            rgbaData[i * 4 + 2] = b; // B
-            rgbaData[i * 4 + 3] = alpha; // A
-        }
-
-        return rgbaData;
-    }
-
     public FontBackend(Stream fontStream, GraphicsDevice graphicsDevice, uint initialSize = 48)
     {
         _gd = graphicsDevice ?? throw new ArgumentNullException(nameof(graphicsDevice));
@@ -55,7 +29,7 @@ internal sealed class FontBackend : IDisposable
         fontStream.CopyTo(ms);
         byte[] fontData = ms.ToArray();
 
-        _font = new LunarLabs.Fonts.Font(fontData);
+        _font = new LunarLabsFonts.Font(fontData, null);
         SetFontSize(initialSize);
     }
 
@@ -71,29 +45,14 @@ internal sealed class FontBackend : IDisposable
             _fontSizeInPixels = pixelSize;
             _fontScale = _font.ScaleInPixels(pixelSize);
 
-            var refResult = _font.RenderGlyph('A', _fontScale);
-            if (refResult != null)
-            {
-                // yOfs = distance from baseline to top of glyph (positive)
-                _ascender = refResult.yOfs;
-                var gResult = _font.RenderGlyph('g', _fontScale);
-                if (gResult != null)
-                {
-                    // Descender = baseline to bottom = yOfs - height
-                    _descender = gResult.yOfs - gResult.Image.Height;
-                }
-                else
-                {
-                    _descender = -pixelSize * 0.2f;
-                }
-                _lineHeight = _ascender - _descender;
-            }
-            else
-            {
-                _ascender = pixelSize * 0.8f;
-                _descender = -pixelSize * 0.2f;
-                _lineHeight = pixelSize;
-            }
+            var metricsA = _font.GetGlyphMetrics('A', _fontScale, _fontScale, 0, 0).GetAwaiter().GetResult();
+            // yOfs = distance from baseline to top of glyph (positive)
+            _ascender = metricsA.Bounds.Y;
+
+            var metricsG = _font.GetGlyphMetrics('g', _fontScale, _fontScale, 0, 0).GetAwaiter().GetResult();
+            // Descender = baseline to bottom = yOfs - height
+            _descender = metricsG.Bounds.Height > 0 ? metricsG.Bounds.Y - metricsG.Bounds.Height : -pixelSize * 0.2f;
+            _lineHeight = _ascender - _descender;
         }
     }
 
@@ -104,18 +63,13 @@ internal sealed class FontBackend : IDisposable
             if (_disposed)
                 return CreateEmptyTexture();
 
-            var result = _font.RenderGlyph(c, _fontScale);
-            if (result == null || result.Image.Width == 0 || result.Image.Height == 0)
+            var result = _font.RenderGlyph(c, _fontScale, Color.White, Color.Transparent).GetAwaiter().GetResult();
+            if (result == null || result.Width == 0 || result.Height == 0)
                 return CreateEmptyTexture();
 
-            uint width = (uint)result.Image.Width;
-            uint height = (uint)result.Image.Height;
-            byte[] pixelData = ConvertToRGBA(
-                result.Image.Pixels,
-                (int)width,
-                (int)height,
-                new(1, 1, 1, 1)
-            );
+            uint width = (uint)result.Width;
+            uint height = (uint)result.Height;
+            byte[] pixelData = result.Pixels;
 
             Texture texture = _gd.ResourceFactory.CreateTexture(
                 TextureDescription.Texture2D(
@@ -150,19 +104,22 @@ internal sealed class FontBackend : IDisposable
                 return;
             }
 
-            var result = _font.RenderGlyph(c, _fontScale);
-            if (result == null || result.Image.Width == 0 || result.Image.Height == 0)
+            var result = _font.RenderGlyph(c, _fontScale, Color.White, Color.Transparent).GetAwaiter().GetResult();
+            if (result == null || result.Width == 0 || result.Height == 0)
             {
                 width = height = 0;
                 advance = bearingX = bearingY = 0;
                 return;
             }
 
-            width = (uint)result.Image.Width;
-            height = (uint)result.Image.Height;
-            advance = result.xAdvance;
-            bearingX = result.xOfs;
-            bearingY = result.yOfs;
+            width = (uint)result.Width;
+            height = (uint)result.Height;
+
+            var metrics = _font.GetGlyphMetrics(c, _fontScale, _fontScale, 0, 0).GetAwaiter().GetResult();
+            _font.GetCodepointHMetrics(c, out int advanceWidth, out _);
+            advance = (int)Math.Floor(advanceWidth * _fontScale);
+            bearingX = metrics.Bounds.X;
+            bearingY = metrics.Bounds.Y;
         }
     }
 
