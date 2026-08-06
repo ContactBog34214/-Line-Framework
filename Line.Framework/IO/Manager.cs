@@ -105,7 +105,7 @@ public class InputManager
         float dy = y - LastMousePosition.Y;
         LastMousePosition = new(x, y);
         Mouse.Position = LastMousePosition * _window.Scale;
-        if (dx != 0 && dy != 0)
+        if (dx != 0 || dy != 0)
         {
             MouseMove?.Invoke(Mouse);
             CursorMove?.Invoke(Mouse);
