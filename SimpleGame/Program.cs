@@ -160,7 +160,7 @@ public static class SimpleGame
 
         FPSPrinter();
 
-        PerTest(2000,Host.Root);
+        //PerTest(2000,Host.Root);
 
         Host.ShowCursor = false;
         Host.ParallelRender = true;

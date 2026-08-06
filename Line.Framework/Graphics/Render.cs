@@ -398,50 +398,8 @@ void main()
                 {
                     if (i.Source.GetSizeOnScreen() == new Vector2(0, 0))
                         break;
-                    if (i is UIDrawCollector.DrawRectCommand r)
                     {
-                        //矩形处理
-                        var a = GetRectVertices(r.Rect, r.Color, screenSize, r.Source);
-                        foreach (var b in a)
-                        {
-                            tasks.Add(
-                                new Vertex(
-                                    b.Position,
-                                    b.Color,
-                                    new(new(), b.UV),
-                                    null,
-                                    _textureResourceSet,
-                                    r.Source.o
-                                )
-                                {
-                                    Clips = i.Source.ClipList,
-                                }
-                            );
-                        }
-                    }
-                    else if (i is UIDrawCollector.DrawTextureCommand t)
-                    {
-                        //带材质矩形处理
-                        var a = GetRectVertices(t.Rect, t.Tint, screenSize, t.Source);
-                        foreach (var b in a)
-                        {
-                            tasks.Add(
-                                new Vertex(
-                                    b.Position,
-                                    b.Color,
-                                    new(new(), b.UV),
-                                    t.Texture,
-                                    t.TextureResourceSet,
-                                    t.Source.o
-                                )
-                                {
-                                    Clips = i.Source.ClipList,
-                                }
-                            );
-                        }
-                    }
-                    else if (i is UIDrawCollector.DrawVertCommand verts)
-                    {
+                        var verts = i;
                         //顶点组处理
                         List<Vertex> v = [];
                         foreach (var c in verts.Vert)
@@ -642,7 +600,7 @@ void main()
         }
         cl.SetFramebuffer(window.Dev.SwapchainFramebuffer);
 
-        cl.ClearColorTarget(0, new(0,0,0,0));
+        cl.ClearColorTarget(0, new(0, 0, 0, 0));
         cl.SetPipeline(_pipeline);
         cl.SetVertexBuffer(0, _vertexBuffer);
 

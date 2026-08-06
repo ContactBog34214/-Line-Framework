@@ -89,8 +89,6 @@ public class UIButton : UIWidget
                     Height = (float)args.height,
                     Width = (float)args.width,
                 },
-                0,
-                Anchor,
                 color,
                 this
             );
