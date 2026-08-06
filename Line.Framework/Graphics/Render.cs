@@ -6,6 +6,7 @@ using Line.Framework.Types;
 using Line.Framework.UI;
 using Veldrid;
 using Veldrid.SPIRV;
+using static Line.Framework.Graphics.WindowsRenderer;
 using BufferDescription = Veldrid.BufferDescription;
 using Rectangle = System.Drawing.RectangleF;
 using RgbaFloat = Veldrid.RgbaFloat;
@@ -88,40 +89,6 @@ void main()
         public const uint SizeInBytes = 32;
     }
 
-    public class Vertex
-    {
-        public Vector2 Position { get; set; }
-        public RgbaFloat Color { get; set; }
-        public Coord2 UV { get; set; }
-        public Texture Texture { get; set; }
-        public ResourceSet ResourceSet { get; set; }
-        public float Opacity { get; set; }
-        public List<Vector2[]> Clips { get; set; } = new();
-
-        public Vertex(Vector2 p, Types.RgbaFloat c, Coord2 u, Texture t, ResourceSet rs, float o)
-        {
-            Position = p;
-            Color = c;
-            UV = u;
-            Texture = t;
-            ResourceSet = rs;
-            Opacity = o;
-        }
-
-        public VertexTask Export()
-        {
-            return new()
-            {
-                Position = Position,
-                UV = UV.scale + UV.offset / new Vector2(Texture?.Width ?? 1, Texture?.Height ?? 1),
-                Color = Color,
-                Texture = Texture,
-                ResourceSet = ResourceSet,
-                Opacity = Opacity,
-            };
-        }
-    }
-
     public class VertexTask
     {
         public Vector2 Position { get; set; }
@@ -175,47 +142,6 @@ void main()
             tmp[i] = target;
         }
         return tmp;
-    }
-
-    VertexPositionColor[] GetRectVertices(
-        Rectangle rect,
-        RgbaFloat color,
-        Vector2 source,
-        UIWidget s
-    )
-    {
-        RgbaFloat f = new(color.R, color.G, color.B, color.A);
-        Rectangle tmp = rect;
-
-        //初步定位
-        Vector2 tl = new(0, 0);
-        Vector2 tr = new(tmp.Width, 0);
-        Vector2 bl = new(0, tmp.Height);
-        Vector2 br = new(tmp.Width, tmp.Height);
-        RgbaFloat finalColor = f;
-
-        Vector2 ps = new(tmp.X, tmp.Y);
-        tl += ps;
-        tr += ps;
-        bl += ps;
-        br += ps;
-
-        //uv
-        Vector2 uv_tl = new Vector2(0, 0);
-        Vector2 uv_tr = new Vector2(1, 0);
-        Vector2 uv_bl = new Vector2(0, 1);
-        Vector2 uv_br = new Vector2(1, 1);
-
-        VertexPositionColor[] vert =
-        [
-            new VertexPositionColor(tl, finalColor, uv_tl),
-            new VertexPositionColor(tr, finalColor, uv_tr),
-            new VertexPositionColor(bl, finalColor, uv_bl),
-            new VertexPositionColor(tr, finalColor, uv_tr),
-            new VertexPositionColor(br, finalColor, uv_br),
-            new VertexPositionColor(bl, finalColor, uv_bl),
-        ];
-        return GetVertices(vert, source, s);
     }
 
     static Dictionary<UINode, treeCache> TreeCache = [];
@@ -685,5 +611,24 @@ void main()
     void CreateShader(GraphicsDevice gd)
     {
         _shaders = gd.ResourceFactory.CreateFromSpirv(vertexShaderDesc, fragmentShaderDesc);
+    }
+}
+
+public static class VertexExtensions
+{
+    public static VertexTask Export(this Vertex vertex)
+    {
+        return new()
+        {
+            Position = vertex.Position,
+            UV =
+                vertex.UV.scale
+                + vertex.UV.offset
+                    / new Vector2(vertex.Texture?.Width ?? 1, vertex.Texture?.Height ?? 1),
+            Color = vertex.Color,
+            Texture = vertex.Texture,
+            ResourceSet = vertex.ResourceSet,
+            Opacity = vertex.Opacity,
+        };
     }
 }

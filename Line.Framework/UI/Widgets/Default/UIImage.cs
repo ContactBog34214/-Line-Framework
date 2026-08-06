@@ -33,7 +33,7 @@ public class UIImage : UIWidget
             var collector = args.Collector;
 
             //背景
-            var tl = new WindowsRenderer.Vertex(
+            var tl = new Vertex(
                 new(0, 0),
                 BackgroundColor,
                 new(new(), new(0, 0)),
@@ -41,7 +41,7 @@ public class UIImage : UIWidget
                 null,
                 1
             );
-            var tr = new WindowsRenderer.Vertex(
+            var tr = new Vertex(
                 new((float)args.width, 0),
                 BackgroundColor,
                 new(new(), new(1, 0)),
@@ -49,7 +49,7 @@ public class UIImage : UIWidget
                 null,
                 1
             );
-            var bl = new WindowsRenderer.Vertex(
+            var bl = new Vertex(
                 new(0, (float)args.height),
                 BackgroundColor,
                 new(new(), new(0, 1)),
@@ -57,7 +57,7 @@ public class UIImage : UIWidget
                 null,
                 1
             );
-            var br = new WindowsRenderer.Vertex(
+            var br = new Vertex(
                 new((float)args.width, (float)args.height),
                 BackgroundColor,
                 new(new(), new(1, 1)),
@@ -77,7 +77,7 @@ public class UIImage : UIWidget
             if (ResourceSet == null)
                 return;
 
-            var ttl = new WindowsRenderer.Vertex(
+            var ttl = new Vertex(
                 new(0, 0),
                 Color,
                 new(new(), new(0, 0)),
@@ -85,7 +85,7 @@ public class UIImage : UIWidget
                 ResourceSet,
                 1
             );
-            var ttr = new WindowsRenderer.Vertex(
+            var ttr = new Vertex(
                 new((float)args.height, 0),
                 Color,
                 new(new(), new(1, 0)),
@@ -93,7 +93,7 @@ public class UIImage : UIWidget
                 ResourceSet,
                 1
             );
-            var tbl = new WindowsRenderer.Vertex(
+            var tbl = new Vertex(
                 new(0, (float)args.width),
                 Color,
                 new(new(), new(0, 1)),
@@ -101,7 +101,7 @@ public class UIImage : UIWidget
                 ResourceSet,
                 1
             );
-            var tbr = new WindowsRenderer.Vertex(
+            var tbr = new Vertex(
                 new((float)args.height, (float)args.width),
                 Color,
                 new(new(), new(1, 1)),

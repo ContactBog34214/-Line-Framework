@@ -45,14 +45,14 @@ public class UICircle : UIWidget
             var v1p = new Vector2(cos + 1f, sin + 1f);
             v1p /= 2f;
             v1p *= sz;
-            var v1 = new WindowsRenderer.Vertex(v1p, color, new(new(), new()), null, null, 1f);
+            var v1 = new Vertex(v1p, color, new(new(), new()), null, null, 1f);
             rt = (float)(i + 1) / Precision * 360f;
             cos = (float)Math.Cos(rt * Math.PI / 180f);
             sin = (float)Math.Sin(rt * Math.PI / 180f);
             var v2p = new Vector2(cos + 1f, sin + 1f);
             v2p /= 2f;
             v2p *= sz;
-            var v2 = new WindowsRenderer.Vertex(v2p, color, new(new(), new()), null, null, 1f);
+            var v2 = new Vertex(v2p, color, new(new(), new()), null, null, 1f);
             cl.DrawVertex([middle, v1, v2], this);
             v.AddRange([middle, v1, v2]);
         }

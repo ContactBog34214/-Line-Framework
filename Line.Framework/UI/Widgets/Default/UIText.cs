@@ -185,7 +185,7 @@ public sealed class UIText : UIWidget
     {
         // 构建顶点并提交给 collector
         // 参考之前的 renderAText 逻辑，但直接使用屏幕坐标，不再乘缩放
-        var tl = new WindowsRenderer.Vertex(
+        var tl = new Vertex(
             position + Offset,
             color.Value,
             new(new(), new(0, 0)),
@@ -193,7 +193,7 @@ public sealed class UIText : UIWidget
             cache.ResourceSet,
             1
         );
-        var tr = new WindowsRenderer.Vertex(
+        var tr = new Vertex(
             position + new Vector2(size.X, 0) + Offset,
             color,
             new(new(), new(1, 0)),
@@ -201,7 +201,7 @@ public sealed class UIText : UIWidget
             cache.ResourceSet,
             1
         );
-        var bl = new WindowsRenderer.Vertex(
+        var bl = new Vertex(
             position + new Vector2(0, size.Y) + Offset,
             color,
             new(new(), new(0, 1)),
@@ -209,7 +209,7 @@ public sealed class UIText : UIWidget
             cache.ResourceSet,
             1
         );
-        var br = new WindowsRenderer.Vertex(
+        var br = new Vertex(
             position + size + Offset,
             color,
             new(new(), new(1, 1)),
