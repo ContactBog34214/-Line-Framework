@@ -34,7 +34,7 @@ public class Window : WindowType
             Renderer = new Renderer(this);
         if (Compositor == null)
             Compositor = new Compositor();
-        Resource.AddType("Image", new TResourceSet(Resource, Dev, Renderer.TextureLayout));
-        Resource.AddType("Font", new TFont(Resource, Dev, Renderer.TextureLayout));
+        Resource.AddType("Image", new TResourceSet(Dev, Renderer.TextureLayout));
+        Resource.AddType("Font", new TFont(Dev, Renderer.TextureLayout));
     }
 }

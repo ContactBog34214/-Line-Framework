@@ -4,10 +4,26 @@ namespace Line.Framework.Types;
 
 public struct RgbaFloat
 {
-    public float R { get; set; } = 0;
-    public float G { get; set; } = 0;
-    public float B { get; set; } = 0;
-    public float A { get; set; } = 0;
+    public float R
+    {
+        get;
+        set { field = Math.Clamp(value, 0f, 1f); }
+    } = 0;
+    public float G
+    {
+        get;
+        set { field = Math.Clamp(value, 0f, 1f); }
+    } = 0;
+    public float B
+    {
+        get;
+        set { field = Math.Clamp(value, 0f, 1f); }
+    } = 0;
+    public float A
+    {
+        get;
+        set { field = Math.Clamp(value, 0f, 1f); }
+    } = 0;
 
     public RgbaFloat(float r, float g, float b, float a)
     {
@@ -36,4 +52,12 @@ public struct RgbaFloat
 
     public static implicit operator RgbaFloat(Vector4 vec) =>
         new RgbaFloat(vec.X, vec.Y, vec.Z, vec.W);
+
+    public static RgbaFloat operator +(RgbaFloat a, RgbaFloat b) => (Vector4)a + (Vector4)b;
+
+    public static RgbaFloat operator -(RgbaFloat a, RgbaFloat b) => (Vector4)a - (Vector4)b;
+
+    public static RgbaFloat operator *(RgbaFloat a, RgbaFloat b) => (Vector4)a * (Vector4)b;
+
+    public static RgbaFloat operator /(RgbaFloat a, RgbaFloat b) => (Vector4)a / (Vector4)b;
 }
