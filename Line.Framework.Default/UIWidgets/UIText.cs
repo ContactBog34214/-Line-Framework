@@ -1,9 +1,9 @@
+using System.Collections.Concurrent;
 using System.Numerics;
 using Line.Framework.Graphics;
 using Line.Framework.Resource;
 using Line.Framework.Resource.Graphic;
 using Line.Framework.Types;
-using System.Collections.Concurrent;
 using Line.Framework.UI;
 using Veldrid;
 using RgbaFloat = Line.Framework.Types.RgbaFloat;
@@ -39,6 +39,8 @@ public sealed class UIText : UIWidget
         Font font = null;
         double FontScale = 0;
         UseFontIndex(0, out font, out FontScale);
+        if (font == null)
+            return;
 
         // ---------- 坐标系配置 ----------
         // 如果屏幕 Y 轴向下为正（左上角原点），设为 true；Y 轴向上为正（左下角原点），设为 false
@@ -82,7 +84,8 @@ public sealed class UIText : UIWidget
                 continue;
             }
 
-            if(font==null)continue;
+            if (font == null)
+                continue;
             var cache = font.GetFontTexture(c);
 
             // 计算字形矩形的左上角（屏幕坐标）
@@ -138,11 +141,14 @@ public sealed class UIText : UIWidget
     {
         font = null;
         FontScale = 0;
-        if (Index <= 0 && FontId.Count <= Index)
+        if (Index < 0 || FontId.Count <= Index)
             return;
         var tmp = rm.GetResource(FontId[Index]).GetAwaiter().GetResult() as Font;
         if (tmp == null)
+        {
+            UseFontIndex(Index + 1, out font, out FontScale);
             return;
+        }
         font = tmp;
         FontScale = FontSize / (double)font.Size;
     }
@@ -259,7 +265,8 @@ public sealed class UIText : UIWidget
             }
             else
             {
-                if(font==null)continue;
+                if (font == null)
+                    continue;
                 var cache = font.GetFontTexture(c);
                 advance = (float)(cache.Advance * FontScale * LetterSpacing);
             }

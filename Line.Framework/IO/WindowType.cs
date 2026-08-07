@@ -504,14 +504,7 @@ public abstract class WindowType : IDisposable, IName
                             wait = 0;
                         if (delay < wait)
                         {
-                            if (wait - delay > 4)
-                            {
-                                Thread.Sleep((int)(wait - delay) - 4);
-                            }
-                            else
-                            {
-                                Thread.SpinWait(2);
-                            }
+                            Task.Delay(TimeSpan.FromMicroseconds(wait-delay)).GetAwaiter().GetResult();
                             tick = sw.ElapsedTicks;
                             milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
                             delay = milliseconds - UpdateMs;
@@ -601,14 +594,8 @@ public abstract class WindowType : IDisposable, IName
                         wait = 0;
                     if (delay < wait)
                     {
-                        if (wait - delay > 4)
-                        {
-                            Thread.Sleep((int)(wait - delay) - 4);
-                        }
-                        else
-                        {
-                            Thread.SpinWait(2);
-                        }
+                        await Task.Delay(TimeSpan.FromMicroseconds(wait-delay));
+
                         tick = sw.ElapsedTicks;
                         milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
                         delay = milliseconds - RenderMs;

@@ -45,10 +45,10 @@ public static class SimpleGame
 
         await Host.Resource.Create(
             "Font",
-            "Font",
-            assembly.GetManifestResourceStream("SimpleGame.assets.Font.ttf")
+            "Mono",
+            assembly.GetManifestResourceStream("SimpleGame.assets.CascadiaMono.ttf")
         );
-        font = await Host.Resource?.GetResource("Font") as Font;
+        font = await Host.Resource?.GetResource("Mono") as Font;
         font?.Size = (uint)Host.Size.Y;
         await Host.Resource.Create(
             "Font",
@@ -157,11 +157,12 @@ public static class SimpleGame
             Host.VSync = true;
         };
 
-        Host.UpdatePerSecond = 1000;
+        Host.UpdatePerSecond = 20000;
 
         FPSPrinter();
+        Performance();
 
-        PerTest(20000, Host.Root);
+        //PerTest(20000, Host.Root);
 
         Host.ShowCursor = false;
         Host.EnableMouseRelative = true;
@@ -275,6 +276,38 @@ public static class SimpleGame
                 //Size = new Coord2(new(200), new()),
             };
         }
+    }
+
+    static void Performance()
+    {
+        List<string> mono=["Mono"];
+        PerformanceChart renderChart = new(Host.Resource)
+        {
+            Name = "renderChart",
+            Size = new Coord2(new(), new(0.35f, 1f)),
+            Position = new Coord2(new(), new(1, 1)),
+            Anchor = new Vector2(1),
+            Index = 2048,
+            Parent = Host.Root,
+            Num = 100,
+            BufferSize = 256,
+            MarkFontId = mono,
+            MarkPrefix = (d) => $"{d}ms",
+        };
+        Host.OnRender += renderChart.Update;
+        PerformanceChart updateChart = new(Host.Resource)
+        {
+            Name = "updateChart",
+            Size = new Coord2(new(), new(0.35f, 1f)),
+            Position = new Coord2(new(), new(0, 1)),
+            Anchor = new Vector2(0, 1),
+            Index = 256,
+            Parent = Host.Root,
+            Num = 100,
+            MarkFontId = mono,
+            MarkPrefix = (d) => $"{d}ms",
+        };
+        Host.OnUpdate += updateChart.Update;
     }
 
     static void VisualTouch()
