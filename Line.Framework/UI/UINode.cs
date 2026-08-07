@@ -73,12 +73,7 @@ public abstract class UINode : IDisposable, IName, IIndexable
     public float Index
     {
         get;
-        set
-        {
-            field = value;
-            var idx = Parent?._children.IndexOf(this) ?? -1;
-            Parent?._children?.Add(this);
-        }
+        set { field = value; }
     } = 0;
 
     public UINode FindRoot()
