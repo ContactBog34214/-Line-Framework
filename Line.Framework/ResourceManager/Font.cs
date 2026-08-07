@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Drawing;
 using System.Numerics;
 using Veldrid;
@@ -256,7 +257,7 @@ public sealed class Font : IDisposable
     private GraphicsDevice Dev;
     private ResourceLayout Layout;
     private readonly object _cacheLock = new object();
-    private Dictionary<char, FontTexture> TextureCache = new();
+    private ConcurrentDictionary<char, FontTexture> TextureCache = new();
 
     public uint Size
     {
@@ -285,6 +286,8 @@ public sealed class Font : IDisposable
         backend = new FontBackend(stream, dev, pool.size);
         p = pool;
         _size = pool.size;
+        BuildThread = new(BuildChar);
+        BuildThread.Start();
     }
 
     public void Dispose()
@@ -298,63 +301,127 @@ public sealed class Font : IDisposable
         }
     }
 
-    public FontTexture GetFontTexture(char c)
-    {
-        if (NullChar.Contains(c))
-        {
-            uint w = c == ' ' ? _size * (uint)SpaceWidth : 0;
-            return new FontTexture
-            {
-                Texture = null,
-                ResourceSet = null,
-                Width = w,
-                Height = _size,
-                Advance = 0,
-                BearingX = 0,
-                BearingY = 0,
-            };
-        }
+    private readonly ConcurrentQueue<char> CharQueue = [];
 
-        lock (_cacheLock)
+    public void CreateCharTexture(char c)
+    {
+        if (HasCache(c))
+            return;
+        if (CharQueue.Contains(c))
+            return;
+        CharQueue.Enqueue(c);
+    }
+
+    public async Task<FontTexture> GetFontTexture(char c)
+    {
+        try
         {
-            if (_size != p.size)
+            if (NullChar.Contains(c))
             {
-                foreach (var kv in TextureCache)
-                    kv.Value?.Dispose();
-                TextureCache.Clear();
-                backend.SetFontSize(p.size);
-                _size = p.size;
+                uint w = c == ' ' ? _size * (uint)SpaceWidth : 0;
+                return new FontTexture
+                {
+                    Texture = null,
+                    ResourceSet = null,
+                    Width = w,
+                    Height = _size,
+                    Advance = 0,
+                    BearingX = 0,
+                    BearingY = 0,
+                };
             }
 
-            if (TextureCache.TryGetValue(c, out var cached))
-                return cached;
-
-            Texture r8Tex = backend.GetGlyphTexture(c).GetAwaiter().GetResult();
-            backend.GetCharMetrics(
-                c,
-                out uint w,
-                out uint h,
-                out float adv,
-                out float bx,
-                out float by
-            );
-            var rs = Dev?.ResourceFactory.CreateResourceSet(
-                new ResourceSetDescription(Layout, r8Tex)
-            );
-            var cache = new FontTexture
             {
-                Texture = r8Tex,
-                ResourceSet = rs,
-                Width = w,
-                Height = h,
-                Advance = adv,
-                BearingX = bx,
-                BearingY = by,
-            };
-            TextureCache.Add(c, cache);
-            return cache;
+                if (_size != p.size)
+                {
+                    foreach (var kv in TextureCache)
+                        kv.Value?.Dispose();
+                    TextureCache.Clear();
+                    backend.SetFontSize(p.size);
+                    _size = p.size;
+                }
+
+                if (TextureCache.TryGetValue(c, out var cached))
+                    return cached;
+
+                CreateCharTexture(c);
+                while (!HasCache(c))
+                {
+                    await Task.Delay(1);
+                }
+                return await GetFontTexture(c);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"{ex}");
+        }
+        return null;
+    }
+
+    public bool HasCache(char c) => TextureCache.TryGetValue(c, out _);
+
+    private void BuildChar()
+    {
+        WeakReference weak = new(this);
+        while (weak.IsAlive)
+        {
+            if (CharQueue.Count == 0)
+            {
+                Thread.Sleep(2);
+                continue;
+            }
+            Task[] tasks = new Task[CharQueue.Count];
+            for (int num = 0; num < tasks.Length; num++)
+            {
+                var c = CharQueue.First();
+                tasks[num] = Task.Run(async () =>
+                {
+                    if (_size != p.size)
+                    {
+                        foreach (var kv in TextureCache)
+                            kv.Value?.Dispose();
+                        TextureCache.Clear();
+                        backend.SetFontSize(p.size);
+                        _size = p.size;
+                    }
+
+                    if (TextureCache.TryGetValue(c, out var cached))
+                        return cached;
+
+                    Texture r8Tex = await backend.GetGlyphTexture(c);
+                    backend.GetCharMetrics(
+                        c,
+                        out uint w,
+                        out uint h,
+                        out float adv,
+                        out float bx,
+                        out float by
+                    );
+                    var rs = Dev?.ResourceFactory.CreateResourceSet(
+                        new ResourceSetDescription(Layout, r8Tex)
+                    );
+                    var cache = new FontTexture
+                    {
+                        Texture = r8Tex,
+                        ResourceSet = rs,
+                        Width = w,
+                        Height = h,
+                        Advance = adv,
+                        BearingX = bx,
+                        BearingY = by,
+                    };
+                    TextureCache.TryAdd(c, cache);
+                    return cache;
+                });
+                CharQueue.TryDequeue(out _);
+            }
+            Task.WaitAll(tasks);
         }
     }
+
+    private Task BuildTask;
+    private Thread BuildThread;
 }
 
 public class FontTexture : IDisposable

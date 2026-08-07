@@ -133,7 +133,7 @@ public class PerformanceChart : UIWidget
                 RendererContextArgs VRender = new()
                 {
                     width = args.width - 2 * markSize,
-                    height = MarkFontSize,
+                    height = args.height,
                     Collector = VCollector,
                 };
                 Vector2 Sc =
