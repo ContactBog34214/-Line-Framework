@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 
 namespace Line.Framework.Resource;
@@ -16,10 +17,10 @@ public class ResourceManager : IDisposable
         Types.Clear();
     }
 
-    readonly Dictionary<string, IResource> Resources = [];
+    readonly ConcurrentDictionary<string, IResource> Resources = [];
     public bool AutoReleaseResources { get; set; } = true;
     readonly Dictionary<string, (ulong LastGetTime, ulong NumGet)> Rs = [];
-    readonly Dictionary<string, ResourceType> Types = [];
+    readonly ConcurrentDictionary<string, ResourceType> Types = [];
     readonly Stopwatch sw = new();
 
     public ResourceManager()
@@ -44,7 +45,7 @@ public class ResourceManager : IDisposable
         {
             obj.Release();
             obj.Dispose();
-            Resources.Remove(id);
+            Resources.TryRemove(id, out _);
         }
         Resources.TryAdd(id, res);
         Rs.TryAdd(id, new((uint)sw.ElapsedMilliseconds, 0));
@@ -60,7 +61,7 @@ public class ResourceManager : IDisposable
         }
         var target = obj;
         if (!target.IsLoaded)
-            target.Load();
+            await target.Load();
         try
         {
             var t = Rs[id];
@@ -90,7 +91,7 @@ public class ResourceManager : IDisposable
                 if (Time > 120000 || Time > rsi.NumGet * 300)
                 {
                     rsi.LastGetTime = (ulong)sw.ElapsedMilliseconds;
-                    Resources[i].Release();
+                    await Resources[i].Release();
                     if (Resources[i].IsLoaded)
                         rsi.LastGetTime += 1000 * 30;
                 }
@@ -115,7 +116,24 @@ public class ResourceManager : IDisposable
         }
         obj.Release();
         obj.Dispose();
-        Resources.Remove(id);
+        Resources.TryRemove(id, out _);
+    }
+
+    public void DisposeResource(IResource resource)
+    {
+        if (Resources.Values.ToList().IndexOf(resource) == -1)
+        {
+            return;
+        }
+        foreach (var i in Resources)
+        {
+            if (i.Value != resource)
+                continue;
+            i.Value.Release();
+            i.Value.Dispose();
+            Resources.TryRemove(i.Key, out _);
+            return;
+        }
     }
 
     public virtual void AddType(string id, ResourceType t)
@@ -126,7 +144,7 @@ public class ResourceManager : IDisposable
         }
         if (Types.TryGetValue(id, out _))
         {
-            Types.Remove(id);
+            Types.TryRemove(id, out _);
         }
         Types.TryAdd(id, t);
     }
@@ -147,24 +165,27 @@ public class ResourceManager : IDisposable
         return a;
     }
 
-    public virtual async Task Create(string TypeId, string targetId, Stream stream)
+    public virtual async Task<IResource> Create(string TypeId, string targetId, Stream stream)
     {
         if (!Types.TryGetValue(TypeId, out var t))
         {
-            return;
+            return null;
         }
         if (Resources.TryGetValue(targetId, out _))
         {
-            return;
+            return null;
         }
         try
         {
-            await t.Create(targetId, stream);
+            var res = await t.Create(stream);
+            AddResource(targetId, res);
+            return res;
         }
         catch (Exception ex)
         {
             Log.Error($"{ex}");
         }
+        return null;
     }
 
     public void DisposeType(string id)
@@ -173,6 +194,6 @@ public class ResourceManager : IDisposable
         {
             return;
         }
-        Types.Remove(id);
+        Types.TryRemove(id, out _);
     }
 }

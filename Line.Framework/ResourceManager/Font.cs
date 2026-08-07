@@ -236,14 +236,12 @@ public sealed class TFont : ResourceType
     GraphicsDevice gd;
     ResourceLayout rl;
 
-    public override async Task Create(string id, Stream stream)
+    public override async Task<IResource> Create(Stream stream)
     {
-        var t = new RFont(gd, rl, stream);
-        Manager.AddResource(id, t);
+        return new RFont(gd, rl, stream);
     }
 
-    public TFont(ResourceManager rm, GraphicsDevice dev, ResourceLayout l)
-        : base(rm)
+    public TFont(GraphicsDevice dev, ResourceLayout l)
     {
         gd = dev;
         rl = l;

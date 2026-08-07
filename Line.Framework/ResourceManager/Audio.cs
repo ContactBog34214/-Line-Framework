@@ -1,5 +1,6 @@
 #nullable disable
 
+using System.Collections.Concurrent;
 using ManagedBass;
 using ManagedBass.Fx;
 
@@ -179,9 +180,9 @@ namespace Line.Framework.Resource.Audio
         private int _deviceIndex = -1;
         private bool _disposed = false;
 
-        public TAudio(ResourceManager manager, int deviceIndex = -1)
-            : base(manager)
+        public TAudio(ResourceManager rm, int deviceIndex = -1)
         {
+            Manager = rm;
             BassManager.Init();
             BassManager.Register(this);
             _deviceIndex = deviceIndex;
@@ -249,17 +250,20 @@ namespace Line.Framework.Resource.Audio
             }
         }
 
-        public override async Task Create(string id, Stream stream)
+        public override async Task<IResource> Create(Stream stream)
         {
             if (stream == null)
                 throw new ArgumentNullException(nameof(stream));
             lock (_lock)
             {
                 var resource = new AudioResource(stream, this);
-                _resources.Add(id, resource);
-                Manager.AddResource(id, resource);
+                Guid uuid = Guid.NewGuid();
+                _resources.Add(uuid.ToString(), resource);
+                return resource;
             }
         }
+
+        private ResourceManager Manager;
 
         internal async Task RemoveResourceFromManager(string id)
         {

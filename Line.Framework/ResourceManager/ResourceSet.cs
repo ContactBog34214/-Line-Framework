@@ -20,7 +20,7 @@ public class RResourceSet : IResource
 
     public object GetHandle()
     {
-        return new ResourceSetArg(t,resourceSet);
+        return new ResourceSetArg(t, resourceSet);
     }
 
     public async Task Load()
@@ -61,17 +61,15 @@ public class TResourceSet : ResourceType
     internal GraphicsDevice Dev { get; init; }
     internal ResourceLayout Layout { get; init; }
 
-    public TResourceSet(ResourceManager manager, GraphicsDevice dev, ResourceLayout layout)
-        : base(manager)
+    public TResourceSet(GraphicsDevice dev, ResourceLayout layout)
     {
         Dev = dev;
         Layout = layout;
     }
 
-    public override async Task Create(string id, Stream stream)
+    public override async Task<IResource> Create(Stream stream)
     {
-        var tmp = new RResourceSet(stream, this);
-        Manager.AddResource(id, tmp);
+        return new RResourceSet(stream, this);
     }
 }
 
