@@ -66,6 +66,7 @@ public sealed class UIText : UIWidget
         }
         uint i = 0;
         ResetOffset(s[i]);
+        bool SkipLine = false;
         foreach (char c in _text)
         {
             SelectFont(c, out font, out FontScale);
@@ -74,8 +75,11 @@ public sealed class UIText : UIWidget
                 i++;
                 ResetOffset(s[i]);
                 baselinePos.Y += lineHeight;
+                SkipLine = false;
                 continue;
             }
+            else if (SkipLine)
+                continue;
 
             if (c == ' ')
             {
@@ -86,22 +90,46 @@ public sealed class UIText : UIWidget
 
             if (font == null)
                 continue;
-            var cache = font.GetFontTexture(c);
+            FontTexture cache = null;
+            if (font.HasCache(c))
+                cache = await font.GetFontTexture(c);
+            else
+            {
+                font.CreateCharTexture(c);
+                baselinePos.X += FontSize * LetterSpacing;
+                continue;
+            }
 
             // 计算字形矩形的左上角（屏幕坐标）
             float left = (float)(baselinePos.X + cache.BearingX * FontScale);
             double top;
             top = baselinePos.Y + cache.BearingY * FontScale;
-            Vector2 position = new Vector2(left, (float)top);
+            Vector2 position = new Vector2(left, (float)top) + Offset;
             Vector2 size = new Vector2(cache.Width, cache.Height) * (float)FontScale;
 
             if (cache?.Texture != null && cache?.ResourceSet != null)
             {
-                DrawCharacter(position, size, cache, collector);
+                bool r = true;
+                if (position.X > args.width)
+                {
+                    r = false;
+                    SkipLine = true;
+                }
+                if (position.Y > args.height)
+                {
+                    r = false;
+                    break;
+                }
+                if (position.X + size.X < 0)
+                    r = false;
+                if (position.Y + size.Y < 0)
+                    r = false;
+                if (r)
+                    DrawCharacter(position, size, cache, collector);
             }
 
             // 前进到下一个字符
-            baselinePos.X += (float)(cache.Advance * FontScale * LetterSpacing);
+            baselinePos.X += (float)((cache?.Advance ?? FontSize) * FontScale * LetterSpacing);
         }
     }
 
@@ -170,7 +198,12 @@ public sealed class UIText : UIWidget
             if (font == null)
                 continue;
             FontScale = FontSize / (double)font.Size;
-            var g = font.GetFontTexture(c);
+            FontTexture g = null;
+            if (font.HasCache(c))
+                g = font.GetFontTexture(c).GetAwaiter().GetResult();
+            else
+                font.CreateCharTexture(c);
+
             if ((g?.Width ?? 0) * (g?.Height ?? 0) > 0 || c == ' ')
             {
                 _charCache.TryAdd(c, font);
@@ -194,7 +227,7 @@ public sealed class UIText : UIWidget
         // 构建顶点并提交给 collector
         // 参考之前的 renderAText 逻辑，但直接使用屏幕坐标，不再乘缩放
         var tl = new Vertex(
-            position + Offset,
+            position,
             color.Value,
             new(new(), new(0, 0)),
             cache.Texture,
@@ -202,7 +235,7 @@ public sealed class UIText : UIWidget
             1
         );
         var tr = new Vertex(
-            position + new Vector2(size.X, 0) + Offset,
+            position + new Vector2(size.X, 0),
             color,
             new(new(), new(1, 0)),
             cache.Texture,
@@ -210,7 +243,7 @@ public sealed class UIText : UIWidget
             1
         );
         var bl = new Vertex(
-            position + new Vector2(0, size.Y) + Offset,
+            position + new Vector2(0, size.Y),
             color,
             new(new(), new(0, 1)),
             cache.Texture,
@@ -218,7 +251,7 @@ public sealed class UIText : UIWidget
             1
         );
         var br = new Vertex(
-            position + size + Offset,
+            position + size,
             color,
             new(new(), new(1, 1)),
             cache.Texture,
@@ -267,7 +300,8 @@ public sealed class UIText : UIWidget
             {
                 if (font == null)
                     continue;
-                var cache = font.GetFontTexture(c);
+                FontTexture cache = null;
+                cache = font.GetFontTexture(c).GetAwaiter().GetResult();
                 advance = (float)(cache.Advance * FontScale * LetterSpacing);
             }
             currentWidth += advance;
