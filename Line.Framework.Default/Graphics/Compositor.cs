@@ -17,8 +17,11 @@ namespace Line.Framework.Default.Graphics
 
             UILayoutTable.Clear();
 
-            float zIndex = 0;
+            int zIndex = 0;
             Vector2 ScreenSize = new();
+            Collector collector = new();
+            Task[] tasks = new Task[ws.Count];
+
             foreach (var i in ws)
             {
                 if (!(i is UIScreen _) && !(i.Parent is UIWidget _))
@@ -57,18 +60,9 @@ namespace Line.Framework.Default.Graphics
                     continue;
                 }
                 UILayoutTable.Add(i, new(Offset, Size, Opacity, zIndex, i.Rotation.Value, clip));
-                zIndex++;
-            }
-            if (UILayoutTable.TryGetValue(root, out var val))
-                ScreenSize = val.Size;
-
-            UIDrawCollector collector = new();
-            await Parallel.ForAsync(
-                0,
-                ws.Count,
-                async (i, _) =>
+                tasks[zIndex] = Task.Run(async () =>
                 {
-                    var item = ws[i];
+                    var item = i;
                     if (item is UIWidget target && UILayoutTable.TryGetValue(item, out var table))
                     {
                         var source = table.Size;
@@ -90,22 +84,21 @@ namespace Line.Framework.Default.Graphics
                             Log.Error($"{ex}");
                         }
                     }
-                }
-            );
-            collector.Update();
-            var commands = collector.AllCommands;
+                });
+                zIndex++;
+            }
+
+            await Task.WhenAll(tasks);
+            if (UILayoutTable.TryGetValue(root, out var val))
+                ScreenSize = val.Size;
+
+            var commands = collector.GetOrdered(ws);
             if (commands.Count == 0)
                 return [];
-
-            commands = commands
-                .Select(s => (Index: ws.IndexOf(s.Source), s))
-                .OrderBy(c => c.Index == -1 ? int.MaxValue : c.Index)
-                .Select(r => r.s)
-                .ToList();
             long TotalThreadCount = commands.Count;
             var values = new ConcurrentBag<(uint, Vertex[])>();
 
-            void CTV(UIDrawCollector.DrawCommand i, int idx)
+            void CTV(DrawCommand i, int idx)
             {
                 try
                 {
@@ -234,11 +227,7 @@ namespace Line.Framework.Default.Graphics
             await Parallel.ForAsync(
                 0,
                 TotalThreadCount,
-                async (idx, _) =>
-                {
-                    var i = commands[(int)idx];
-                    CTV(i, (int)idx);
-                }
+                async (idx, _) => CTV(commands[(int)idx], (int)idx)
             );
 
             List<Vertex> result = [];
@@ -633,5 +622,62 @@ namespace Line.Framework.Default.Graphics
         }
 
         private static Vertex ToClip(Vertex v) => v;
+    }
+
+    public class Collector : UIDrawCollector
+    {
+        private readonly ConcurrentDictionary<UIWidget, List<DrawCommand>> Vertex = [];
+        private bool VertsDirty = true;
+        public override List<DrawCommand> Verts
+        {
+            get
+            {
+                if (VertsDirty)
+                {
+                    VertsDirty = false;
+                    field.Clear();
+                    foreach (var i in Vertex.Values)
+                        field.AddRange(i);
+                }
+                return field;
+            }
+        } = [];
+
+        public override void DrawVertex(Vertex[] v, UIWidget source)
+        {
+            if (v.Length % 3 != 0)
+            {
+                var t = v.ToList();
+                bool two = v.Length % 3 == 2;
+                t.RemoveAt(t.Count - 1);
+                if (two)
+                    t.RemoveAt(t.Count - 1);
+                v = t.ToArray();
+            }
+            DrawCommand tmp = new()
+            {
+                Vert = v,
+                Z = 0,
+                Source = source,
+            };
+            if (Vertex.TryGetValue(source, out var val))
+            {
+                val.Add(tmp);
+            }
+            else
+                Vertex.TryAdd(source, [tmp]);
+            VertsDirty = true;
+        }
+
+        public List<DrawCommand> GetOrdered(List<UIWidget> ws)
+        {
+            List<DrawCommand> result = [];
+            foreach (var i in ws)
+            {
+                if (Vertex.TryGetValue(i, out var val))
+                    result.AddRange(val);
+            }
+            return result;
+        }
     }
 }

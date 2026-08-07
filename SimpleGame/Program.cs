@@ -3,14 +3,14 @@ using System.Numerics;
 using System.Reflection;
 using System.Text;
 using Line.Framework;
+using Line.Framework.Default.Graphics;
+using Line.Framework.Default.UIWidgets;
 using Line.Framework.Graphics;
 using Line.Framework.IO;
 using Line.Framework.Resource.Graphic;
 using Line.Framework.Types;
 using Line.Framework.UI;
-using Line.Framework.Default.UIWidgets;
 using SDL3;
-using Line.Framework.Default.Graphics;
 #pragma warning disable CS8618
 
 namespace SG;
@@ -106,7 +106,7 @@ public static class SimpleGame
             Parent = spinnerBox,
             TextureId = "Icon",
             TouchMode = TouchModes.None,
-            Index=16,
+            Index = 16,
         };
 
         var cs = new UIImage(Host.Resource)
@@ -158,14 +158,12 @@ public static class SimpleGame
         };
 
         Host.UpdatePerSecond = 1000;
-        Host.ParallelRender = false;
 
         FPSPrinter();
 
-        //PerTest(2000,Host.Root);
+        PerTest(20000, Host.Root);
 
         Host.ShowCursor = false;
-        Host.ParallelRender = true;
         Host.EnableMouseRelative = true;
         Host.MouseSpeedScale = 1;
 
@@ -274,6 +272,7 @@ public static class SimpleGame
                 Index = 100,
                 Parent = root,
                 Visible = true,
+                //Size = new Coord2(new(200), new()),
             };
         }
     }

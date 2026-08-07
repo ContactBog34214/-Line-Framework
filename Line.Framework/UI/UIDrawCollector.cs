@@ -7,35 +7,14 @@ namespace Line.Framework.UI;
 
 public class UIDrawCollector
 {
+    public virtual List<DrawCommand> Verts { get; } = [];
 
-    public class DrawCommand
-    {
-        public Vertex[] Vert;
-        public float Z;
-
-        public float Rotation;
-        public Vector2 Anchor;
-        public UIWidget Source;
-    }
-
-    public List<DrawCommand> Verts = [];
-
-    public List<DrawCommand> AllCommands = new List<DrawCommand>();
-
-        public void Update()
-        {
-            AllCommands.Clear();
-
-            AllCommands.AddRange(Verts);
-        }
-
-    public void Clear()
+    public virtual void Clear()
     {
         Verts.Clear();
-        AllCommands.Clear();
     }
 
-    public void DrawRect(Rectangle rect, RgbaFloat color, UIWidget source)
+    public virtual void DrawRect(Rectangle rect, RgbaFloat color, UIWidget source)
     {
         var tl = new Vertex(
             new Vector2(0, 0) + new Vector2(rect.X, rect.Y),
@@ -73,7 +52,7 @@ public class UIDrawCollector
         DrawVertex([tr, bl, br], source);
     }
 
-    public void DrawTexture(
+    public virtual void DrawTexture(
         Rectangle rect,
         ResourceSet textureResourceSet,
         Texture texture,
@@ -119,7 +98,7 @@ public class UIDrawCollector
 
     private readonly Object vertLock = new();
 
-    public void DrawVertex(Vertex[] v, UIWidget source)
+    public virtual void DrawVertex(Vertex[] v, UIWidget source)
     {
         if (v.Length % 3 != 0)
         {
@@ -136,10 +115,17 @@ public class UIDrawCollector
                 new()
                 {
                     Vert = v,
-                    Z = source.oz,
+                    Z = source.Index,
                     Source = source,
                 }
             );
         }
     }
+}
+
+public class DrawCommand
+{
+    public Vertex[] Vert { get; set; }
+    public float Z { get; set; }
+    public UIWidget Source { get; set; }
 }

@@ -77,7 +77,6 @@ public abstract class WindowType : IDisposable, IName
             field = value;
         }
     } = false;
-    public virtual bool ParallelRender { get; set; } = true;
     private readonly Thread MainThread;
     public virtual float FramePerSecond { get; set; } = 240;
     public virtual bool FullScreen
