@@ -17,6 +17,7 @@ jobs:
         - uses: actions/checkout@v4
           with:
             fetch-depth: 0
+            fetch-tags: true
     
         - name: Setup .NET
           uses: actions/setup-dotnet@v5
@@ -51,39 +52,21 @@ jobs:
             dotnet pack -c Release ./Line.Framework/ -o ./packages
             dotnet pack -c Release ./Line.Framework.Default/ -o ./packages /p:Version=${{ steps.get_versions.outputs.core_version }}
 
-        - name: Check if core tag exists
-          id: check_tag_core
-          run: |
-            if git rev-parse "v${{ steps.get_versions.outputs.core_version }}" >/dev/null 2>&1; then
-                echo "exists=true" >> $GITHUB_OUTPUT
-            else
-                echo "exists=false" >> $GITHUB_OUTPUT
-            fi
-
-        - name: Check if default tag exists
-          id: check_tag_default
-          run: |
-            if git rev-parse "v${{ steps.get_versions.outputs.default_version }}" >/dev/null 2>&1; then
-                echo "exists=true" >> $GITHUB_OUTPUT
-            else
-                echo "exists=false" >> $GITHUB_OUTPUT
-            fi
-
-        - name: Create and push core tag
-          if: steps.check_tag_core.outputs.exists == 'false'
+        - name: Create and push tags
           run: |
             git config user.name github-actions
             git config user.email github-actions@github.com
-            git tag v${{ steps.get_versions.outputs.core_version }}
-            git push origin v${{ steps.get_versions.outputs.core_version }}
 
-        - name: Create and push default tag
-          if: steps.check_tag_default.outputs.exists == 'false'
-          run: |
-            git config user.name github-actions
-            git config user.email github-actions@github.com
-            git tag v${{ steps.get_versions.outputs.default_version }}
-            git push origin v${{ steps.get_versions.outputs.default_version }}
+            for tag in "v${{ steps.get_versions.outputs.core_version }}" "v${{ steps.get_versions.outputs.default_version }}"; do
+              if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+                echo "Tag $tag already exists on origin, skipping"
+              elif git rev-parse "$tag" >/dev/null 2>&1; then
+                echo "Tag $tag already exists locally, skipping"
+              else
+                git tag "$tag"
+                git push origin "$tag"
+              fi
+            done
 
         - name: Create GitHub Release
           uses: softprops/action-gh-release@v2
