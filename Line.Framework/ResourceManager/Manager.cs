@@ -51,7 +51,7 @@ public class ResourceManager : IDisposable
         Rs.TryAdd(id, new((uint)sw.ElapsedMilliseconds, 0));
     }
 
-    public virtual async Task<object> GetResource(string id)
+    public virtual async Task<object> GetResource(string id, bool NeedLoaded = true)
     {
         if (id == null)
             return null;
@@ -60,7 +60,7 @@ public class ResourceManager : IDisposable
             return null;
         }
         var target = obj;
-        if (!target.IsLoaded)
+        if (!(target.IsLoaded && NeedLoaded))
             await target.Load();
         try
         {
@@ -70,7 +70,32 @@ public class ResourceManager : IDisposable
             Rs[id] = t;
         }
         catch { }
-        return target.GetHandle();
+        if (target.IsLoaded)
+            return target.GetHandle();
+        return null;
+    }
+
+    public virtual async Task LoadResource(string id)
+    {
+        if (id == null)
+            return;
+        if (!Resources.TryGetValue(id, out var obj))
+        {
+            return;
+        }
+        if (!obj.IsLoaded)
+            await obj.Load();
+    }
+
+    public virtual bool ResourceIsLoaded(string id)
+    {
+        if (id == null)
+            return false;
+        if (!Resources.TryGetValue(id, out var obj))
+        {
+            return false;
+        }
+        return obj.IsLoaded;
     }
 
     public virtual List<string> GetAllResourceId()
