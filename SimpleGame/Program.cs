@@ -48,22 +48,22 @@ public static class SimpleGame
             "Mono",
             assembly.GetManifestResourceStream("SimpleGame.assets.CascadiaMono.ttf")
         );
-        font = await Host.Resource?.GetResource("Mono") as Font;
-        font?.Size = (uint)Host.Size.Y/1;
+        font = await Host.Resource.GetResource<Font>("Mono");
+        font?.Size = (uint)Host.Size.Y / 1;
         await Host.Resource.Create(
             "Font",
             "GenJyuuGothic",
             assembly.GetManifestResourceStream("SimpleGame.assets.GenJyuuGothic-Normal-2.ttf")
         );
-        font = await Host.Resource?.GetResource("GenJyuuGothic") as Font;
-        font?.Size = (uint)Host.Size.Y/1;
+        font = await Host.Resource.GetResource<Font>("GenJyuuGothic");
+        font?.Size = (uint)Host.Size.Y / 1;
         await Host.Resource.Create(
             "Font",
             "Noto",
             assembly.GetManifestResourceStream("SimpleGame.assets.NotoSansSC.ttf")
         );
-        font = await Host.Resource?.GetResource("Noto") as Font;
-        font?.Size = (uint)Host.Size.Y/1;
+        font = await Host.Resource.GetResource<Font>("Noto");
+        font?.Size = (uint)Host.Size.Y / 1;
 
         Log.Debug("Loaded Font");
 
@@ -280,7 +280,7 @@ public static class SimpleGame
 
     static void Performance()
     {
-        List<string> mono=["Mono"];
+        List<string> mono = ["Mono"];
         PerformanceChart renderChart = new(Host.Resource)
         {
             Name = "renderChart",
