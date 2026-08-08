@@ -60,7 +60,7 @@ public class ResourceManager : IDisposable
             return null;
         }
         var target = obj;
-        if (!(target.IsLoaded && NeedLoaded))
+        if (!(target.IsLoaded) && NeedLoaded)
             await target.Load();
         try
         {
