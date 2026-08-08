@@ -98,6 +98,17 @@ public class ResourceManager : IDisposable
         return obj.IsLoaded;
     }
 
+    public virtual async Task ReleaseResource(string id)
+    {
+        if (id == null)
+            return;
+        if (!Resources.TryGetValue(id, out var obj))
+        {
+            return;
+        }
+        await obj.Release();
+    }
+
     public virtual List<string> GetAllResourceId()
     {
         List<string> a = [];
