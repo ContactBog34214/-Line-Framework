@@ -1,16 +1,18 @@
 using Line.Framework.Graphics;
 using Line.Framework.Resource;
 using Line.Framework.Resource.Graphic;
+using Line.Framework.Types;
 using Line.Framework.UI;
 using Veldrid;
+using RgbaFloat = Line.Framework.Types.RgbaFloat;
 
 namespace Line.Framework.Default.UIWidgets;
 
 public class UIImage : UIWidget
 {
-    public RgbaFloat BackgroundColor { get; set; } = new(0, 0, 0, 0);
-    public RgbaFloat Color { get; set; } = new(1, 1, 1, 1f);
-    public string TextureId { get; set; } = "";
+    public DynamicValue<RgbaFloat> BackgroundColor { get; set; } = new RgbaFloat(0, 0, 0, 0);
+    public DynamicValue<RgbaFloat> Color { get; set; } = new RgbaFloat(1, 1, 1, 1f);
+    public DynamicValue<string> TextureId { get; set; } = "";
     internal ResourceManager Manager;
 
     public override async Task RendererContext(RendererContextArgs args)
@@ -23,6 +25,7 @@ public class UIImage : UIWidget
         var collector = args.Collector;
 
         //背景
+        var BackgroundColor = this.BackgroundColor?.Value ?? new(0, 0, 0, 0);
         var tl = new Vertex(new(0, 0), BackgroundColor, new(new(), new(0, 0)), null, null, 1);
         var tr = new Vertex(
             new((float)args.width, 0),
@@ -52,7 +55,7 @@ public class UIImage : UIWidget
         collector.DrawVertex([tr, bl, br], this);
 
         //纹理
-        var Resource = await Manager.GetResource(TextureId) as ResourceSetArg;
+        var Resource = await Manager.GetResource(TextureId, true) as ResourceSetArg;
         if (Resource == null)
             return;
         var ResourceSet = Resource.ResourceSet;
@@ -60,6 +63,7 @@ public class UIImage : UIWidget
         if (ResourceSet == null)
             return;
 
+        var Color = this.Color?.Value ?? new(1, 1, 1, 1);
         var ttl = new Vertex(new(0, 0), Color, new(new(), new(0, 0)), Texture, ResourceSet, 1);
         var ttr = new Vertex(
             new((float)args.width, 0),

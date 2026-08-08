@@ -60,8 +60,8 @@ public class ResourceManager : IDisposable
             return null;
         }
         var target = obj;
-        if (!(target.IsLoaded) && NeedLoaded)
-            await target.Load();
+        if (NeedLoaded)
+            await LoadResource(id);
         try
         {
             var t = Rs[id];
@@ -70,7 +70,7 @@ public class ResourceManager : IDisposable
             Rs[id] = t;
         }
         catch { }
-        if (target.IsLoaded)
+        if (ResourceIsLoaded(id))
             return target.GetHandle();
         return null;
     }
