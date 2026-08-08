@@ -18,6 +18,7 @@ namespace SG;
 public static class SimpleGame
 {
     static Window Host;
+    static Localization Localization;
     static Stopwatch sw = new();
     static readonly float SpinnerBoxSpeed = 3.5f;
     static readonly float SpinnerBoxSize = 400;
@@ -32,6 +33,8 @@ public static class SimpleGame
         Log.SetLogFile(null);
         Log.Info("Welcome to -Line-Framework");
         var assembly = Assembly.GetExecutingAssembly();
+        Localization = new();
+        Localization.SetLanguage("en_us", "{\"SimpleGame.Title\":\"-Line-Framwork {0}\"}");
 
         var names = assembly.GetManifestResourceNames();
         foreach (var name in names)
@@ -131,7 +134,7 @@ public static class SimpleGame
             FontId = Fonts,
             XAlignment = Alignment.Center,
             YAlignment = Alignment.Right,
-            Text = "-Line- Framework\nExample",
+            Text = Localization.Get("SimpleGame.Title",["Example"]),
             Index = 1,
             FontSize = 100,
         };
