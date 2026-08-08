@@ -51,13 +51,13 @@ public class ResourceManager : IDisposable
         Rs.TryAdd(id, new((uint)sw.ElapsedMilliseconds, 0));
     }
 
-    public virtual async Task<object> GetResource(string id, bool NeedLoaded = true)
+    public virtual async Task<T> GetResource<T>(string id, bool NeedLoaded = true)
     {
         if (id == null)
-            return null;
+            return default;
         if (!Resources.TryGetValue(id, out var obj))
         {
-            return null;
+            return default;
         }
         var target = obj;
         if (!(target.IsLoaded) && NeedLoaded)
@@ -71,8 +71,8 @@ public class ResourceManager : IDisposable
         }
         catch { }
         if (target.IsLoaded)
-            return target.GetHandle();
-        return null;
+            return (T)target.GetHandle();
+        return default;
     }
 
     public virtual async Task LoadResource(string id)
