@@ -55,7 +55,7 @@ public class UIImage : UIWidget
         collector.DrawVertex([tr, bl, br], this);
 
         //纹理
-        var Resource = await Manager.GetResource(TextureId, true) as ResourceSetArg;
+        var Resource = await Manager.GetResource<ResourceSetArg>(TextureId);
         if (Resource == null)
             return;
         var ResourceSet = Resource.ResourceSet;

@@ -171,10 +171,14 @@ public sealed class UIText : UIWidget
         FontScale = 0;
         if (Index < 0 || FontId.Count <= Index)
             return;
-        var tmp = rm.GetResource(FontId[Index]).GetAwaiter().GetResult() as Font;
+        Font tmp = null;
+        if (rm.ResourceIsLoaded(FontId[Index]))
+            tmp = rm.GetResource<Font>(FontId[Index]).GetAwaiter().GetResult();
         if (tmp == null)
         {
             UseFontIndex(Index + 1, out font, out FontScale);
+            if (!rm.ResourceIsLoaded(FontId[Index]))
+                rm.LoadResource(FontId[Index]).GetAwaiter().GetResult();
             return;
         }
         font = tmp;
@@ -194,7 +198,7 @@ public sealed class UIText : UIWidget
             return;
         foreach (var i in FontId)
         {
-            font = rm.GetResource(i).GetAwaiter().GetResult() as Font;
+            font = rm.GetResource<Font>(i).GetAwaiter().GetResult();
             if (font == null)
                 continue;
             FontScale = FontSize / (double)font.Size;

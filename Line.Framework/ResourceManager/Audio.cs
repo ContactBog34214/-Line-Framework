@@ -734,8 +734,8 @@ namespace Line.Framework.Resource.Audio
     {
         public static IAudioController GetAudioController(this ResourceManager manager, string id)
         {
-            var obj = manager.GetResource(id);
-            return obj as IAudioController;
+            var obj = manager.GetResource<IAudioController>(id).GetAwaiter().GetResult();
+            return obj;
         }
     }
 }
