@@ -342,7 +342,11 @@ public sealed class Font : IDisposable
                 }
 
                 if (TextureCache.TryGetValue(c, out var cached))
-                    return cached;
+                {
+                    if (cached.FontSize == _size)
+                        return cached;
+                    TextureCache.TryRemove(c, out _);
+                }
 
                 CreateCharTexture(c);
                 while (!HasCache(c))
@@ -387,7 +391,11 @@ public sealed class Font : IDisposable
                     }
 
                     if (TextureCache.TryGetValue(c, out var cached))
-                        return cached;
+                    {
+                        if (cached.FontSize == _size)
+                            return cached;
+                        TextureCache.TryRemove(c, out _);
+                    }
 
                     Texture r8Tex = await backend.GetGlyphTexture(c);
                     backend.GetCharMetrics(
@@ -410,6 +418,7 @@ public sealed class Font : IDisposable
                         Advance = adv,
                         BearingX = bx,
                         BearingY = by,
+                        FontSize = _size,
                     };
                     TextureCache.TryAdd(c, cache);
                     return cache;
@@ -433,6 +442,7 @@ public class FontTexture : IDisposable
     public float Advance { get; set; }
     public float BearingX { get; set; }
     public float BearingY { get; set; }
+    public uint FontSize { get; init; }
 
     public void Dispose()
     {
