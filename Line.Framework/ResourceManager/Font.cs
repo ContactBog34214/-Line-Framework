@@ -351,7 +351,8 @@ public sealed class Font : IDisposable
                 CreateCharTexture(c);
                 while (!HasCache(c))
                 {
-                    await Task.Delay(1);
+                    await Task.Delay(2);
+                    CreateCharTexture(c);
                 }
                 return await GetFontTexture(c);
             }
@@ -370,6 +371,14 @@ public sealed class Font : IDisposable
         WeakReference weak = new(this);
         while (weak.IsAlive)
         {
+            if (_size != p.size)
+            {
+                foreach (var kv in TextureCache)
+                    kv.Value?.Dispose();
+                TextureCache.Clear();
+                backend.SetFontSize(p.size);
+                _size = p.size;
+            }
             if (CharQueue.Count == 0)
             {
                 Thread.Sleep(2);
@@ -381,23 +390,14 @@ public sealed class Font : IDisposable
                 var c = CharQueue.First();
                 tasks[num] = Task.Run(async () =>
                 {
-                    if (_size != p.size)
-                    {
-                        foreach (var kv in TextureCache)
-                            kv.Value?.Dispose();
-                        TextureCache.Clear();
-                        backend.SetFontSize(p.size);
-                        _size = p.size;
-                    }
-
                     if (TextureCache.TryGetValue(c, out var cached))
                     {
                         if (cached.FontSize == _size)
                             return cached;
                         TextureCache.TryRemove(c, out _);
                     }
-
                     Texture r8Tex = await backend.GetGlyphTexture(c);
+                    var s = _size;
                     backend.GetCharMetrics(
                         c,
                         out uint w,
@@ -418,7 +418,7 @@ public sealed class Font : IDisposable
                         Advance = adv,
                         BearingX = bx,
                         BearingY = by,
-                        FontSize = _size,
+                        FontSize = s,
                     };
                     TextureCache.TryAdd(c, cache);
                     return cache;
