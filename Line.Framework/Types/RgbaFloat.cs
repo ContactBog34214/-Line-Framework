@@ -4,21 +4,36 @@ namespace Line.Framework.Types;
 
 public struct RgbaFloat
 {
+    /// <summary>
+    /// Red
+    /// </summary>
     public float R
     {
         get;
         set { field = Math.Clamp(value, 0f, 1f); }
     } = 0;
+
+    /// <summary>
+    /// Green
+    /// </summary>
     public float G
     {
         get;
         set { field = Math.Clamp(value, 0f, 1f); }
     } = 0;
+
+    /// <summary>
+    /// Blue
+    /// </summary>
     public float B
     {
         get;
         set { field = Math.Clamp(value, 0f, 1f); }
     } = 0;
+
+    /// <summary>
+    /// Alpha
+    /// </summary>
     public float A
     {
         get;

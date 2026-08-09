@@ -7,13 +7,25 @@ namespace Line.Framework.UI;
 
 public class UIDrawCollector
 {
+    /// <summary>
+    /// 已提交顶点
+    /// </summary>
     public virtual List<DrawCommand> Verts { get; } = [];
 
+    /// <summary>
+    /// 清除顶点
+    /// </summary>
     public virtual void Clear()
     {
         Verts.Clear();
     }
 
+    /// <summary>
+    /// 绘制矩形
+    /// </summary>
+    /// <param name="矩形"></param>
+    /// <param name="颜色"></param>
+    /// <param name="源UI控件"></param>
     public virtual void DrawRect(Rectangle rect, RgbaFloat color, UIWidget source)
     {
         var tl = new Vertex(
@@ -52,6 +64,14 @@ public class UIDrawCollector
         DrawVertex([tr, bl, br], source);
     }
 
+    /// <summary>
+    /// 绘制带材质矩形
+    /// </summary>
+    /// <param name="矩形"></param>
+    /// <param name="材质资产设定"></param>
+    /// <param name="材质"></param>
+    /// <param name="颜色"></param>
+    /// <param name="源UI控件"></param>
     public virtual void DrawTexture(
         Rectangle rect,
         ResourceSet textureResourceSet,
@@ -98,6 +118,11 @@ public class UIDrawCollector
 
     private readonly Object vertLock = new();
 
+    /// <summary>
+    /// 绘制顶点
+    /// </summary>
+    /// <param name="顶点数组"></param>
+    /// <param name="源UI控件"></param>
     public virtual void DrawVertex(Vertex[] v, UIWidget source)
     {
         if (v.Length % 3 != 0)

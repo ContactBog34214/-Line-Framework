@@ -5,11 +5,30 @@ namespace Line.Framework.UI;
 
 public abstract class UIWidget : UINode
 {
+    /// <summary>
+    /// 位置
+    /// </summary>
     public DynamicValue<Coord2> Position { get; set; } = new(new Coord2());
+
+    /// <summary>
+    /// 大小
+    /// </summary>
     public DynamicValue<Coord2> Size { get; set; } = new(new Coord2());
+
+    /// <summary>
+    /// 锚点(控件中心点)
+    /// </summary>
     public DynamicValue<Vector2> Anchor { get; set; } = new(new Vector2(0, 0));
+
+    /// <summary>
+    /// 是否可见
+    /// </summary>
     public DynamicValue<bool> Visible { get; set; } = true;
 
+    /// <summary>
+    /// 获取在屏幕上的绝对位置
+    /// </summary>
+    /// <returns>绝对位置</returns>
     public Vector2 GetPositionOnScreen()
     {
         Vector2 si = new(0, 0);
@@ -32,6 +51,10 @@ public abstract class UIWidget : UINode
         );
     }
 
+    /// <summary>
+    /// 获取在屏幕上的绝对大小
+    /// </summary>
+    /// <returns>绝对大小</returns>
     public Vector2 GetSizeOnScreen()
     {
         return new(
@@ -79,11 +102,27 @@ public abstract class UIWidget : UINode
     internal bool syncOK = false;
     internal DynamicValue<float> o { get; set; }
     internal List<Vector2[]> ClipList = [];
+
+    /// <summary>
+    /// 旋转角度
+    /// </summary>
     public DynamicValue<float> Rotation { get; set; } = 0;
+
+    /// <summary>
+    /// 不透明度
+    /// </summary>
     public DynamicValue<float> Opacity { get; set; } = 1;
 
+    /// <summary>
+    /// 缩放
+    /// </summary>
     public DynamicValue<Vector2> Scale { get; set; } = new Vector2(1);
 
+    /// <summary>
+    /// 获取与鼠标的相对坐标
+    /// </summary>
+    /// <param name="鼠标绝对坐标"></param>
+    /// <returns>相对坐标</returns>
     public Vector2 MousePosition(Vector2 mousePixel)
     {
         var P = GetPositionOnScreen();
@@ -101,6 +140,11 @@ public abstract class UIWidget : UINode
         return tmp + Anchor * s;
     }
 
+    /// <summary>
+    /// 判断是否碰到
+    /// </summary>
+    /// <param name="绝对位置"></param>
+    /// <returns>是否碰对</returns>
     public virtual bool HitTest(Vector2 mousePixel)
     {
         var tmp = MousePosition(mousePixel);
@@ -108,6 +152,12 @@ public abstract class UIWidget : UINode
         return 0 <= tmp.X && 0 <= tmp.Y && tmp.X <= S.X && tmp.Y <= S.Y;
     }
 
+    /// <summary>
+    /// 寻找被触碰的UI控件
+    /// </summary>
+    /// <param name="根UI"></param>
+    /// <param name="绝对坐标"></param>
+    /// <returns>被碰到的UI控件</returns>
     public static UIWidget FindWidgetPointTouched(UIWidget w, Vector2 Point)
     {
         UIWidget[] Children = w.Children.OfType<UIWidget>().OrderBy(c => c.Index).ToArray();
@@ -133,6 +183,13 @@ public abstract class UIWidget : UINode
         return w;
     }
 
+    /// <summary>
+    /// 判断UI控件是否被无遮挡地碰到
+    /// </summary>
+    /// <param name="根UI"></param>
+    /// <param name="目标UI控件"></param>
+    /// <param name="绝对坐标"></param>
+    /// <returns>是否无遮挡碰到</returns>
     public static bool IsWidgetPointTouched(UIWidget w, UIWidget t, Vector2 Point)
     {
         UIWidget[] Children = w.Children.OfType<UIWidget>().OrderBy(c => c.Index).ToArray();
@@ -171,7 +228,18 @@ public class RendererContextArgs
 
 public enum TouchModes
 {
+    /// <summary>
+    /// 不可触碰
+    /// </summary>
     None,
+
+    /// <summary>
+    /// 仅子UI控件
+    /// </summary>
     Children,
+
+    /// <summary>
+    /// 子UI控件与本身
+    /// </summary>
     All,
 }

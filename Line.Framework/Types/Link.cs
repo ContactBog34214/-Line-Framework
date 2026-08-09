@@ -1,5 +1,9 @@
 namespace Line.Framework.Types;
 
+/// <summary>
+/// 动态值
+/// </summary>
+/// <typeparam name="T"></typeparam>
 public class DynamicValue<T>
 {
     Func<T> fc = () => default;
@@ -33,6 +37,11 @@ public class DynamicValue<T>
         ReadOnly = readOnly;
     }
 
+    /// <summary>
+    /// 设置动态值
+    /// </summary>
+    /// <param name="值"></param>
+    /// <exception cref="InvalidOperationException"></exception>
     public void SetValue(T value)
     {
         if (ReadOnly)
@@ -41,6 +50,11 @@ public class DynamicValue<T>
         usingLambda = false;
     }
 
+    /// <summary>
+    /// 设置动态值为Lambda表达式
+    /// </summary>
+    /// <param name="Lambda表达式"></param>
+    /// <exception cref="InvalidOperationException"></exception>
     public void SetValueAsLambda(Func<T> Lambda)
     {
         if (ReadOnly)
@@ -54,12 +68,21 @@ public class DynamicValue<T>
             fc = Lambda;
     }
 
+    /// <summary>
+    /// 克隆动态值
+    /// </summary>
+    /// <returns>克隆后的动态值</returns>
     public DynamicValue<T> Clone()
     {
         bool readOnly = ReadOnly;
         return Clone(readOnly);
     }
 
+    /// <summary>
+    /// 克隆动态值
+    /// </summary>
+    /// <param name="只读"></param>
+    /// <returns>克隆后的动态值</returns>
     public DynamicValue<T> Clone(bool readOnly)
     {
         if (usingLambda)
@@ -67,6 +90,9 @@ public class DynamicValue<T>
         return new(val, readOnly);
     }
 
+    /// <summary>
+    /// 启用只读
+    /// </summary>
     public bool ReadOnly { get; init; } = false;
 
     public static implicit operator T(DynamicValue<T> link) => link.Value;

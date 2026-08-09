@@ -2,6 +2,10 @@ using System.Collections;
 
 namespace Line.Framework.Types;
 
+/// <summary>
+/// 长数组
+/// </summary>
+/// <typeparam name="数据类型"></typeparam>
 public class LongArray<T> : IEnumerable<T>
 {
     private const int PageSize = 1 << 20; // 每页 1,048,576 个元素（1M）
@@ -17,6 +21,9 @@ public class LongArray<T> : IEnumerable<T>
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
+    /// <summary>
+    /// 数组长度
+    /// </summary>
     public long Length { get; }
 
     public LongArray(long length)

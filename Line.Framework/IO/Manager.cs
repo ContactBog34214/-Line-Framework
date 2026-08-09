@@ -4,22 +4,64 @@ using static SDL3.SDL;
 
 namespace Line.Framework.IO;
 
+/// <summary>
+/// 输入管理器
+/// </summary>
 public class InputManager
 {
     private readonly WindowType _window;
+
+    /// <summary>
+    /// 鼠标对象
+    /// </summary>
     public Sdl3Mouse Mouse { get; } = new();
+
+    /// <summary>
+    /// 键盘对象
+    /// </summary>
     public Sdl3Keyboard Keyboard { get; } = new();
+
+    /// <summary>
+    /// 触摸对象
+    /// </summary>
     public Sdl3TouchDevice Touch { get; } = new();
     Vector2 LastMousePosition { get; set; } = new();
 
     // 事件
+    /// <summary>
+    /// 当按键按下时
+    /// </summary>
     public event Action<KeyCode> KeyDown;
+
+    /// <summary>
+    /// 当按键松开时
+    /// </summary>
     public event Action<KeyCode> KeyUp;
+
+    /// <summary>
+    /// 当鼠标按下时
+    /// </summary>
     public event Action<IMouse> MouseDown;
+
+    /// <summary>
+    /// 当鼠标松开时
+    /// </summary>
     public event Action<IMouse> MouseUp;
+
+    /// <summary>
+    /// 当鼠标滚轮滚动时
+    /// </summary>
     public event Action<IMouse> MouseWheel; // 滚动增量（正值向下/右）
+
+    /// <summary>
+    /// 当鼠标移动时
+    /// </summary>
     public event Action<IMouse> MouseMove; // dx, dy 增量
 
+    /// <summary>
+    /// 获取剪切板文本
+    /// </summary>
+    /// <returns></returns>
     public string GetClipBoardText() => GetClipboardText();
 
     public InputManager(WindowType window)
@@ -57,6 +99,9 @@ public class InputManager
         TextInput?.Invoke(Marshal.PtrToStringUTF8(evt.Text.Text));
     }
 
+    /// <summary>
+    /// 当输入文本时
+    /// </summary>
     public event Action<string> TextInput;
 
     private void OnKeyUp(Event evt)
@@ -122,8 +167,18 @@ public class InputManager
     }
 
     // 状态查询
+    /// <summary>
+    /// 判断按键是否按下
+    /// </summary>
+    /// <param name="按键"></param>
+    /// <returns>按下状态</returns>
     public bool IsKeyDown(KeyCode key) => Keyboard.IsKeyDown(key);
 
+    /// <summary>
+    /// 判断鼠标按键是否按下
+    /// </summary>
+    /// <param name="鼠标按键"></param>
+    /// <returns>按下状态</returns>
     public bool IsMouseButtonDown(MouseButton button) => Mouse.IsMouseButtonDown(button);
 
     //触摸
@@ -138,6 +193,9 @@ public class InputManager
         CursorDown?.Invoke(finger);
     }
 
+    /// <summary>
+    /// 当手指按下时
+    /// </summary>
     public event Action<(ulong Id, Sdl3TouchPoint Finger)> FingerDown;
 
     private void OnFingerUp(Event evt)
@@ -154,6 +212,9 @@ public class InputManager
         }
     }
 
+    /// <summary>
+    /// 当手指抬起时
+    /// </summary>
     public event Action<(ulong Id, Sdl3TouchPoint Finger)> FingerUp;
 
     private void OnFingerMove(Event evt)
@@ -169,19 +230,45 @@ public class InputManager
         }
     }
 
+    /// <summary>
+    /// 当手指移动时
+    /// </summary>
     public event Action<(ulong Id, Sdl3TouchPoint Finger)> FingerMove;
 
+    /// <summary>
+    /// 当指针设备按下时
+    /// </summary>
     public event Action<ICursor> CursorDown;
+
+    /// <summary>
+    /// 当指针设备移动时
+    /// </summary>
     public event Action<ICursor> CursorMove;
+
+    /// <summary>
+    /// 当指针设备松开时
+    /// </summary>
     public event Action<ICursor> CursorUp;
 }
 
 public class Sdl3Mouse : IMouse
 {
+    /// <summary>
+    /// 光标绝对位置
+    /// </summary>
     public Vector2 Position { get; set; } = new();
+
+    /// <summary>
+    /// 滚轮增量
+    /// </summary>
     public Vector2 WheelDelta { get; set; } = new();
     internal List<MouseButton> down = [];
 
+    /// <summary>
+    /// 鼠标按键是否被按下
+    /// </summary>
+    /// <param name="鼠标键"></param>
+    /// <returns>按下状态</returns>
     public bool IsMouseButtonDown(MouseButton Button)
     {
         return down.Contains(Button);
@@ -190,8 +277,16 @@ public class Sdl3Mouse : IMouse
 
 public class Sdl3Keyboard : IKey
 {
+    /// <summary>
+    /// 被按下的按键
+    /// </summary>
     public List<KeyCode> Keys { get; set; } = [];
 
+    /// <summary>
+    /// 按键是否被按下
+    /// </summary>
+    /// <param name="按键"></param>
+    /// <returns>按下状态</returns>
     public bool IsKeyDown(KeyCode key)
     {
         return Keys.Contains(key);
@@ -200,8 +295,16 @@ public class Sdl3Keyboard : IKey
 
 public class Sdl3TouchDevice : ITouchDevice
 {
+    /// <summary>
+    /// 所有触摸点
+    /// </summary>
     public Dictionary<ulong, ICursor> Touches { get; set; } = new();
 
+    /// <summary>
+    /// 获取触摸点
+    /// </summary>
+    /// <param name="触摸点ID"></param>
+    /// <returns>触摸点对象</returns>
     public ICursor GetTouch(ulong Id)
     {
         if (Touches.TryGetValue(Id, out var result))
@@ -212,5 +315,8 @@ public class Sdl3TouchDevice : ITouchDevice
 
 public class Sdl3TouchPoint : ICursor
 {
+    /// <summary>
+    /// 触摸点绝对位置
+    /// </summary>
     public Vector2 Position { get; set; } = new();
 }
