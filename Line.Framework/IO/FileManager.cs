@@ -6,17 +6,43 @@ using System.Text;
 
 namespace Line.Framework.IO;
 
+/// <summary>
+/// 虚拟文件管理器
+/// </summary>
 public class FileManager
 {
     private readonly Stopwatch Base = new();
+
+    /// <summary>
+    /// 根目录
+    /// </summary>
     public string WorkDir { get; private set; }
+
+    /// <summary>
+    /// 映射缓存
+    /// </summary>
     private ConcurrentDictionary<string, string> MapCache { get; } = new();
+
+    /// <summary>
+    /// 哈希数据缓存
+    /// </summary>
     private ConcurrentDictionary<string, HashCacheType> HashCache { get; } = new();
 
     private record HashCacheType(byte[] Data, long LastGetTime);
 
+    /// <summary>
+    /// 映射表目录
+    /// </summary>
     internal string MapDir => Path.Combine(WorkDir, "Map");
+
+    /// <summary>
+    /// 是否压缩文件
+    /// </summary>
     public bool CompressFile { get; set; } = true;
+
+    /// <summary>
+    /// 是否启用缓存
+    /// </summary>
     public bool? AllowCache
     {
         get
@@ -27,12 +53,31 @@ public class FileManager
         }
         set;
     } = null;
+
+    /// <summary>
+    /// 是否在全局启用缓存
+    /// </summary>
     public static bool GlobalAllowCache { get; set; } = true;
+
+    /// <summary>
+    /// 允许的缓存数据最大大小
+    /// </summary>
     public ulong MaximumCacheSize { get; set; } = (long)1024 * 1024 * 512;
+
+    /// <summary>
+    /// 缓存数据最长存放时间
+    /// </summary>
     public TimeSpan MaximumCacheAge { get; set; } = new(0, 1, 0);
+
+    /// <summary>
+    /// 缓存总大小
+    /// </summary>
     public long CacheTotalSize { get; private set; } = 0;
     private Thread cacheManagerThread;
 
+    /// <summary>
+    /// 强制清理缓存:适合在缓存出现问题时使用
+    /// </summary>
     public void ForceClearCache()
     {
         MapCache.Clear();
@@ -53,6 +98,9 @@ public class FileManager
         }
     }
 
+    /// <summary>
+    /// 调用缓存回收器回收缓存
+    /// </summary>
     public void CacheCollector()
     {
         long size = 0; //顺便算个大小
@@ -91,6 +139,11 @@ public class FileManager
         }
     }
 
+    /// <summary>
+    /// 压缩数据
+    /// </summary>
+    /// <param name="数据"></param>
+    /// <returns>压缩后的数据</returns>
     public static byte[] Compress(byte[] data)
     {
         using var ms = new MemoryStream();
@@ -101,6 +154,11 @@ public class FileManager
         return ms.ToArray();
     }
 
+    /// <summary>
+    /// 解压数据
+    /// </summary>
+    /// <param name="数据"></param>
+    /// <returns>解压后的数据</returns>
     public static byte[] Decompress(byte[] compressed)
     {
         using var input = new MemoryStream(compressed);
@@ -112,21 +170,40 @@ public class FileManager
         return output.ToArray();
     }
 
+    /// <summary>
+    /// 清理映射
+    /// </summary>
+    /// <returns></returns>
     public async Task ClearMap()
     {
         MapCache.Clear();
     }
 
+    /// <summary>
+    /// 以异步的形式读取文件的文本
+    /// </summary>
+    /// <param name="文件路径"></param>
+    /// <returns>文本</returns>
     public async Task<string> ReadAllTextAsync(string Path)
     {
         return Encoding.UTF8.GetString(await ReadAllByteAsyncForHash(await GetFileHash(Path)));
     }
 
+    /// <summary>
+    /// 以异步的形式读取文件的数据
+    /// </summary>
+    /// <param name="文件路径"></param>
+    /// <returns>数据</returns>
     public async Task<Byte[]> ReadAllBytesAsync(string Path)
     {
         return await ReadAllByteAsyncForHash(await GetFileHash(Path));
     }
 
+    /// <summary>
+    /// 获取文件Hash
+    /// </summary>
+    /// <param name="文件路径"></param>
+    /// <returns>Hash</returns>
     public async Task<string> GetFileHash(string Path)
     {
         try
@@ -145,9 +222,19 @@ public class FileManager
         }
     }
 
+    /// <summary>
+    /// 读取文件的文本
+    /// </summary>
+    /// <param name="文件路径"></param>
+    /// <returns>文本</returns>
     public string ReadAllText(string Path) =>
         Task.Run(() => ReadAllTextAsync(Path)).ConfigureAwait(false).GetAwaiter().GetResult();
 
+    /// <summary>
+    /// 读取文件的数据
+    /// </summary>
+    /// <param name="文件路径"></param>
+    /// <returns>数据</returns>
     public Byte[] ReadAllBytes(string Path) =>
         Task.Run(() => ReadAllBytesAsync(Path)).ConfigureAwait(false).GetAwaiter().GetResult();
 
@@ -181,6 +268,11 @@ public class FileManager
         return data;
     }
 
+    /// <summary>
+    /// 格式化路径
+    /// </summary>
+    /// <param name="路径"></param>
+    /// <returns>格式化后的路径</returns>
     public static string FormatPath(string Path)
     {
         string[] path = Path.Split('/');
@@ -198,6 +290,12 @@ public class FileManager
         return string.Join('/', result);
     }
 
+    /// <summary>
+    /// 根据Hash生成文件路径
+    /// </summary>
+    /// <param name="Hash"></param>
+    /// <returns>Hash路径</returns>
+    /// <exception cref="InvalidDataException"></exception>
     public static string GetHashPath(string Hash)
     {
         if (Hash.Length != 64)
@@ -205,6 +303,11 @@ public class FileManager
         return Path.Combine(Hash.Substring(0, 2), Hash.Substring(2, 2), Hash.Substring(4));
     }
 
+    /// <summary>
+    /// 异步创建文件
+    /// </summary>
+    /// <param name="文件路径"></param>
+    /// <returns></returns>
     public async Task CreateFileAsync(string Path)
     {
         var f = FormatPath(Path);
@@ -214,15 +317,29 @@ public class FileManager
         await File.WriteAllTextAsync(m, await WriteAllBytesAsyncForHash([], f));
     }
 
+    /// <summary>
+    /// 创建文件
+    /// </summary>
+    /// <param name="文件路径"></param>
     public void CreateFile(string Path) =>
         Task.Run(() => CreateFileAsync(Path)).ConfigureAwait(false).GetAwaiter().GetResult();
 
+    /// <summary>
+    /// 创建目录
+    /// </summary>
+    /// <param name="目录路径"></param>
     public void CreateDirectory(string Path)
     {
         string m = System.IO.Path.Combine(MapDir, FormatPath(Path));
         Directory.CreateDirectory(m);
     }
 
+    /// <summary>
+    /// 异步写入文本到文件
+    /// </summary>
+    /// <param name="文件路径"></param>
+    /// <param name="文本"></param>
+    /// <returns></returns>
     public async Task WriteAllTextAsync(string Path, string Text)
     {
         Path = FormatPath(Path);
@@ -233,12 +350,23 @@ public class FileManager
         );
     }
 
+    /// <summary>
+    /// 写入文本到文件
+    /// </summary>
+    /// <param name="文件路径"></param>
+    /// <param name="文本"></param>
     public void WriteAllText(string Path, string Text) =>
         Task.Run(() => WriteAllTextAsync(Path, Text))
             .ConfigureAwait(false)
             .GetAwaiter()
             .GetResult();
 
+    /// <summary>
+    /// 异步写入数据到文件
+    /// </summary>
+    /// <param name="文件路径"></param>
+    /// <param name="数据"></param>
+    /// <returns></returns>
     public async Task WriteAllBytesAsync(string Path, byte[] Byte)
     {
         Path = FormatPath(Path);
@@ -246,12 +374,22 @@ public class FileManager
         await File.WriteAllTextAsync(path, await WriteAllBytesAsyncForHash(Byte, Path));
     }
 
+    /// <summary>
+    /// 写入数据到文件
+    /// </summary>
+    /// <param name="文件路径"></param>
+    /// <param name="数据"></param>
     public void WriteAllBytes(string Path, byte[] Bytes) =>
         Task.Run(() => WriteAllBytesAsync(Path, Bytes))
             .ConfigureAwait(false)
             .GetAwaiter()
             .GetResult();
 
+    /// <summary>
+    /// 异步删除文件
+    /// </summary>
+    /// <param name="文件路径"></param>
+    /// <returns></returns>
     public async Task DeleteFileAsync(string Path)
     {
         Path = FormatPath(Path);
@@ -262,9 +400,18 @@ public class FileManager
         await TryDeleteHash(fh);
     }
 
+    /// <summary>
+    /// 删除文件
+    /// </summary>
+    /// <param name="文件路径"></param>
     public void DeleteFile(string Path) =>
         Task.Run(() => DeleteFileAsync(Path)).ConfigureAwait(false).GetAwaiter().GetResult();
 
+    /// <summary>
+    /// 异步删除目录
+    /// </summary>
+    /// <param name="目录路径"></param>
+    /// <returns></returns>
     public async Task DeleteDirectoryAsync(string Path)
     {
         Path = FormatPath(Path);
@@ -283,9 +430,18 @@ public class FileManager
             Directory.Delete(System.IO.Path.Combine(MapDir, Path));
     }
 
+    /// <summary>
+    /// 删除目录
+    /// </summary>
+    /// <param name="目录路径"></param>
     public void DeleteDirectory(string Path) =>
         Task.Run(() => DeleteDirectoryAsync(Path)).ConfigureAwait(false).GetAwaiter().GetResult();
 
+    /// <summary>
+    /// 异步获取目录下所有文件
+    /// </summary>
+    /// <param name="目录路径"></param>
+    /// <returns>文件路径数组</returns>
     public async Task<string[]> GetFilesAsync(string Path)
     {
         Path = FormatPath(Path);
@@ -298,9 +454,19 @@ public class FileManager
         return tg;
     }
 
+    /// <summary>
+    /// 获取目录下所有文件
+    /// </summary>
+    /// <param name="目录路径"></param>
+    /// <returns>文件路径数组</returns>
     public string[] GetFiles(string Path) =>
         Task.Run(() => GetFilesAsync(Path)).ConfigureAwait(false).GetAwaiter().GetResult();
 
+    /// <summary>
+    /// 异步获取目录下所有目录
+    /// </summary>
+    /// <param name="目录路径"></param>
+    /// <returns>目录路径数组</returns>
     public async Task<string[]> GetDirectoriesAsync(string Path)
     {
         Path = FormatPath(Path);
@@ -313,6 +479,12 @@ public class FileManager
         return tg;
     }
 
+    /// <summary>
+    /// 异步重命名文件
+    /// </summary>
+    /// <param name="文件路径"></param>
+    /// <param name="新名称"></param>
+    /// <returns></returns>
     public async Task RenameFileAsync(string Path, string Name)
     {
         Path = FormatPath(Path);
@@ -320,6 +492,12 @@ public class FileManager
         await MoveFileAsync(Path, tg);
     }
 
+    /// <summary>
+    /// 异步重命名目录
+    /// </summary>
+    /// <param name="目录路径"></param>
+    /// <param name="新名称"></param>
+    /// <returns></returns>
     public async Task RenameDirectoryAsync(string Path, string Name)
     {
         Path = FormatPath(Path);
@@ -327,6 +505,12 @@ public class FileManager
         await MoveDirectoryAsync(Path, tg);
     }
 
+    /// <summary>
+    /// 异步移动文件
+    /// </summary>
+    /// <param name="文件路径"></param>
+    /// <param name="新路径"></param>
+    /// <returns></returns>
     public async Task MoveFileAsync(string Path, string TargetPath)
     {
         Path = FormatPath(Path);
@@ -339,6 +523,12 @@ public class FileManager
         await RemoveDataRefToHash(path, hash);
     }
 
+    /// <summary>
+    /// 异步复制文件
+    /// </summary>
+    /// <param name="文件路径"></param>
+    /// <param name="目标路径"></param>
+    /// <returns></returns>
     public async Task CopyFileAsync(string Path, string TargetPath)
     {
         Path = FormatPath(Path);
@@ -350,6 +540,14 @@ public class FileManager
         await AddDataRefToHash(tgp, hash);
     }
 
+    /// <summary>
+    /// 异步复制目录
+    /// </summary>
+    /// <param name="目录路径"></param>
+    /// <param name="目标路径"></param>
+    /// <returns></returns>
+    /// <exception cref="DirectoryNotFoundException"></exception>
+    /// <exception cref="IOException"></exception>
     public async Task CopyDirectoryAsync(string Path, string TargetPath)
     {
         Path = FormatPath(Path);
@@ -381,6 +579,11 @@ public class FileManager
         }
     }
 
+    /// <summary>
+    /// 判断目录是否存在
+    /// </summary>
+    /// <param name="目录路径"></param>
+    /// <returns>是否存在</returns>
     public bool DirectoryExists(string Path)
     {
         Path = FormatPath(Path);
@@ -388,6 +591,11 @@ public class FileManager
         return Directory.Exists(path);
     }
 
+    /// <summary>
+    /// 判断文件是否存在
+    /// </summary>
+    /// <param name="文件路径"></param>
+    /// <returns>是否存在</returns>
     public bool FileExists(string Path)
     {
         Path = FormatPath(Path);
@@ -395,6 +603,11 @@ public class FileManager
         return File.Exists(path);
     }
 
+    /// <summary>
+    /// 判断路径是否存在
+    /// </summary>
+    /// <param name="路径"></param>
+    /// <returns>是否存在</returns>
     public bool PathExists(string Path)
     {
         Path = FormatPath(Path);
@@ -402,6 +615,14 @@ public class FileManager
         return System.IO.Path.Exists(path);
     }
 
+    /// <summary>
+    /// 异步移动目录
+    /// </summary>
+    /// <param name="目录路径"></param>
+    /// <param name="新路径"></param>
+    /// <returns></returns>
+    /// <exception cref="DirectoryNotFoundException"></exception>
+    /// <exception cref="IOException"></exception>
     public async Task MoveDirectoryAsync(string Path, string TargetPath)
     {
         Path = FormatPath(Path);
@@ -434,33 +655,68 @@ public class FileManager
         Directory.Delete(path, true);
     }
 
+    /// <summary>
+    /// 移动目录
+    /// </summary>
+    /// <param name="目录路径"></param>
+    /// <param name="新路径"></param>
     public void MoveDirectory(string Path, string Target) =>
         Task.Run(() => MoveDirectoryAsync(Path, Target))
             .ConfigureAwait(false)
             .GetAwaiter()
             .GetResult();
 
+    /// <summary>
+    /// 移动文件
+    /// </summary>
+    /// <param name="文件路径"></param>
+    /// <param name="新路径"></param>
     public void MoveFile(string Path, string Target) =>
         Task.Run(() => MoveFileAsync(Path, Target)).ConfigureAwait(false).GetAwaiter().GetResult();
 
+    /// <summary>
+    /// 复制文件
+    /// </summary>
+    /// <param name="文件路径"></param>
+    /// <param name="目标路径"></param>
     public void CopyFile(string Path, string Target) =>
         Task.Run(() => CopyFileAsync(Path, Target)).ConfigureAwait(false).GetAwaiter().GetResult();
 
+    /// <summary>
+    /// 复制目录
+    /// </summary>
+    /// <param name="目录路径"></param>
+    /// <param name="目标路径"></param>
     public void CopyDirectory(string Path, string Target) =>
         Task.Run(() => CopyDirectoryAsync(Path, Target))
             .ConfigureAwait(false)
             .GetAwaiter()
             .GetResult();
 
+    /// <summary>
+    /// 重命名文件
+    /// </summary>
+    /// <param name="文件路径"></param>
+    /// <param name="新名称"></param>
     public void RenameFile(string Path, string Name) =>
         Task.Run(() => RenameFileAsync(Path, Name)).ConfigureAwait(false).GetAwaiter().GetResult();
 
+    /// <summary>
+    /// 重命名目录
+    /// </summary>
+    /// <param name="目录路径"></param>
+    /// <param name="新名称"></param>
     public void RenameDirectory(string Path, string Name) =>
         Task.Run(() => RenameDirectoryAsync(Path, Name))
             .ConfigureAwait(false)
             .GetAwaiter()
             .GetResult();
 
+    /// <summary>
+    /// 获取获取目录下所有目录
+    /// </summary>
+    /// <param name="目录路径"></param>
+    /// <returns>目录路径数组</returns>
     public string[] GetDirectories(string Path) =>
         Task.Run(() => GetDirectoriesAsync(Path)).ConfigureAwait(false).GetAwaiter().GetResult();
 
@@ -516,6 +772,10 @@ public class FileManager
 
     private FileManager() { }
 
+    /// <summary>
+    /// 创建虚拟文件管理器
+    /// </summary>
+    /// <param name="工作目录"></param>
     public FileManager(string WorkDir)
     {
         this.WorkDir = WorkDir;
@@ -525,6 +785,11 @@ public class FileManager
         cacheManagerThread.Start();
     }
 
+    /// <summary>
+    /// 尝试删除指定Hash对应文件
+    /// </summary>
+    /// <param name="Hash"></param>
+    /// <returns></returns>
     public async Task<bool> TryDeleteHash(string Hash)
     {
         if (Hash.Length != 64)
@@ -593,6 +858,11 @@ public class FileManager
             }
     }
 
+    /// <summary>
+    /// 获取文本Hash
+    /// </summary>
+    /// <param name="文本"></param>
+    /// <returns>Hash</returns>
     public static string ComputeSha256Hash(string input)
     {
         byte[] inputBytes = Encoding.UTF8.GetBytes(input);
@@ -601,6 +871,11 @@ public class FileManager
         return Convert.ToHexString(hashBytes).ToLowerInvariant();
     }
 
+    /// <summary>
+    /// 获取数据Hash
+    /// </summary>
+    /// <param name="数据"></param>
+    /// <returns>Hash</returns>
     public static string ComputeSha256Hash(byte[] input)
     {
         byte[] hashBytes = SHA256.HashData(input);

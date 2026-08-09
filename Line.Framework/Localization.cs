@@ -6,10 +6,21 @@ namespace Line.Framework;
 public class Localization
 {
     private readonly List<string> id = [];
+
+    /// <summary>
+    /// 已加载的语言ID列表
+    /// </summary>
     public ReadOnlyCollection<string> LoadedLanguage => id.AsReadOnly();
     private readonly Dictionary<string, Dictionary<string, string>> sources = [];
     private readonly object _lock = new();
 
+    /// <summary>
+    /// 设置语言
+    /// </summary>
+    /// <param name="语言ID"></param>
+    /// <param name="语言json文本"></param>
+    /// <param name="目标索引"></param>
+    /// <exception cref="IndexOutOfRangeException"></exception>
     public void SetLanguage(string ID, string json, int index = -1)
     {
         var strDict = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
@@ -44,6 +55,10 @@ public class Localization
         }
     }
 
+    /// <summary>
+    /// 移除语言
+    /// </summary>
+    /// <param name="目标语言ID"></param>
     public void RemoveLanguage(string ID)
     {
         lock (_lock)
@@ -53,6 +68,12 @@ public class Localization
         }
     }
 
+    /// <summary>
+    /// 获取本地化字符串
+    /// </summary>
+    /// <param name="翻译键"></param>
+    /// <param name="参数"></param>
+    /// <returns></returns>
     public string Get(string Key, string[] Args = null)
     {
         string select = Key;
@@ -85,6 +106,9 @@ public class Localization
         }
     }
 
+    /// <summary>
+    /// 清除语言
+    /// </summary>
     public void ClearLanguage()
     {
         lock (_lock)
@@ -94,5 +118,8 @@ public class Localization
         }
     }
 
+    /// <summary>
+    /// 是否启用完整错误输出
+    /// </summary>
     public bool EnableFullExceptionOutput { get; set; } = false;
 }

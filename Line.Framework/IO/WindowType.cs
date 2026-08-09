@@ -15,11 +15,34 @@ namespace Line.Framework.IO;
 
 public abstract class WindowType : IDisposable, IName
 {
+    /// <summary>
+    /// 窗口标题
+    /// </summary>
     public virtual string Name => Title;
+
+    /// <summary>
+    /// 窗口SDL3句柄
+    /// </summary>
     public virtual nint WindowHandle { get; init; }
+
+    /// <summary>
+    /// 窗口输入管理器
+    /// </summary>
     public virtual InputManager Input { get; init; }
+
+    /// <summary>
+    /// Veldrid图形设备
+    /// </summary>
     public virtual GraphicsDevice Dev { get; init; }
+
+    /// <summary>
+    /// 请求退出时执行的Action
+    /// </summary>
     public virtual Action RequestQuit { get; set; }
+
+    /// <summary>
+    /// 启用相对鼠标模式
+    /// </summary>
     public virtual bool EnableMouseRelative
     {
         get => SDL.GetWindowRelativeMouseMode(WindowHandle);
@@ -32,6 +55,10 @@ public abstract class WindowType : IDisposable, IName
                 SDL.HideCursor();
         }
     }
+
+    /// <summary>
+    /// 鼠标灵敏度(仅启用相对鼠标模式可用)
+    /// </summary>
     public virtual float MouseSpeedScale
     {
         get;
@@ -41,6 +68,10 @@ public abstract class WindowType : IDisposable, IName
                 field = value;
         }
     } = 1;
+
+    /// <summary>
+    /// 窗口大小
+    /// </summary>
     public virtual Vector2 Size
     {
         get
@@ -67,7 +98,15 @@ public abstract class WindowType : IDisposable, IName
             }
         }
     }
+
+    /// <summary>
+    /// 窗口UI根节点
+    /// </summary>
     public virtual UIScreen Root { get; init; }
+
+    /// <summary>
+    /// 垂直同步
+    /// </summary>
     public virtual bool VSync
     {
         get;
@@ -78,7 +117,15 @@ public abstract class WindowType : IDisposable, IName
         }
     } = false;
     private readonly Thread MainThread;
+
+    /// <summary>
+    /// 渲染频率
+    /// </summary>
     public virtual float FramePerSecond { get; set; } = 240;
+
+    /// <summary>
+    /// 启用全屏
+    /// </summary>
     public virtual bool FullScreen
     {
         get;
@@ -89,7 +136,14 @@ public abstract class WindowType : IDisposable, IName
         }
     } = false;
 
+    /// <summary>
+    /// 更新频率
+    /// </summary>
     public virtual float UpdatePerSecond { get; set; } = 1000;
+
+    /// <summary>
+    /// 窗口内容缩放
+    /// </summary>
     public virtual float Scale
     {
         get;
@@ -102,7 +156,15 @@ public abstract class WindowType : IDisposable, IName
             OnWindowResized();
         }
     } = 1;
+
+    /// <summary>
+    /// 窗口UI绘制收集器
+    /// </summary>
     public virtual UIDrawCollector Collector { get; init; }
+
+    /// <summary>
+    /// 启用文本输入
+    /// </summary>
     public virtual bool TextInput
     {
         get => SDL.TextInputActive(WindowHandle);
@@ -114,13 +176,36 @@ public abstract class WindowType : IDisposable, IName
                 SDL.StopTextInput(WindowHandle);
         }
     }
+
+    /// <summary>
+    /// 窗口渲染后端
+    /// </summary>
     public virtual GraphicBackend RenderBackend { get; init; }
 
+    /// <summary>
+    /// 当渲染一帧时
+    /// </summary>
     public event Action<double> OnRender;
+
+    /// <summary>
+    /// 渲染器
+    /// </summary>
     public abstract RendererType Renderer { get; }
+
+    /// <summary>
+    /// 合成器
+    /// </summary>
     public abstract ICompositor Compositor { get; }
+
+    /// <summary>
+    /// 当窗口更新时
+    /// </summary>
     public event Action<double> OnUpdate;
 
+    /// <summary>
+    /// 后端选择器
+    /// </summary>
+    /// <returns>可用后端</returns>
     public static GraphicBackend BackendSelector()
     {
         //默认设备（到最后都用不了那就算了吧）
@@ -428,9 +513,24 @@ public abstract class WindowType : IDisposable, IName
         RequestQuit = Dispose;
     }
 
+    /// <summary>
+    /// 资产构建器:音频构建器
+    /// </summary>
     public virtual TAudio Audio { get; private set; }
+
+    /// <summary>
+    /// SDL3窗口ID
+    /// </summary>
     public virtual uint WindowID { get; init; }
+
+    /// <summary>
+    /// 窗口是否为焦点
+    /// </summary>
     public virtual bool IsFocus => SDL.GetKeyboardFocus() == WindowHandle;
+
+    /// <summary>
+    /// 是否显示光标
+    /// </summary>
     public virtual bool ShowCursor
     {
         get => field && EnableMouseRelative;
@@ -448,12 +548,26 @@ public abstract class WindowType : IDisposable, IName
     } = true;
     internal virtual ConcurrentDictionary<SDL.EventType, Action<SDL.Event>> EventPool { get; } =
         new();
+
+    /// <summary>
+    /// 当窗口获得焦点时
+    /// </summary>
     public event Action FocusGained;
+
+    //当窗口失去焦点时
     public event Action FocusLost;
+
+    /// <summary>
+    /// 窗口是否存在
+    /// </summary>
     public virtual bool Exists
     {
         get => SDL.GetWindowID(WindowHandle) != 0;
     }
+
+    /// <summary>
+    /// 窗口标题
+    /// </summary>
     public virtual string Title
     {
         get => SDL.GetWindowTitle(WindowHandle) ?? "";
@@ -504,7 +618,9 @@ public abstract class WindowType : IDisposable, IName
                             wait = 0;
                         if (delay < wait)
                         {
-                            Task.Delay(TimeSpan.FromMicroseconds(wait-delay)).GetAwaiter().GetResult();
+                            Task.Delay(TimeSpan.FromMicroseconds(wait - delay))
+                                .GetAwaiter()
+                                .GetResult();
                             tick = sw.ElapsedTicks;
                             milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
                             delay = milliseconds - UpdateMs;
@@ -594,7 +710,7 @@ public abstract class WindowType : IDisposable, IName
                         wait = 0;
                     if (delay < wait)
                     {
-                        await Task.Delay(TimeSpan.FromMicroseconds(wait-delay));
+                        await Task.Delay(TimeSpan.FromMicroseconds(wait - delay));
 
                         tick = sw.ElapsedTicks;
                         milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
@@ -620,6 +736,10 @@ public abstract class WindowType : IDisposable, IName
 
     Thread UpdateThread;
     private bool _resizePending = false;
+
+    /// <summary>
+    /// 窗口资产管理器
+    /// </summary>
     public virtual ResourceManager Resource { get; init; }
     private uint _newWidth,
         _newHeight;
@@ -661,6 +781,11 @@ public abstract class WindowType : IDisposable, IName
         Root?.Dispose();
     }
 
+    /// <summary>
+    /// 获取全屏模式
+    /// </summary>
+    /// <param name="显示器ID"></param>
+    /// <returns>全屏模式数组</returns>
     public static FullScreenMode[] GetFullScreenModes(uint display)
     {
         var s = SDL.GetFullscreenDisplayModes(display, out int _);

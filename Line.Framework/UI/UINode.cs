@@ -9,6 +9,10 @@ public abstract class UINode : IDisposable, IName, IIndexable
 
     //对外的加点料
     private UINode _parent;
+
+    /// <summary>
+    /// 父节点
+    /// </summary>
     public UINode Parent
     {
         get => _parent;
@@ -17,6 +21,10 @@ public abstract class UINode : IDisposable, IName, IIndexable
 
     //对外的只读
     private protected readonly List<UINode> _children = new();
+
+    /// <summary>
+    /// 子节点
+    /// </summary>
     public List<UINode> Children
     {
         get => _children;
@@ -29,6 +37,10 @@ public abstract class UINode : IDisposable, IName, IIndexable
         NodeTreeVersion++;
     }
 
+    /// <summary>
+    /// 设置父节点
+    /// </summary>
+    /// <param name="父节点"></param>
     public virtual void SetParent(UINode value)
     {
         if (value == _parent)
@@ -45,6 +57,11 @@ public abstract class UINode : IDisposable, IName, IIndexable
         _parent?.AddNodeTreeVersion();
     }
 
+    /// <summary>
+    /// 寻找指定名称的子节点
+    /// </summary>
+    /// <param name="名称"></param>
+    /// <returns>子节点</returns>
     public List<UINode> FindChildren(string name)
     {
         List<UINode> tmp = [];
@@ -76,6 +93,10 @@ public abstract class UINode : IDisposable, IName, IIndexable
         set { field = value; }
     } = 0;
 
+    /// <summary>
+    /// 寻找根节点
+    /// </summary>
+    /// <returns>根节点</returns>
     public UINode FindRoot()
     {
         if (this.Parent != null)
@@ -92,6 +113,11 @@ public abstract class UINode : IDisposable, IName, IIndexable
         }
     }
 
+    /// <summary>
+    /// 寻找根节点
+    /// </summary>
+    /// <param name="节点"></param>
+    /// <returns>根节点</returns>
     public static UINode FindRoot(UINode widget)
     {
         if (widget.Parent != null)

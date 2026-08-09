@@ -3,6 +3,9 @@ using System.Diagnostics;
 
 namespace Line.Framework.Resource;
 
+/// <summary>
+/// 资产管理器
+/// </summary>
 public class ResourceManager : IDisposable
 {
     public void Dispose()
@@ -35,6 +38,11 @@ public class ResourceManager : IDisposable
             await ReleaseIdleResources();
     }
 
+    /// <summary>
+    /// 向资产管理器添加新(外来)资产
+    /// </summary>
+    /// <param name="资产ID"></param>
+    /// <param name="资产对象"></param>
     public virtual void AddResource(string id, IResource res)
     {
         if (res == null)
@@ -51,6 +59,13 @@ public class ResourceManager : IDisposable
         Rs.TryAdd(id, new((uint)sw.ElapsedMilliseconds, 0));
     }
 
+    /// <summary>
+    /// 获取指定ID的资产
+    /// </summary>
+    /// <typeparam name="资产实际类型"></typeparam>
+    /// <param name="资产ID"></param>
+    /// <param name="是否在未加载时自动加载"></param>
+    /// <returns>资产</returns>
     public virtual async Task<T> GetResource<T>(string id, bool NeedLoaded = true)
     {
         if (id == null)
@@ -75,6 +90,11 @@ public class ResourceManager : IDisposable
         return default;
     }
 
+    /// <summary>
+    /// 加载指定ID的资产
+    /// </summary>
+    /// <param name="资产ID"></param>
+    /// <returns></returns>
     public virtual async Task LoadResource(string id)
     {
         if (id == null)
@@ -87,6 +107,11 @@ public class ResourceManager : IDisposable
             await obj.Load();
     }
 
+    /// <summary>
+    /// 获取资产是否加载
+    /// </summary>
+    /// <param name="资产ID"></param>
+    /// <returns>加载状态</returns>
     public virtual bool ResourceIsLoaded(string id)
     {
         if (id == null)
@@ -98,6 +123,11 @@ public class ResourceManager : IDisposable
         return obj.IsLoaded;
     }
 
+    /// <summary>
+    /// 释放指定资产ID的资源
+    /// </summary>
+    /// <param name="资产ID"></param>
+    /// <returns></returns>
     public virtual async Task ReleaseResource(string id)
     {
         if (id == null)
@@ -109,6 +139,10 @@ public class ResourceManager : IDisposable
         await obj.Release();
     }
 
+    /// <summary>
+    /// 获取所有资产的ID
+    /// </summary>
+    /// <returns>资产ID(List)</returns>
     public virtual List<string> GetAllResourceId()
     {
         List<string> a = [];
@@ -116,6 +150,10 @@ public class ResourceManager : IDisposable
         return a;
     }
 
+    /// <summary>
+    /// 释放所有不活跃的资产
+    /// </summary>
+    /// <returns></returns>
     public virtual async Task ReleaseIdleResources()
     {
         foreach (var i in Resources.Keys)
@@ -144,6 +182,10 @@ public class ResourceManager : IDisposable
         }
     }
 
+    /// <summary>
+    /// 注销指定资产
+    /// </summary>
+    /// <param name="资产ID"></param>
     public void DisposeResource(string id)
     {
         if (!Resources.TryGetValue(id, out var obj))
@@ -155,6 +197,10 @@ public class ResourceManager : IDisposable
         Resources.TryRemove(id, out _);
     }
 
+    /// <summary>
+    /// 注销指定资产
+    /// </summary>
+    /// <param name="资产对象"></param>
     public void DisposeResource(IResource resource)
     {
         if (Resources.Values.ToList().IndexOf(resource) == -1)
@@ -172,6 +218,11 @@ public class ResourceManager : IDisposable
         }
     }
 
+    /// <summary>
+    /// 添加资产构建器
+    /// </summary>
+    /// <param name="构建器ID"></param>
+    /// <param name="构建器对象"></param>
     public virtual void AddType(string id, ResourceType t)
     {
         if (t == null)
@@ -185,6 +236,11 @@ public class ResourceManager : IDisposable
         Types.TryAdd(id, t);
     }
 
+    /// <summary>
+    /// 获取资产构建器
+    /// </summary>
+    /// <param name="构建器ID"></param>
+    /// <returns>构建器对象</returns>
     public virtual ResourceType GetResourceType(string id)
     {
         if (Types.TryGetValue(id, out var obj))
@@ -194,6 +250,10 @@ public class ResourceManager : IDisposable
         return null;
     }
 
+    /// <summary>
+    /// 获取所有资产构建器
+    /// </summary>
+    /// <returns>所有资产构建器(List)</returns>
     public virtual List<string> GetAllTypeId()
     {
         List<string> a = [];
@@ -201,6 +261,13 @@ public class ResourceManager : IDisposable
         return a;
     }
 
+    /// <summary>
+    /// 使用构建器创建资产
+    /// </summary>
+    /// <param name="构建器ID"></param>
+    /// <param name="资产ID"></param>
+    /// <param name="数据流"></param>
+    /// <returns>创建后的资产对象</returns>
     public virtual async Task<IResource> Create(string TypeId, string targetId, Stream stream)
     {
         if (!Types.TryGetValue(TypeId, out var t))
@@ -224,6 +291,10 @@ public class ResourceManager : IDisposable
         return null;
     }
 
+    /// <summary>
+    /// 注销指定资产构建器
+    /// </summary>
+    /// <param name="资产构建器ID"></param>
     public void DisposeType(string id)
     {
         if (!Types.TryGetValue(id, out _))

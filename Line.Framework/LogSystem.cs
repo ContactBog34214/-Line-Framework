@@ -24,12 +24,12 @@ internal class LogEntry
     public DateTime Time { get; }
     public string Source { get; }
 
-    public LogEntry(LogLevel level, string message,string source)
+    public LogEntry(LogLevel level, string message, string source)
     {
         Level = level;
         Message = message;
         Time = DateTime.Now;
-        Source=source;
+        Source = source;
     }
 
     // 格式化输出： [2025-04-08 14:30:21.123][Info] 玩家上线
@@ -52,6 +52,10 @@ public static class Log
     private static LogLevel s_minLevel = LogLevel.Debug;
     private static bool s_enableFileLog = true;
 
+    /// <summary>
+    /// 启用或禁用输出日志到文件
+    /// </summary>
+    /// <param name="enable"></param>
     public static void EnableFileLog(bool enable) => s_enableFileLog = enable;
 
     static Log()
@@ -62,12 +66,24 @@ public static class Log
     }
 
     // 设置最小输出级别（例如只输出 Warning 以上）
+    /// <summary>
+    /// 最小记录级别
+    /// </summary>
+    /// <param name="日志等级"></param>
     public static void SetMinLevel(LogLevel level) => s_minLevel = level;
 
     // 设置是否输出到控制台
+    /// <summary>
+    /// 启用或禁用输出日志到控制台
+    /// </summary>
+    /// <param name="enable"></param>
     public static void EnableConsole(bool enable) => s_enableConsole = enable;
 
     // 设置日志文件路径（使用前确保目录存在）
+    /// <summary>
+    /// 设置输出日志文件路径
+    /// </summary>
+    /// <param name="文件路径"></param>
     public static void SetLogFile(string filePath)
     {
         if (string.IsNullOrEmpty(filePath))
@@ -83,22 +99,43 @@ public static class Log
     }
 
     // ---------- 公开的日志 API ----------
+    /// <summary>
+    /// 输出调试信息
+    /// </summary>
+    /// <param name="信息"></param>
+    /// <param name="调用者"></param>
     public static void Debug(object msg, [CallerMemberName] string member = "") =>
-        Enqueue(LogLevel.Debug, $"{msg}",member);
+        Enqueue(LogLevel.Debug, $"{msg}", member);
 
+    /// <summary>
+    /// 输出信息
+    /// </summary>
+    /// <param name="信息"></param>
+    /// <param name="调用者"></param>
     public static void Info(object msg, [CallerMemberName] string member = "") =>
-        Enqueue(LogLevel.Info, $"{msg}",member);
+        Enqueue(LogLevel.Info, $"{msg}", member);
 
+    /// <summary>
+    /// 输出警告
+    /// </summary>
+    /// <param name="信息"></param>
+    /// <param name="调用者"></param>
     public static void Warning(object msg, [CallerMemberName] string member = "") =>
-        Enqueue(LogLevel.Warning, $"{msg}",member);
-    public static void Error(object msg, [CallerMemberName] string member = "") =>
-        Enqueue(LogLevel.Error, $"{msg}",member);
+        Enqueue(LogLevel.Warning, $"{msg}", member);
 
-    private static void Enqueue(LogLevel level, string msg,string source)
+    /// <summary>
+    /// 输出错误
+    /// </summary>
+    /// <param name="信息"></param>
+    /// <param name="调用者"></param>
+    public static void Error(object msg, [CallerMemberName] string member = "") =>
+        Enqueue(LogLevel.Error, $"{msg}", member);
+
+    private static void Enqueue(LogLevel level, string msg, string source)
     {
         if (level < s_minLevel)
             return; // 低于设定级别直接丢弃
-        s_queue.Enqueue(new LogEntry(level, msg,source));
+        s_queue.Enqueue(new LogEntry(level, msg, source));
     }
 
     // 异步处理队列
@@ -167,6 +204,9 @@ public static class Log
     }
 
     // 关闭日志系统（程序退出时调用）
+    /// <summary>
+    /// 关闭日志系统
+    /// </summary>
     public static void Shutdown()
     {
         s_cancelToken.Cancel();

@@ -9,6 +9,10 @@ namespace Line.Framework.UI;
 public class UIScreen : UIWidget
 {
     private int _screenWidth;
+
+    /// <summary>
+    /// 窗口
+    /// </summary>
     public WindowType window { get; init; }
     private int _screenHeight;
 
@@ -32,6 +36,11 @@ public class UIScreen : UIWidget
         oz = 0;
     }
 
+    /// <summary>
+    /// 更新屏幕大小
+    /// </summary>
+    /// <param name="宽"></param>
+    /// <param name="高"></param>
     public void UpdateScreenSize(int width, int height)
     {
         _screenWidth = width;
@@ -50,6 +59,13 @@ public class UIScreen : UIWidget
     }
 
     // 可选：提供屏幕尺寸属性供子控件进行百分比布局计算
+    /// <summary>
+    /// 屏幕宽
+    /// </summary>
     public int ScreenWidth => _screenWidth;
+
+    /// <summary>
+    /// 屏幕高
+    /// </summary>
     public int ScreenHeight => _screenHeight;
 }

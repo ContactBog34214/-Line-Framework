@@ -2,6 +2,10 @@ using System.Collections;
 
 namespace Line.Framework.Types;
 
+/// <summary>
+/// 环形缓冲区
+/// </summary>
+/// <typeparam name="类型"></typeparam>
 public class CircularBuffer<T> : IEnumerable<T>
 {
     public IEnumerator<T> GetEnumerator()
@@ -17,6 +21,10 @@ public class CircularBuffer<T> : IEnumerable<T>
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
     private LongArray<T> Buffer;
+
+    /// <summary>
+    /// 缓冲区大小
+    /// </summary>
     public long Size
     {
         get;
@@ -30,6 +38,10 @@ public class CircularBuffer<T> : IEnumerable<T>
     }
     private long AddPtr = 0;
     private bool Circulated = false;
+
+    /// <summary>
+    /// 缓冲区数据数量
+    /// </summary>
     public long Count
     {
         get => Circulated ? Size : AddPtr;
@@ -59,6 +71,11 @@ public class CircularBuffer<T> : IEnumerable<T>
         }
     }
 
+    /// <summary>
+    /// 写入缓冲区
+    /// </summary>
+    /// <param name="写入数据"></param>
+    /// <exception cref="InvalidOperationException"></exception>
     public void Add(T value)
     {
         if (Size <= 0)
@@ -75,6 +92,9 @@ public class CircularBuffer<T> : IEnumerable<T>
         }
     }
 
+    /// <summary>
+    /// 重置缓冲区
+    /// </summary>
     public void Reset()
     {
         lock (_lock)
