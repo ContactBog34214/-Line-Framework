@@ -40,7 +40,7 @@ namespace Line.Framework.Default.Graphics
                 {
                     if (!UILayoutTable.TryGetValue(parentWidget, out var u))
                         continue;
-                    var p = i.Position.Value;
+                    var p = i.Position.Value + parentWidget.ChildrenOffset.Value;
                     var s = i.Size.Value;
                     var o = i.Opacity;
                     Offset = p.offset + p.scale * u.Size + u.Position;
@@ -322,9 +322,6 @@ namespace Line.Framework.Default.Graphics
                 target.X = pos.X * cos - pos.Y * sin;
                 target.Y = pos.Y * cos + pos.X * sin;
 
-                //缩放
-                target *= tg.Scale;
-
                 //映射回前面
                 target += ac * s;
 
@@ -366,9 +363,6 @@ namespace Line.Framework.Default.Graphics
                 var rp = target.Position;
                 rp.X = pos.X * cos - pos.Y * sin;
                 rp.Y = pos.Y * cos + pos.X * sin;
-
-                //缩放
-                rp *= s.Scale;
 
                 //映射回前面
                 rp += s.Anchor * size;

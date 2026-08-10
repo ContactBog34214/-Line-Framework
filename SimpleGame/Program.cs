@@ -134,7 +134,7 @@ public static class SimpleGame
             FontId = Fonts,
             XAlignment = Alignment.Center,
             YAlignment = Alignment.Right,
-            Text = Localization.Get("SimpleGame.Title",["Example"]),
+            Text = Localization.Get("SimpleGame.Title", ["Example"]),
             Index = 1,
             FontSize = 100,
         };
