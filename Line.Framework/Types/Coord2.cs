@@ -19,4 +19,14 @@ public struct Coord2
         this.offset = offset;
         this.scale = scale;
     }
+
+    public static Coord2 operator +(Coord2 a, Coord2 b) =>
+        new(a.offset + b.offset, a.scale + b.scale);
+
+    public static Coord2 operator -(Coord2 a, Coord2 b) =>
+        new(a.offset - b.offset, a.scale - b.scale);
+
+    public static Coord2 operator *(Coord2 a, float b) => new(a.offset * b, a.scale * b);
+
+    public static Coord2 operator /(Coord2 a, float b) => new(a.offset / b, a.scale / b);
 }

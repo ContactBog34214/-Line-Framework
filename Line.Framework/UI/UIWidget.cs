@@ -21,6 +21,11 @@ public abstract class UIWidget : UINode
     public DynamicValue<Vector2> Anchor { get; set; } = new(new Vector2(0, 0));
 
     /// <summary>
+    /// 子控件偏移
+    /// </summary>
+    public DynamicValue<Coord2> ChildrenOffset { get; set; } = new Coord2();
+
+    /// <summary>
     /// 是否可见
     /// </summary>
     public DynamicValue<bool> Visible { get; set; } = true;
@@ -32,18 +37,24 @@ public abstract class UIWidget : UINode
     public Vector2 GetPositionOnScreen()
     {
         Vector2 si = new(0, 0);
-        if (Parent != null || Parent is UIWidget i)
+        Coord2 of = new();
+        UIWidget pa = null;
+        if (Parent != null && Parent is UIWidget i)
         {
             i = Parent as UIWidget;
             si = i.GetSizeOnScreen() * i.Anchor;
+            pa = i;
+            of = i.ChildrenOffset;
         }
         return new(
-            s.Value.X * Position.Value.scale.X
+            s.Value.X * (Position.Value.scale.X + of.scale.X)
+                + of.offset.X
                 + Position.Value.offset.X
                 - GetSizeOnScreen().X * Anchor.Value.X
                 + p.Value.X
                 - si.X,
-            s.Value.Y * Position.Value.scale.Y
+            s.Value.Y * (Position.Value.scale.Y + of.scale.Y)
+                + of.offset.Y
                 + Position.Value.offset.Y
                 - GetSizeOnScreen().Y * Anchor.Value.Y
                 + p.Value.Y
@@ -112,11 +123,6 @@ public abstract class UIWidget : UINode
     /// 不透明度
     /// </summary>
     public DynamicValue<float> Opacity { get; set; } = 1;
-
-    /// <summary>
-    /// 缩放
-    /// </summary>
-    public DynamicValue<Vector2> Scale { get; set; } = new Vector2(1);
 
     /// <summary>
     /// 获取与鼠标的相对坐标
