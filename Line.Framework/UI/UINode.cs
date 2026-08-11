@@ -44,9 +44,8 @@ public abstract class UINode : IDisposable, IName, IIndexable
     public virtual void SetParent(UINode value)
     {
         if (value == _parent)
-        {
             return;
-        }
+
         //解除旧绑定
         _parent?.AddNodeTreeVersion();
         _parent?._children.Remove(this);
@@ -55,6 +54,13 @@ public abstract class UINode : IDisposable, IName, IIndexable
         _parent = value;
         _parent?._children.Add(this);
         _parent?.AddNodeTreeVersion();
+
+        foreach (var i in _children.OrderBy(c => c?.Index ?? -100))
+        {
+            if (i == null)
+                continue;
+            i?.SetParent(this);
+        }
     }
 
     /// <summary>
