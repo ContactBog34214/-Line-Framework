@@ -4,13 +4,12 @@ using Line.Framework.Graphics;
 using Line.Framework.Types;
 using Line.Framework.UI;
 
-namespace Line.Framework.Default.Graphics
+namespace Line.Framework.Sandbox
 {
-    public class Compositor : ICompositor
+    public class SandCompositor : ICompositor
     {
         private protected readonly Dictionary<UIWidget, UIWidgetLayout> UILayoutTable = new();
-
-        public virtual async Task<Vertex[]> Composite(UIWidget root)
+        public async Task<Vertex[]> Composite(UIWidget root)
         {
             bool clipMode = EnableClip;
             List<UIWidget> ws = trees(root);
@@ -20,71 +19,79 @@ namespace Line.Framework.Default.Graphics
             int zIndex = 0;
             Vector2 ScreenSize = new();
             Collector collector = new();
-            Task[] tasks = new Task[ws.Count];
+            Task[] tasks = new Task[ws.Count - 1];
 
             foreach (var i in ws)
             {
-                if (!(i is UIScreen _) && !(i.Parent is UIWidget _))
-                    continue;
-                Vector2 Offset = new();
-                Vector2 Size;
-                float Opacity = 1;
-                List<Vector2[]> clip = new();
-
-                if (i is UIScreen sc)
+                try
                 {
-                    Size = sc.Size.Value.offset;
-                    Opacity = 1;
-                }
-                else if (i.Parent is UIWidget parentWidget)
-                {
-                    if (!UILayoutTable.TryGetValue(parentWidget, out var u))
+                    if (!(i is UIScreen _) && !(i.Parent is UIWidget _))
                         continue;
-                    var p = i.Position.Value + parentWidget.ChildrenOffset.Value;
-                    var s = i.Size.Value;
-                    var o = i.Opacity;
-                    Offset = p.offset + p.scale * u.Size + u.Position;
-                    Size = s.offset + s.scale * u.Size;
-                    Offset -= i.Anchor * Size;
-                    Opacity = Math.Max(o * u.Opacity, 0);
-                    Opacity = Math.Min(Opacity, 1);
-                    if (clipMode)
+                    Vector2 Offset = new();
+                    Vector2 Size;
+                    float Opacity = 1;
+                    List<Vector2[]> clip = new();
+
+                    if (i == root)
                     {
-                        if (u.ClipList != null)
-                            clip.AddRange(u.ClipList);
-                        clip.Add(GetClipArea(i, Size));
+                        Size = ((UIScreen)i).Size.Value.offset;
+                        Opacity = 1;
+                        UILayoutTable.Add(i, new(Offset, Size, Opacity, zIndex, i.Rotation.Value, clip));
+                        continue;
                     }
-                }
-                else
-                {
-                    continue;
-                }
-                UILayoutTable.Add(i, new(Offset, Size, Opacity, zIndex, i.Rotation.Value, clip));
-                tasks[zIndex] = Task.Run(async () =>
-                {
-                    var item = i;
-                    if (item is UIWidget target && UILayoutTable.TryGetValue(item, out var table))
+                    else if (i.Parent is UIWidget parentWidget)
                     {
-                        var source = table.Size;
-                        try
+                        if (!UILayoutTable.TryGetValue(parentWidget, out var u))
+                            continue;
+                        var p = i.Position.Value + parentWidget.ChildrenOffset.Value;
+                        var s = i.Size.Value;
+                        var o = i.Opacity;
+                        Offset = p.offset + p.scale * u.Size + u.Position;
+                        Size = s.offset + s.scale * u.Size;
+                        Offset -= i.Anchor * Size;
+                        Opacity = Math.Max(o * u.Opacity, 0);
+                        Opacity = Math.Min(Opacity, 1);
+                        if (clipMode)
                         {
-                            await target.RendererContext(
-                                new RendererContextArgs
-                                {
-                                    X = table.Position.X,
-                                    Y = table.Position.Y,
-                                    width = table.Size.X,
-                                    height = table.Size.Y,
-                                    Collector = collector,
-                                }
-                            );
+                            if (u.ClipList != null)
+                                clip.AddRange(u.ClipList);
+                            clip.Add(GetClipArea(i, Size));
                         }
-                        catch (Exception ex)
-                        {
-                            Log.Error($"{ex}");
-                        }
+                        UILayoutTable.Add(i, new(Offset, Size, Opacity, zIndex, i.Rotation.Value, clip));
                     }
-                });
+                    else
+                    {
+                        continue;
+                    }
+                    tasks[zIndex] = Task.Run(async () =>
+                    {
+                        var item = i;
+                        if (item is UIWidget target && UILayoutTable.TryGetValue(item, out var table))
+                        {
+                            try
+                            {
+                                await target.RendererContext(
+                                    new RendererContextArgs
+                                    {
+                                        X = table.Position.X,
+                                        Y = table.Position.Y,
+                                        width = table.Size.X,
+                                        height = table.Size.Y,
+                                        Collector = collector,
+                                    }
+                                );
+                            }
+                            catch (Exception ex)
+                            {
+                                Log.Error($"{ex}");
+                            }
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex);
+                }
                 zIndex++;
             }
 
@@ -231,11 +238,10 @@ namespace Line.Framework.Default.Graphics
             );
 
             List<Vertex> result = [];
-            foreach (var i in values.OrderBy(c => c.Item1).Select(c => c.Item2))
+            foreach (var i in values.OrderBy(c => -c.Item1).Select(c => c.Item2))
             {
                 result.AddRange(i);
             }
-
             return result.ToArray();
         }
 

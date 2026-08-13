@@ -42,9 +42,9 @@ public abstract class UIWidget : UINode
         if (Parent != null && Parent is UIWidget i)
         {
             i = Parent as UIWidget;
-            si = i.GetSizeOnScreen() * i.Anchor;
+            si = (i?.GetSizeOnScreen()??new()) * (i?.Anchor??new());
             pa = i;
-            of = i.ChildrenOffset;
+            of = i?.ChildrenOffset??new();
         }
         return new(
             s.Value.X * (Position.Value.scale.X + of.scale.X)

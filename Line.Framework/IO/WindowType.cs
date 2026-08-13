@@ -171,7 +171,10 @@ public abstract class WindowType : IDisposable, IName
         set
         {
             if (value)
+            {
                 SDL.StartTextInput(WindowHandle);
+                SDL.RaiseWindow(WindowHandle);
+            }
             else
                 SDL.StopTextInput(WindowHandle);
         }
@@ -659,7 +662,14 @@ public abstract class WindowType : IDisposable, IName
                                 {
                                     if (ev.Type == (uint)item.Key)
                                     {
-                                        item.Value?.Invoke(ev);
+                                        try
+                                        {
+                                            item.Value?.Invoke(ev);
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            Log.Error(ex);
+                                        }
                                     }
                                 }
                             }

@@ -107,7 +107,7 @@ public class UIButton : UIWidget
         if (a is UIScreen)
         {
             var b = a as UIScreen;
-            input = b.window.Input;
+            input = b.InputManager;
             input?.CursorDown += Press;
             input?.CursorUp += Release;
         }

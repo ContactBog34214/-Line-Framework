@@ -8,6 +8,7 @@ using Line.Framework.Default.UIWidgets;
 using Line.Framework.Graphics;
 using Line.Framework.IO;
 using Line.Framework.Resource.Graphic;
+using Line.Framework.Sandbox;
 using Line.Framework.Types;
 using Line.Framework.UI;
 using SDL3;
@@ -24,7 +25,8 @@ public static class SimpleGame
     static readonly float SpinnerBoxSize = 400;
     static Font font;
     static List<string> Fonts = ["GenJyuuGothic", "Noto"];
-
+    static InsideSandbox Background;
+    static UISandbox sbSession;
     public static async Task Main()
     {
         sw.Start();
@@ -40,7 +42,7 @@ public static class SimpleGame
         foreach (var name in names)
             Log.Debug($"Asset:{name}");
 
-        Host = new(Backend: GraphicBackend.OpenGL)
+        Host = new(Backend: GraphicBackend.Vulkan)
         {
             Title = "-Line-Framework example",
             UpdatePerSecond = 10000,
@@ -82,13 +84,18 @@ public static class SimpleGame
         );
         Log.Debug("Loaded Font");
 
-        var Background = new UIBox
+
+        sbSession = new UISandbox
         {
             Name = "Background",
             Size = new Coord2(new(), new(1, 1)),
-            color = new(202f / 255f, 233f / 255f, 1, 1),
+            //color = new(202f / 255f, 233f / 255f, 1, 1),
             Parent = Host.Root,
+            Position = new Coord2(new(), new(0)),
+            Anchor = new Vector2(0),
         };
+
+        Background = sbSession.Sandbox;
 
         var spinnerBox = new UIBox
         {
@@ -99,6 +106,7 @@ public static class SimpleGame
             color = new(153f / 255f, 153f / 255f, 1, 1),
             Parent = Background,
             TouchMode = TouchModes.All,
+            Index = 0,
         };
         var Image = new UIImage(Host.Resource)
         {
@@ -109,7 +117,7 @@ public static class SimpleGame
             Parent = spinnerBox,
             TextureId = "Icon",
             TouchMode = TouchModes.None,
-            Index = 16,
+            Index = 2,
         };
 
         var cs = new UIImage(Host.Resource)
@@ -118,7 +126,7 @@ public static class SimpleGame
             Position = new Coord2(new(), new()),
             Size = new Coord2(new(32), new()),
             Anchor = new Vector2(0.5f),
-            Parent = Host.Root,
+            Parent = Background,
             TextureId = "Cursor",
             Index = 32767,
             TouchMode = TouchModes.None,
@@ -142,13 +150,14 @@ public static class SimpleGame
 
         Host.OnUpdate += (b) =>
         {
-            cs.Position = new Coord2(Host.Input.Mouse.Position, new());
+            cs.Position = new Coord2(Background.InputManager.Mouse.Position, new());
         };
         Host.OnRender += (b) =>
         {
             float r = sw.ElapsedMilliseconds / 1000f % SpinnerBoxSpeed * 360f / SpinnerBoxSpeed;
             spinnerBox.Rotation = r;
             Image.Rotation = r;
+            //sbSession.Rotation = r;
         };
         Host.FramePerSecond = -1;
         Host.FocusGained += () =>
@@ -177,7 +186,7 @@ public static class SimpleGame
             Position = new Coord2(new(0, -120), new(0.5f, 1)),
             Size = new Coord2(new(400, 160), new()),
             Anchor = new Vector2(0.5f),
-            Parent = Host.Root,
+            Parent = Background,
             Index = 100,
             FontId = Fonts,
             CursorColor = new(1f, 1f, 1f, 0.5f),
@@ -245,18 +254,18 @@ public static class SimpleGame
             YAlignment = Alignment.Right,
             color = new RgbaFloat(0f, 0f, 1f, 1f),
             FontId = Fonts,
-            Index = 65536,
+            Index = 0,
             FontSize = 40,
         };
 
         float Renderfps = 0;
         float UpdateMs = 0;
         float Rf = 0;
-        Host.OnRender += (b) =>
+        Background.OnRender += (b) =>
         {
             Rf = 1000f / (float)b;
         };
-        Host.OnUpdate += (b) =>
+        Background.OnUpdate += (b) =>
         {
             UpdateMs += ((float)b - UpdateMs) / 200f;
             Renderfps += (Rf - Renderfps) / 200f;
@@ -290,14 +299,14 @@ public static class SimpleGame
             Size = new Coord2(new(), new(0.35f, 1f)),
             Position = new Coord2(new(), new(1, 1)),
             Anchor = new Vector2(1),
-            Index = 2048,
-            Parent = Host.Root,
+            Index = 256,
+            Parent = Background,
             Num = 100,
             BufferSize = 256,
             MarkFontId = mono,
             MarkPrefix = (d) => $"{d}ms",
         };
-        Host.OnRender += renderChart.Update;
+        Background.OnRender += renderChart.Update;
         PerformanceChart updateChart = new(Host.Resource)
         {
             Name = "updateChart",
@@ -305,14 +314,13 @@ public static class SimpleGame
             Position = new Coord2(new(), new(0, 1)),
             Anchor = new Vector2(0, 1),
             Index = 256,
-            Parent = Host.Root,
+            Parent = Background,
             Num = 100,
             MarkFontId = mono,
             MarkPrefix = (d) => $"{d}ms",
         };
-        Host.OnUpdate += updateChart.Update;
+        Background.OnUpdate += updateChart.Update;
     }
-
     static void VisualTouch()
     {
         var TouchC = new UIBox()

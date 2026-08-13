@@ -23,16 +23,13 @@ public class UIInput : UIWidget
             else if (Focus == this)
                 Focus = null;
             if (Focus != null)
-                (root as UIScreen)?.window.TextInput = true;
+                (root as UIScreen)?.TextInput = true;
             else
-                (root as UIScreen)?.window.TextInput = false;
+                (root as UIScreen)?.TextInput = false;
             if (Focused)
-            {
-                (root as UIScreen)?.window.Input.TextInput += InputAction;
-                SDL.RaiseWindow((root as UIScreen)?.window.WindowHandle ?? nint.Zero);
-            }
+                (root as UIScreen)?.InputManager.TextInput += InputAction;
             else
-                (root as UIScreen)?.window.Input.TextInput -= InputAction;
+                (root as UIScreen)?.InputManager.TextInput -= InputAction;
         }
     }
 
@@ -368,14 +365,14 @@ public class UIInput : UIWidget
         }
         base.SetParent(value);
         root = FindRoot(this) as UIWidget;
-        if ((root as UIScreen)?.window.Input == im)
+        if ((root as UIScreen)?.InputManager == im)
             return;
         im?.CursorDown -= WhenClick;
         im?.CursorUp -= WhenUp;
         im?.KeyDown -= WhenKeyDown;
         im?.CursorMove -= WhenHold;
         im?.MouseWheel -= WhenScroll;
-        im = (root as UIScreen)?.window.Input;
+        im = (root as UIScreen)?.InputManager;
         im?.CursorDown += WhenClick;
         im?.KeyDown += WhenKeyDown;
         im?.CursorUp += WhenUp;
@@ -553,8 +550,6 @@ public class UIInput : UIWidget
         if (Focused && Text != null)
         {
             Vector4 color = new(CursorColor.R, CursorColor.G, CursorColor.B, CursorColor.A);
-            if (!SDL.TextInputActive((root as UIScreen)?.window.WindowHandle ?? nint.Zero))
-                color.W *= 0.3f;
             DrawSelectArea(InputPosition, new(color.X, color.Y, color.Z, color.W));
         }
     }

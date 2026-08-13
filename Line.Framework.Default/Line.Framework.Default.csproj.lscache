@@ -13,18 +13,18 @@ primary
 lastDtbSucceeded
 
 [properties]
-AssemblyName=Line.Framework
+AssemblyName=Line.Framework.Default
 CommandLineArgsForDesignTimeEvaluation=-langversion:14.0 -define:TRACE
 CompilerGeneratedFilesOutputPath=
 MaxSupportedLangVersion=14.0
 ProjectAssetsFile=<PATH>obj/project.assets.json
-RootNamespace=Line.Framework
+RootNamespace=Line.Framework.Default
 RunAnalyzers=
 RunAnalyzersDuringLiveAnalysis=
 SolutionPath=<PATH>../LineFramework.sln
 TargetFrameworkIdentifier=.NETCoreApp
-TargetPath=<PATH>bin/Debug/net10.0/Line.Framework.dll
-TargetRefPath=<PATH>obj/Debug/net10.0/ref/Line.Framework.dll
+TargetPath=<PATH>bin/Debug/net10.0/Line.Framework.Default.dll
+TargetRefPath=<PATH>obj/Debug/net10.0/ref/Line.Framework.Default.dll
 TemporaryDependencyNodeTargetIdentifier=net10.0
 
 [commandLineArguments]
@@ -44,8 +44,8 @@ TemporaryDependencyNodeTargetIdentifier=net10.0
 /debug:portable
 /filealign:512
 /optimize-
-/out:obj/Debug/net10.0/Line.Framework.dll
-/refout:obj/Debug/net10.0/refint/Line.Framework.dll
+/out:obj/Debug/net10.0/Line.Framework.Default.dll
+/refout:obj/Debug/net10.0/refint/Line.Framework.Default.dll
 /target:library
 /warnaserror-
 /utf8output
@@ -55,53 +55,21 @@ TemporaryDependencyNodeTargetIdentifier=net10.0
 
 [sourceFiles]
 Graphics/
- FullScreenMode.cs
- GraphicBackend.cs
- ICompositor.cs
- RendererType.cs
- Vertex.cs
-IO/
- FileManager.cs
- ICursor.cs
- IKey.cs
- IMouse.cs
- ITouch.cs
- Manager.cs
- WindowType.cs
-Localization.cs
-LogSystem.cs
-obj/Debug/net10.0/Line.Framework.GlobalUsings.g.cs
-Properties.cs
-ResourceManager/
- Audio.cs
- Font.cs
- IResource.cs
- LunarLabsFont.cs
- Manager.cs
- ResourceSet.cs
- ResourceType.cs
-Sandbox/
- InsideSandbox.cs
- SandCompositor.cs
- UISandbox.cs
- VirtualIM.cs
-Types/
- CircularBuffer.cs
- Coord2.cs
- IIndexable.cs
- IName.cs
- IndexList.cs
- Link.cs
- LongArray.cs
- RgbaFloat.cs
- TrackableList.cs
-UI/
- UIDrawCollector.cs
- UINode.cs
- UIScreen.cs
- UIWidget.cs
+ Compositor.cs
+ Renderer.cs
+IO/Window.cs
+obj/Debug/net10.0/Line.Framework.Default.GlobalUsings.g.cs
+UIWidgets/
+ PerformanceChart.cs
+ UIBox.cs
+ UIButton.cs
+ UICircle.cs
+ UIImage.cs
+ UIInput.cs
+ UIText.cs
 
 [metadataReferences]
+../Line.Framework/obj/Debug/net10.0/ref/Line.Framework.dll
 <DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.10/ref/net10.0/
  Microsoft.CSharp.dll
  Microsoft.VisualBasic.Core.dll
@@ -312,4 +280,4 @@ UI/
 [analyzerConfigFiles]
 ../.editorconfig
 <DOTNET>/sdk/10.0.110/Sdks/Microsoft.NET.Sdk/analyzers/build/config/analysislevel_10_default.globalconfig
-obj/Debug/net10.0/Line.Framework.GeneratedMSBuildEditorConfig.editorconfig
+obj/Debug/net10.0/Line.Framework.Default.GeneratedMSBuildEditorConfig.editorconfig

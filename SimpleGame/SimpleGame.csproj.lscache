@@ -29,7 +29,7 @@ TemporaryDependencyNodeTargetIdentifier=net10.0
 
 [commandLineArguments]
 /noconfig
-/unsafe-
+/unsafe+
 /checked-
 /nowarn:1701,1702,1701,1702
 /fullpaths
@@ -61,8 +61,10 @@ obj/Debug/net10.0/
 Program.cs
 
 [metadataReferences]
-../Line.Framework/obj/Debug/net10.0/ref/Line.Framework.dll
-<DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.4/ref/net10.0/
+../
+ Line.Framework.Default/obj/Debug/net10.0/ref/Line.Framework.Default.dll
+ Line.Framework/obj/Debug/net10.0/ref/Line.Framework.dll
+<DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.10/ref/net10.0/
  Microsoft.CSharp.dll
  Microsoft.VisualBasic.Core.dll
  Microsoft.VisualBasic.dll
@@ -231,14 +233,18 @@ Program.cs
  System.Xml.XPath.XDocument.dll
  WindowsBase.dll
 <NUGET>/
+ managedbass.fx/4.0.2/lib/net8.0/ManagedBass.Fx.dll
  managedbass/4.0.2/lib/net8.0/ManagedBass.dll
  microsoft.dotnet.platformabstractions/2.0.3/lib/netstandard1.3/Microsoft.DotNet.PlatformAbstractions.dll
  microsoft.extensions.dependencymodel/2.0.3/lib/netstandard1.6/Microsoft.Extensions.DependencyModel.dll
  nativelibraryloader/1.0.13/lib/netstandard2.0/NativeLibraryLoader.dll
  newtonsoft.json/9.0.1/lib/netstandard1.0/Newtonsoft.Json.dll
+ sdl3-cs/3.4.10.5/lib/net10.0/SDL3-CS.dll
  sharpgen.runtime.com/2.0.0-beta.13/lib/net7.0/SharpGen.Runtime.COM.dll
  sharpgen.runtime/2.0.0-beta.13/lib/net7.0/SharpGen.Runtime.dll
+ sixlabors.imagesharp/1.0.4/lib/netcoreapp3.1/SixLabors.ImageSharp.dll
  taglibsharp/2.3.0/lib/netstandard2.0/TagLibSharp.dll
+ veldrid.imagesharp/4.9.0/lib/net6.0/Veldrid.ImageSharp.dll
  veldrid.metalbindings/4.9.0/lib/netstandard2.0/Veldrid.MetalBindings.dll
  veldrid.openglbindings/4.9.0/lib/netstandard2.0/Veldrid.OpenGLBindings.dll
  veldrid.sdl2/4.9.0/lib/netstandard2.0/Veldrid.SDL2.dll
@@ -253,18 +259,19 @@ Program.cs
  vortice.mathematics/1.4.25/lib/net7.0/Vortice.Mathematics.dll
 
 [analyzerReferences]
-<DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.4/analyzers/dotnet/cs/
+<DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.10/analyzers/dotnet/cs/
  Microsoft.Interop.ComInterfaceGenerator.dll
  Microsoft.Interop.JavaScript.JSImportGenerator.dll
  Microsoft.Interop.LibraryImportGenerator.dll
  Microsoft.Interop.SourceGeneration.dll
  System.Text.Json.SourceGeneration.dll
  System.Text.RegularExpressions.Generator.dll
-<DOTNET>/sdk/10.0.104/Sdks/Microsoft.NET.Sdk/analyzers/
+<DOTNET>/sdk/10.0.110/Sdks/Microsoft.NET.Sdk/analyzers/
  Microsoft.CodeAnalysis.CSharp.NetAnalyzers.dll
  Microsoft.CodeAnalysis.NetAnalyzers.dll
 <NUGET>/polysharp/1.10.0/analyzers/dotnet/cs/PolySharp.SourceGenerators.dll
 
 [analyzerConfigFiles]
-<DOTNET>/sdk/10.0.104/Sdks/Microsoft.NET.Sdk/analyzers/build/config/analysislevel_10_default.globalconfig
+../.editorconfig
+<DOTNET>/sdk/10.0.110/Sdks/Microsoft.NET.Sdk/analyzers/build/config/analysislevel_10_default.globalconfig
 obj/Debug/net10.0/SimpleGame.GeneratedMSBuildEditorConfig.editorconfig

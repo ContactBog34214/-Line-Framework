@@ -9,68 +9,73 @@ namespace Line.Framework.IO;
 /// </summary>
 public class InputManager
 {
-    private readonly WindowType _window;
+    protected readonly WindowType _window;
 
     /// <summary>
     /// 鼠标对象
     /// </summary>
-    public Sdl3Mouse Mouse { get; } = new();
+    public virtual Sdl3Mouse Mouse { get; } = new();
 
     /// <summary>
     /// 键盘对象
     /// </summary>
-    public Sdl3Keyboard Keyboard { get; } = new();
+    public virtual Sdl3Keyboard Keyboard { get; } = new();
 
     /// <summary>
     /// 触摸对象
     /// </summary>
-    public Sdl3TouchDevice Touch { get; } = new();
-    Vector2 LastMousePosition { get; set; } = new();
+    public virtual Sdl3TouchDevice Touch { get; } = new();
+    protected virtual Vector2 LastMousePosition { get; set; } = new();
 
     // 事件
     /// <summary>
     /// 当按键按下时
     /// </summary>
-    public event Action<KeyCode> KeyDown;
+    public virtual event Action<KeyCode> KeyDown;
 
     /// <summary>
     /// 当按键松开时
     /// </summary>
-    public event Action<KeyCode> KeyUp;
+    public virtual event Action<KeyCode> KeyUp;
 
     /// <summary>
     /// 当鼠标按下时
     /// </summary>
-    public event Action<IMouse> MouseDown;
+    public virtual event Action<IMouse, MouseButton> MouseDown;
 
     /// <summary>
     /// 当鼠标松开时
     /// </summary>
-    public event Action<IMouse> MouseUp;
+    public virtual event Action<IMouse, MouseButton> MouseUp;
 
     /// <summary>
     /// 当鼠标滚轮滚动时
     /// </summary>
-    public event Action<IMouse> MouseWheel; // 滚动增量（正值向下/右）
+    public virtual event Action<IMouse> MouseWheel; // 滚动增量（正值向下/右）
 
     /// <summary>
     /// 当鼠标移动时
     /// </summary>
-    public event Action<IMouse> MouseMove; // dx, dy 增量
+    public virtual event Action<IMouse> MouseMove; // dx, dy 增量
 
     /// <summary>
     /// 获取剪切板文本
     /// </summary>
-    /// <returns></returns>
-    public string GetClipBoardText() => GetClipboardText();
+    /// <returns>系统剪切板文本</returns>
+    public virtual string GetClipBoardText() => GetClipboardText();
+    /// <summary>
+    /// 最新一个光标位置
+    /// </summary>
+    public Vector2 CursorPosition { get; set; }
 
     public InputManager(WindowType window)
     {
         _window = window;
         SubscribeEvents();
+        CursorMove += (i) => CursorPosition = i.Position;
     }
 
-    private void SubscribeEvents()
+    protected virtual void SubscribeEvents()
     {
         _window.EventPool.TryAdd(EventType.KeyDown, OnKeyDown);
         _window.EventPool.TryAdd(EventType.KeyUp, OnKeyUp);
@@ -87,14 +92,14 @@ public class InputManager
         };
     }
 
-    private void OnKeyDown(Event evt)
+    protected virtual void OnKeyDown(Event evt)
     {
         var K = (KeyCode)evt.Key.Key;
         Keyboard.Keys.Add(K);
         KeyDown?.Invoke(K);
     }
 
-    private void OnTextInput(Event evt)
+    protected virtual void OnTextInput(Event evt)
     {
         TextInput?.Invoke(Marshal.PtrToStringUTF8(evt.Text.Text));
     }
@@ -102,57 +107,43 @@ public class InputManager
     /// <summary>
     /// 当输入文本时
     /// </summary>
-    public event Action<string> TextInput;
+    public virtual event Action<string> TextInput;
 
-    private void OnKeyUp(Event evt)
+    protected virtual void OnKeyUp(Event evt)
     {
         var K = (KeyCode)evt.Key.Key;
         Keyboard.Keys.Remove(K);
         KeyUp?.Invoke(K);
     }
 
-    private void OnMouseDown(Event evt)
+    protected virtual void OnMouseDown(Event evt)
     {
         var bt = SDL3MB2LFMB((MouseButtonFlags)evt.Button.Button);
         Mouse.down.Add(bt);
-        MouseDown?.Invoke(Mouse);
+        MouseDown?.Invoke(Mouse, bt);
         CursorDown?.Invoke(Mouse);
     }
 
-    private static MouseButton SDL3MB2LFMB(MouseButtonFlags mousebutton)
+    protected static MouseButton SDL3MB2LFMB(MouseButtonFlags mousebutton)
     {
-        switch (mousebutton)
-        {
-            case MouseButtonFlags.Left:
-                return MouseButton.Left;
-            case MouseButtonFlags.Middle:
-                return MouseButton.Middle;
-            case MouseButtonFlags.Right:
-                return MouseButton.Right;
-            case MouseButtonFlags.X1:
-                return MouseButton.X1;
-            case MouseButtonFlags.X2:
-                return MouseButton.X2;
-            default:
-                return MouseButton.Left;
-        }
+        return (MouseButton)mousebutton;
     }
 
-    private void OnMouseUp(Event evt)
+    protected virtual void OnMouseUp(Event evt)
     {
         var bt = SDL3MB2LFMB((MouseButtonFlags)evt.Button.Button);
         Mouse.down.Remove(bt);
-        MouseUp?.Invoke(Mouse);
+        MouseUp?.Invoke(Mouse, bt);
         CursorUp?.Invoke(Mouse);
     }
 
-    private void OnMouseWheel(Event evt)
+    protected virtual void OnMouseWheel(Event evt)
     {
         Mouse.WheelDelta = new(evt.Wheel.X, evt.Wheel.Y);
         MouseWheel?.Invoke(Mouse);
     }
 
-    private void OnMouseMove()
+    protected virtual void OnMouseMove()
     {
         GetMouseState(out float x, out float y);
         float dx = x - LastMousePosition.X;
@@ -172,17 +163,17 @@ public class InputManager
     /// </summary>
     /// <param name="按键"></param>
     /// <returns>按下状态</returns>
-    public bool IsKeyDown(KeyCode key) => Keyboard.IsKeyDown(key);
+    public virtual bool IsKeyDown(KeyCode key) => Keyboard.IsKeyDown(key);
 
     /// <summary>
     /// 判断鼠标按键是否按下
     /// </summary>
     /// <param name="鼠标按键"></param>
     /// <returns>按下状态</returns>
-    public bool IsMouseButtonDown(MouseButton button) => Mouse.IsMouseButtonDown(button);
+    public virtual bool IsMouseButtonDown(MouseButton button) => Mouse.IsMouseButtonDown(button);
 
     //触摸
-    private void OnFingerDown(Event evt)
+    protected virtual void OnFingerDown(Event evt)
     {
         var id = evt.TFinger.FingerID;
         var position = new Vector2(evt.TFinger.X, evt.TFinger.Y);
@@ -196,9 +187,9 @@ public class InputManager
     /// <summary>
     /// 当手指按下时
     /// </summary>
-    public event Action<(ulong Id, Sdl3TouchPoint Finger)> FingerDown;
+    public virtual event Action<(ulong Id, Sdl3TouchPoint Finger)> FingerDown;
 
-    private void OnFingerUp(Event evt)
+    protected virtual void OnFingerUp(Event evt)
     {
         var id = evt.TFinger.FingerID;
         if (Touch.Touches.TryGetValue(id, out var touch))
@@ -215,9 +206,9 @@ public class InputManager
     /// <summary>
     /// 当手指抬起时
     /// </summary>
-    public event Action<(ulong Id, Sdl3TouchPoint Finger)> FingerUp;
+    public virtual event Action<(ulong Id, Sdl3TouchPoint Finger)> FingerUp;
 
-    private void OnFingerMove(Event evt)
+    protected virtual void OnFingerMove(Event evt)
     {
         var id = evt.TFinger.FingerID;
         if (Touch.Touches.TryGetValue(id, out var touch))
@@ -233,22 +224,22 @@ public class InputManager
     /// <summary>
     /// 当手指移动时
     /// </summary>
-    public event Action<(ulong Id, Sdl3TouchPoint Finger)> FingerMove;
+    public virtual event Action<(ulong Id, Sdl3TouchPoint Finger)> FingerMove;
 
     /// <summary>
     /// 当指针设备按下时
     /// </summary>
-    public event Action<ICursor> CursorDown;
+    public virtual event Action<ICursor> CursorDown;
 
     /// <summary>
     /// 当指针设备移动时
     /// </summary>
-    public event Action<ICursor> CursorMove;
+    public virtual event Action<ICursor> CursorMove;
 
     /// <summary>
     /// 当指针设备松开时
     /// </summary>
-    public event Action<ICursor> CursorUp;
+    public virtual event Action<ICursor> CursorUp;
 }
 
 public class Sdl3Mouse : IMouse
