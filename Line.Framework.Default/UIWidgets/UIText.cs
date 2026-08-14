@@ -78,7 +78,7 @@ public sealed class UIText : UIWidget
                 SkipLine = false;
                 continue;
             }
-            else if (SkipLine)
+            else if (SkipLine || baselinePos.Y + Offset.Y < 0)
                 continue;
 
             if (c == ' ')
@@ -115,7 +115,7 @@ public sealed class UIText : UIWidget
                     r = false;
                     SkipLine = true;
                 }
-                if (position.Y > args.height)
+                if (baselinePos.Y + Offset.Y - lineHeight > args.height)
                 {
                     r = false;
                     break;

@@ -24,11 +24,10 @@ public class Window : WindowType
         int Y = 0,
         int Width = 640,
         int Height = 480,
-        WindowState State = WindowState.Normal,
         GraphicBackend? Backend = null,
         string Title = "Title"
     )
-        : base(X, Y, Width, Height, State, Backend, Title)
+        : base(X, Y, Width, Height, Backend, Title)
     {
         if (Renderer == null)
             Renderer = new Renderer(this);

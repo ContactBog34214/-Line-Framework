@@ -54,21 +54,21 @@ public static class SimpleGame
             assembly.GetManifestResourceStream("SimpleGame.assets.CascadiaMono.ttf")
         );
         font = await Host.Resource.GetResource<Font>("Mono");
-        font?.Size = (uint)Host.Size.Y / 1;
+        font?.Size = (uint)Host.Size.Y / 10 * 7;
         await Host.Resource.Create(
             "Font",
             "GenJyuuGothic",
             assembly.GetManifestResourceStream("SimpleGame.assets.GenJyuuGothic-Normal-2.ttf")
         );
         font = await Host.Resource.GetResource<Font>("GenJyuuGothic");
-        font?.Size = (uint)Host.Size.Y / 1;
+        font?.Size = (uint)Host.Size.Y / 10 * 7;
         await Host.Resource.Create(
             "Font",
             "Noto",
             assembly.GetManifestResourceStream("SimpleGame.assets.NotoSansSC.ttf")
         );
         font = await Host.Resource.GetResource<Font>("Noto");
-        font?.Size = (uint)Host.Size.Y / 1;
+        font?.Size = (uint)Host.Size.Y / 10 * 7;
 
         Log.Debug("Loaded Font");
 

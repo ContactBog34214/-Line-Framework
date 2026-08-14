@@ -45,14 +45,18 @@ public abstract class WindowType : IDisposable, IName
     /// </summary>
     public virtual bool EnableMouseRelative
     {
-        get => SDL.GetWindowRelativeMouseMode(WindowHandle);
+        get;
         set
         {
-            SDL.SetWindowRelativeMouseMode(WindowHandle, value);
-            if (ShowCursor)
-                SDL.ShowCursor();
-            else
-                SDL.HideCursor();
+            field = value;
+            if (IsFocus)
+            {
+                SDL.SetWindowRelativeMouseMode(WindowHandle, value);
+                if (ShowCursor)
+                    SDL.ShowCursor();
+                else
+                    SDL.HideCursor();
+            }
         }
     }
 
@@ -250,7 +254,6 @@ public abstract class WindowType : IDisposable, IName
         int Y = 0,
         int Width = 640,
         int Height = 480,
-        WindowState State = WindowState.Normal,
         GraphicBackend? Backend = null,
         string Title = "Title"
     )
@@ -283,14 +286,14 @@ public abstract class WindowType : IDisposable, IName
             SDL.SetHint(SDL.Hints.Orientations, "Portrait");
         else if (Width > Height)
             SDL.SetHint(SDL.Hints.Orientations, "Landscape");
-        SDL.SetHint(SDL.Hints.VideoDriver, "wayland");
+
         SDL.Init(SDL.InitFlags.Video);
         Log.Debug($"Video driver: {SDL.GetCurrentVideoDriver()}");
         SDL.SetHint(SDL.Hints.TouchMouseEvents, "0");
         SDL.SetHint(SDL.Hints.MouseTouchEvents, "0");
         SDL.GLSetSwapInterval(0);
 
-        SDL.WindowFlags flags = SDL.WindowFlags.Resizable;
+        SDL.WindowFlags flags = SDL.WindowFlags.Resizable | SDL.WindowFlags.InputFocus | SDL.WindowFlags.MouseFocus;
 
         if (Backend == GraphicBackend.OpenGL)
             flags = flags | SDL.WindowFlags.OpenGL;
@@ -489,27 +492,50 @@ public abstract class WindowType : IDisposable, IName
             SDL.EventType.WindowFocusGained,
             (a) =>
             {
+                SDL.RaiseWindow(WindowHandle);
+                SDL.ShowWindow(WindowHandle);
                 if (SDL.GetMouseFocus() == WindowHandle)
                 {
                     if (ShowCursor)
                         SDL.ShowCursor();
                     else
                         SDL.HideCursor();
+                    //SDL.SetWindowRelativeMouseMode(WindowHandle, EnableMouseRelative);
                 }
                 FocusGained?.Invoke();
+            }
+        );
+        EventPool.TryAdd(
+            SDL.EventType.WindowMouseEnter,
+            (a) =>
+            {
+                SDL.SetWindowRelativeMouseMode(WindowHandle, EnableMouseRelative);
+                if (ShowCursor)
+                    SDL.ShowCursor();
+                else
+                    SDL.HideCursor();
+            }
+        );
+        EventPool.TryAdd(
+            SDL.EventType.WindowMouseLeave,
+            (a) =>
+            {
+                SDL.SetWindowRelativeMouseMode(WindowHandle, false);
+            }
+        );
+        EventPool.TryAdd(
+            SDL.EventType.WindowRestored,
+            (a) =>
+            {
+                SDL.RaiseWindow(WindowHandle);
+                SDL.ShowWindow(WindowHandle);
             }
         );
         EventPool.TryAdd(
             SDL.EventType.WindowFocusLost,
             (a) =>
             {
-                if (SDL.GetMouseFocus() == WindowHandle)
-                {
-                    if (ShowCursor)
-                        SDL.ShowCursor();
-                    else
-                        SDL.HideCursor();
-                }
+                SDL.SetWindowRelativeMouseMode(WindowHandle, false);
                 FocusLost?.Invoke();
             }
         );
