@@ -42,7 +42,7 @@ public static class SimpleGame
         foreach (var name in names)
             Log.Debug($"Asset:{name}");
 
-        Host = new(Backend: GraphicBackend.Vulkan)
+        Host = new(Backend: null)
         {
             Title = "-Line-Framework example",
             UpdatePerSecond = 10000,

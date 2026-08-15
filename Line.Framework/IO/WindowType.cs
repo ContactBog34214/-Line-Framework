@@ -23,7 +23,7 @@ public abstract class WindowType : IDisposable, IName
     /// <summary>
     /// 窗口SDL3句柄
     /// </summary>
-    public virtual nint WindowHandle { get; init; }
+    protected internal virtual nint WindowHandle { get; init; }
 
     /// <summary>
     /// 窗口输入管理器
@@ -217,7 +217,7 @@ public abstract class WindowType : IDisposable, IName
     {
         //默认设备（到最后都用不了那就算了吧）
         int Choice = 0;
-        for (int i = 0; i < 5; i++)
+        for (int i = 1; i < 5; i++)
         {
             GraphicsBackend backend;
             switch (i)
@@ -252,8 +252,8 @@ public abstract class WindowType : IDisposable, IName
     protected WindowType(
         int X = 0,
         int Y = 0,
-        int Width = 640,
-        int Height = 480,
+        int Width = 0,
+        int Height = 0,
         GraphicBackend? Backend = null,
         string Title = "Title"
     )
@@ -287,7 +287,7 @@ public abstract class WindowType : IDisposable, IName
         else if (Width > Height)
             SDL.SetHint(SDL.Hints.Orientations, "Landscape");
 
-        SDL.Init(SDL.InitFlags.Video);
+        SDL.Init(SDL.InitFlags.Video | SDL.InitFlags.Events);
         Log.Debug($"Video driver: {SDL.GetCurrentVideoDriver()}");
         SDL.SetHint(SDL.Hints.TouchMouseEvents, "0");
         SDL.SetHint(SDL.Hints.MouseTouchEvents, "0");
