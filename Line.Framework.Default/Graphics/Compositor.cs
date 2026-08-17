@@ -52,7 +52,7 @@ namespace Line.Framework.Default.Graphics
                     {
                         if (u.ClipList != null)
                             clip.AddRange(u.ClipList);
-                        clip.Add(GetClipArea(i, Size));
+                        clip.Add(GetClipArea(i, new(Offset, Size, Opacity, zIndex, i.Rotation.Value, null)));
                     }
                 }
                 else
@@ -273,7 +273,7 @@ namespace Line.Framework.Default.Graphics
             List<UIWidget> widgets = new();
             HashSet<UIWidget> visited = new();
 
-            void Collect(UIWidget node)
+            void Collect(UIWidget node, int i = 0)
             {
                 if (node == null)
                     return;
@@ -290,7 +290,7 @@ namespace Line.Framework.Default.Graphics
 
                 foreach (var child in sortedChildren)
                 {
-                    Collect(child as UIWidget);
+                    Collect(child as UIWidget, i + 1);
                 }
             }
 
@@ -298,10 +298,10 @@ namespace Line.Framework.Default.Graphics
             return widgets;
         }
 
-        private protected static Vector2[] GetClipArea(UIWidget tg, Vector2 renderArea)
+        private protected static Vector2[] GetClipArea(UIWidget tg, UIWidgetLayout table)
         {
-            var p = tg.GetPositionOnScreen();
-            var s = tg.GetSizeOnScreen();
+            var p = table.Position;
+            var s = table.Size;
             Vector2 ac = tg.Anchor;
             Vector2[] vert =
             [
@@ -328,7 +328,6 @@ namespace Line.Framework.Default.Graphics
                 //到绝对
                 target += p;
 
-                // 不在此处映射到 NDC，保留为屏幕像素坐标以便在渲染阶段统一转换
                 vert[i] = target;
             }
             return vert;
