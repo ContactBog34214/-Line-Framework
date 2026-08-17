@@ -34,9 +34,9 @@ public class PerformanceChart : UIWidget
         Buffer.Add(arg);
     }
 
-    public int BufferSize
+    public long BufferSize
     {
-        get => (int)Buffer.Size;
+        get => Buffer.Size;
         set => Buffer.Size = value;
     }
 
