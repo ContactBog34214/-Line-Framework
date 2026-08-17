@@ -19,6 +19,14 @@ public abstract class WindowType : IDisposable, IName
     /// 窗口标题
     /// </summary>
     public virtual string Name => Title;
+    /// <summary>
+    /// 启用SDL事件输出
+    /// </summary>
+    public virtual bool EnableEventOutput { get; set; } = false;
+    /// <summary>
+    /// 是否允许鼠标在获得焦点时离开窗口
+    /// </summary>
+    public virtual bool AllowMouseLeave { get; set; } = true;
 
     /// <summary>
     /// 窗口SDL3句柄
@@ -49,9 +57,9 @@ public abstract class WindowType : IDisposable, IName
         set
         {
             field = value;
+            SDL.SetWindowRelativeMouseMode(WindowHandle, value);
             if (IsFocus)
             {
-                SDL.SetWindowRelativeMouseMode(WindowHandle, value);
                 if (ShowCursor)
                     SDL.ShowCursor();
                 else
@@ -217,36 +225,39 @@ public abstract class WindowType : IDisposable, IName
     {
         //默认设备（到最后都用不了那就算了吧）
         int Choice = 0;
-        for (int i = 1; i < 5; i++)
-        {
-            GraphicsBackend backend;
-            switch (i)
-            {
-                case 1:
-                    backend = GraphicsBackend.Metal;
-                    break;
-                case 2:
-                    backend = GraphicsBackend.Direct3D11;
-                    break;
-                case 3:
-                    backend = GraphicsBackend.Vulkan;
-                    break;
-                case 4:
-                    backend = GraphicsBackend.OpenGL;
-                    break;
-                default:
-                    backend = GraphicsBackend.Vulkan;
-                    break;
-            }
-
-            if (GraphicsDevice.IsBackendSupported(backend))
+        for (int i = 0; i < 4; i++)
+            if (IsBackendSupported((GraphicBackend)i))
             {
                 Choice = i;
                 break;
             }
-        }
+
         //代码死犟死犟的，就这样吧～
         return (GraphicBackend)Choice;
+    }
+
+    public static bool IsBackendSupported(GraphicBackend backend)
+    {
+        GraphicsBackend tbackend;
+        switch ((int)backend)
+        {
+            case 0:
+                tbackend = GraphicsBackend.Metal;
+                break;
+            case 1:
+                tbackend = GraphicsBackend.Direct3D11;
+                break;
+            case 2:
+                tbackend = GraphicsBackend.Vulkan;
+                break;
+            case 3:
+                tbackend = GraphicsBackend.OpenGL;
+                break;
+            default:
+                tbackend = GraphicsBackend.Vulkan;
+                break;
+        }
+        return GraphicsDevice.IsBackendSupported(tbackend);
     }
 
     protected WindowType(
@@ -275,7 +286,7 @@ public abstract class WindowType : IDisposable, IName
         {
             Height = 480;
         }
-        if (Backend == null)
+        if (Backend == null || !IsBackendSupported(Backend ?? GraphicBackend.Direct3D))
         {
             Backend = BackendSelector();
         }
@@ -289,8 +300,14 @@ public abstract class WindowType : IDisposable, IName
 
         SDL.Init(SDL.InitFlags.Video | SDL.InitFlags.Events);
         Log.Debug($"Video driver: {SDL.GetCurrentVideoDriver()}");
+
         SDL.SetHint(SDL.Hints.TouchMouseEvents, "0");
         SDL.SetHint(SDL.Hints.MouseTouchEvents, "0");
+        SDL.SetHint(SDL.Hints.WindowsEnableMessageLoop,"1");
+        SDL.SetHint(SDL.Hints.WindowActivateWhenRaised,"1");
+        SDL.SetHint(SDL.Hints.WindowsRawKeyboard,"1");
+        SDL.SetHint(SDL.Hints.WindowsRawKeyboardInputsink,"1");
+
         SDL.GLSetSwapInterval(0);
 
         SDL.WindowFlags flags = SDL.WindowFlags.Resizable | SDL.WindowFlags.InputFocus | SDL.WindowFlags.MouseFocus;
@@ -500,7 +517,7 @@ public abstract class WindowType : IDisposable, IName
                         SDL.ShowCursor();
                     else
                         SDL.HideCursor();
-                    //SDL.SetWindowRelativeMouseMode(WindowHandle, EnableMouseRelative);
+                    SDL.SetWindowRelativeMouseMode(WindowHandle, EnableMouseRelative);
                 }
                 FocusGained?.Invoke();
             }
@@ -509,7 +526,7 @@ public abstract class WindowType : IDisposable, IName
             SDL.EventType.WindowMouseEnter,
             (a) =>
             {
-                SDL.SetWindowRelativeMouseMode(WindowHandle, EnableMouseRelative);
+                SDL.SetWindowRelativeMouseMode(WindowHandle, EnableMouseRelative && IsFocus);
                 if (ShowCursor)
                     SDL.ShowCursor();
                 else
@@ -562,7 +579,7 @@ public abstract class WindowType : IDisposable, IName
     /// </summary>
     public virtual bool ShowCursor
     {
-        get => field && EnableMouseRelative;
+        get => field && !EnableMouseRelative;
         set
         {
             field = value;
@@ -670,7 +687,19 @@ public abstract class WindowType : IDisposable, IName
                                     (a, ref b) =>
                                     {
                                         if (b.Type == (uint)SDL.EventType.WindowCloseRequested)
-                                            RequestQuit?.Invoke();
+                                            try
+                                            {
+                                                RequestQuit?.Invoke(); if (
+                                    0 == Input.Mouse.Position.X * Input.Mouse.Position.Y ||
+                                Size.X <= Input.Mouse.Position.X ||
+                                Size.Y <= Input.Mouse.Position.Y
+                                )
+                                                    SDL.SetWindowRelativeMouseMode(WindowHandle, false);
+                                            }
+                                            catch (Exception ex)
+                                            {
+                                                Log.Error($"RequestQuit failed:{ex}");
+                                            }
                                         return (
                                                 b.Window.WindowID == WindowID
                                                 || b.TFinger.WindowID == WindowID
@@ -684,13 +713,14 @@ public abstract class WindowType : IDisposable, IName
 
                                 if (!events)
                                     break;
+                                List<Task> tasks = [];
                                 foreach (var item in EventPool)
                                 {
                                     if (ev.Type == (uint)item.Key)
                                     {
                                         try
                                         {
-                                            item.Value?.Invoke(ev);
+                                            tasks.Add(Task.Run(() => item.Value?.Invoke(ev)));
                                         }
                                         catch (Exception ex)
                                         {
@@ -698,6 +728,23 @@ public abstract class WindowType : IDisposable, IName
                                         }
                                     }
                                 }
+
+                                if (EnableEventOutput) Log.Debug($"Event:{((SDL.EventType)ev.Type).ToString()}");
+                                try
+                                {
+                                    Task.WaitAll(tasks);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Log.Error(ex);
+                                }
+                                if (
+                                    AllowMouseLeave &&
+                                    (0 == Input.Mouse.Position.X * Input.Mouse.Position.Y ||
+                                Size.X <= Input.Mouse.Position.X ||
+                                Size.Y <= Input.Mouse.Position.Y)
+                                )
+                                    SDL.SetWindowRelativeMouseMode(WindowHandle, false);
                             }
                         }
                     }
