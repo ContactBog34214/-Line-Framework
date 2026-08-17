@@ -156,10 +156,102 @@ public class UIInput : UIWidget
                     InputPosition = new(0, Text.Length);
                 }
                 break;
+            case KeyCode.Home:
+                {
+                    var HLines = Text.Split('\n');
+                    var i = 0;
+                    var nums = HLines.Select(c =>
+                    {
+                        i += c.Length + 1;
+                        return i - c.Length - 1;
+                    }).ToList();
+                    var thisLineNum = 0;
+                    if (!ctrl)
+                    {
+                        thisLineNum = nums.BinarySearch(InputPosition.StartPosition);
+                        if (thisLineNum < 0) thisLineNum = ~thisLineNum - 1;
+                    }
+                    if (shift)
+                    {
+                        if (!IsLeftMain)
+                        {
+                            InputPosition = new(
+                                nums[thisLineNum],
+                                InputPosition.EndPosition
+                            );
+                        }
+                        else
+                        {
+                            int[] l =
+                            [
+                                InputPosition.StartPosition,
+                            nums[thisLineNum],
+                        ];
+                            if (l[0] >= l[1])
+                            {
+                                l[1] = InputPosition.StartPosition - Math.Max(0, l[0] - l[1]);
+                            }
+                            IsLeftMain = false;
+                            InputPosition = new(l.Min(), l.Max());
+                        }
+                    }
+                    else
+                    {
+                        var cur = nums[thisLineNum];
+                        InputPosition = new(cur, cur);
+                    }
+                    break;
+                }
+            case KeyCode.End:
+                {
+                    var eLines = Text.Split('\n');
+                    var ei = 0;
+                    var enums = eLines.Select(c =>
+                    {
+                        ei += c.Length + 1;
+                        return ei - 1;
+                    }).ToList();
+                    var ethisLineNum = eLines.Length - 1;
+                    if (!ctrl)
+                    {
+                        ethisLineNum = enums.BinarySearch(InputPosition.EndPosition);
+                        if (ethisLineNum < 0) ethisLineNum = ~ethisLineNum;
+                    }
+                    if (shift)
+                    {
+                        if (IsLeftMain)
+                        {
+                            InputPosition = new(
+                                InputPosition.StartPosition,
+                                enums[ethisLineNum]
+                            );
+                        }
+                        else
+                        {
+                            int[] l =
+                            [
+                                enums[ethisLineNum],
+                                InputPosition.EndPosition,
+                            ];
+                            if (l[0] <= l[1])
+                            {
+                                l[1] = InputPosition.EndPosition - Math.Max(0, l[0] - l[1]);
+                            }
+                            InputPosition = new(l.Min(), l.Max());
+                            IsLeftMain = true;
+                        }
+                    }
+                    else
+                    {
+                        var cur = enums[ethisLineNum];
+                        InputPosition = new(cur, cur);
+                    }
+                    break;
+                }
         }
     }
 
-    Action<string> InputAction;
+    readonly Action<string> InputAction;
 
     void WhenInput(string ev)
     {
@@ -333,20 +425,18 @@ public class UIInput : UIWidget
                     return Text.Length;
             }
         float startX = -Offset.X;
-        if (tmp.X < startX)
-            return Result;
-        else
-            for (int i = 0; i < Select.Length; i++)
-            {
-                var l = (TextWidget?.GetTextSize(Select.Substring(i, 1)) ?? new(0, 0)).X;
 
-                if (startX <= tmp.X && startX + l >= tmp.X)
-                {
-                    break;
-                }
-                startX += l;
-                Result++;
+        for (int i = 0; i < Select.Length; i++)
+        {
+            var l = (TextWidget?.GetTextSize(Select.Substring(i, 1)) ?? new(0, 0)).X;
+
+            if (startX + l * 0.5 >= tmp.X)
+            {
+                break;
             }
+            startX += l;
+            Result++;
+        }
         return Result;
     }
 
