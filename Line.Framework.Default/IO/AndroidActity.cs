@@ -1,45 +1,30 @@
+using Line.Framework.Default.Graphics;
 using Line.Framework.Graphics;
 using Line.Framework.IO;
 using SDL3;
 using Veldrid;
 using Veldrid.OpenGL;
 
-namespace Line.Framework.Default.Graphics;
+namespace Line.Framework.Default.IO;
 
-public class Window : WindowType
+public class AndroidActity : WindowType
 {
+    public virtual nint ActivityHandle => WindowHandle;
     public override RendererType Renderer { get; }
     public override ICompositor Compositor { get; }
-
-    public Window(
-        int Width = 640,
-        int Height = 480,
+    public override float FramePerSecond { get; set; } = 144;
+    public override float UpdatePerSecond { get; set; } = 1000;
+    public AndroidActity(
         GraphicBackend? Backend = null,
         string Title = "Title"
     )
     {
-        //检查参数
-        if (Width <= 0)
-        {
-            Width = 640;
-        }
-        if (Height <= 0)
-        {
-            Height = 480;
-        }
         if (Backend == null || !IsBackendSupported(Backend ?? GraphicBackend.Direct3D))
         {
             Backend = BackendSelector();
         }
 
         Resource = new();
-        //一个窗口
-        if (Width < Height)
-            SDL.SetHint(SDL.Hints.Orientations, "Portrait");
-        else if (Width > Height)
-            SDL.SetHint(SDL.Hints.Orientations, "Landscape");
-
-        SDL.Init(SDL.InitFlags.Video | SDL.InitFlags.Events);
         Log.Debug($"Video driver: {SDL.GetCurrentVideoDriver()}");
 
         SDL.SetHint(SDL.Hints.TouchMouseEvents, "0");
@@ -60,7 +45,9 @@ public class Window : WindowType
         if (Backend == GraphicBackend.Metal)
             flags |= SDL.WindowFlags.Metal;
 
-        WindowHandle = SDL.CreateWindow(Title, Width, Height, flags);
+        SDL.Init(SDL.InitFlags.Video);
+
+        WindowHandle = SDL.CreateWindow(Title, 640, 480, flags);
         SDL.ShowWindow(WindowHandle);
         SwapchainSource source = null;
         var driver = SDL.GetCurrentVideoDriver();
@@ -68,46 +55,7 @@ public class Window : WindowType
         try
         {
             uint props = SDL.GetWindowProperties(WindowHandle);
-            if (driver == "wayland")
-            {
-                IntPtr display = SDL.GetPointerProperty(
-                    props,
-                    SDL.Props.WindowWaylandDisplayPointer,
-                    IntPtr.Zero
-                );
-                IntPtr surface = SDL.GetPointerProperty(
-                    props,
-                    SDL.Props.WindowWaylandSurfacePointer,
-                    IntPtr.Zero
-                );
-                source = SwapchainSource.CreateWayland(display, surface);
-            }
-            else if (driver == "x11")
-            {
-                var display = SDL.GetPointerProperty(
-                    props,
-                    SDL.Props.WindowX11DisplayPointer,
-                    IntPtr.Zero
-                );
-                var x11Window = (IntPtr)
-                    SDL.GetNumberProperty(props, SDL.Props.WindowX11WindowNumber, 0);
-                source = SwapchainSource.CreateXlib(display, x11Window);
-            }
-            else if (driver == "windows")
-            {
-                var hwnd = SDL.GetPointerProperty(
-                    props,
-                    SDL.Props.WindowWin32HWNDPointer,
-                    IntPtr.Zero
-                );
-                var hinstance = SDL.GetPointerProperty(
-                    props,
-                    SDL.Props.WindowWin32InstancePointer,
-                    IntPtr.Zero
-                );
-                source = SwapchainSource.CreateWin32(hwnd, hinstance);
-            }
-            else if (driver == "Android")
+            if (driver == "Android")
             {
                 var surfaceHandle = SDL.GetPointerProperty(
                     props,
@@ -136,8 +84,7 @@ public class Window : WindowType
             Log.Error($"{ex}");
         }
 
-        Width = (int)Size.X;
-        Height = (int)Size.Y;
+        SDL.GetWindowSize(WindowHandle, out var Width, out var Height);
 
         var swapchainDesc = new SwapchainDescription(
             source,
@@ -162,10 +109,6 @@ public class Window : WindowType
                 case GraphicBackend.Metal:
                     if (GraphicsDevice.IsBackendSupported(GraphicsBackend.Metal))
                         Dev = GraphicsDevice.CreateMetal(Options, swapchainDesc);
-                    break;
-                case GraphicBackend.Direct3D:
-                    if (GraphicsDevice.IsBackendSupported(GraphicsBackend.Direct3D11))
-                        Dev = GraphicsDevice.CreateD3D11(Options, swapchainDesc);
                     break;
                 case GraphicBackend.Vulkan:
                     if (GraphicsDevice.IsBackendSupported(GraphicsBackend.Vulkan))
@@ -197,9 +140,7 @@ public class Window : WindowType
                     }
                     break;
                 default:
-                    if (GraphicsDevice.IsBackendSupported(GraphicsBackend.Vulkan))
-                        Dev = GraphicsDevice.CreateVulkan(Options, swapchainDesc);
-                    break;
+                    goto case GraphicBackend.Vulkan;
             }
         }
         catch (Exception ex)
@@ -246,4 +187,6 @@ public class Window : WindowType
     }
 
     protected override Thread MainThread { get; }
+    public override event Action FocusGained;
+    public override event Action FocusLost;
 }

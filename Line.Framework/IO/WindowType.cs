@@ -128,7 +128,7 @@ public abstract class WindowType : IDisposable, IName
             field = value;
         }
     } = false;
-    private readonly Thread MainThread;
+    protected virtual Thread MainThread { get; }
 
     /// <summary>
     /// 渲染频率
@@ -260,309 +260,10 @@ public abstract class WindowType : IDisposable, IName
         return GraphicsDevice.IsBackendSupported(tbackend);
     }
 
-    protected WindowType(
-        int X = 0,
-        int Y = 0,
-        int Width = 0,
-        int Height = 0,
-        GraphicBackend? Backend = null,
-        string Title = "Title"
-    )
-    {
-        //检查参数
-        if (X < 0)
-        {
-            X = 0;
-        }
-        if (Y < 0)
-        {
-            Y = 0;
-        }
-        if (Width <= 0)
-        {
-            Width = 640;
-        }
-        if (Height <= 0)
-        {
-            Height = 480;
-        }
-        if (Backend == null || !IsBackendSupported(Backend ?? GraphicBackend.Direct3D))
-        {
-            Backend = BackendSelector();
-        }
-
-        Resource = new();
-        //一个窗口
-        if (Width < Height)
-            SDL.SetHint(SDL.Hints.Orientations, "Portrait");
-        else if (Width > Height)
-            SDL.SetHint(SDL.Hints.Orientations, "Landscape");
-
-        SDL.Init(SDL.InitFlags.Video | SDL.InitFlags.Events);
-        Log.Debug($"Video driver: {SDL.GetCurrentVideoDriver()}");
-
-        SDL.SetHint(SDL.Hints.TouchMouseEvents, "0");
-        SDL.SetHint(SDL.Hints.MouseTouchEvents, "0");
-        SDL.SetHint(SDL.Hints.WindowsEnableMessageLoop,"1");
-        SDL.SetHint(SDL.Hints.WindowActivateWhenRaised,"1");
-        SDL.SetHint(SDL.Hints.WindowsRawKeyboard,"1");
-        SDL.SetHint(SDL.Hints.WindowsRawKeyboardInputsink,"1");
-
-        SDL.GLSetSwapInterval(0);
-
-        SDL.WindowFlags flags = SDL.WindowFlags.Resizable | SDL.WindowFlags.InputFocus | SDL.WindowFlags.MouseFocus;
-
-        if (Backend == GraphicBackend.OpenGL)
-            flags = flags | SDL.WindowFlags.OpenGL;
-        if (Backend == GraphicBackend.Vulkan)
-            flags = flags | SDL.WindowFlags.Vulkan;
-        if (Backend == GraphicBackend.Metal)
-            flags = flags | SDL.WindowFlags.Metal;
-
-        WindowHandle = SDL.CreateWindow(Title, Width, Height, flags);
-        SDL.ShowWindow(WindowHandle);
-        SwapchainSource source = null;
-        var driver = SDL.GetCurrentVideoDriver();
-
-        try
-        {
-            uint props = SDL.GetWindowProperties(WindowHandle);
-            if (driver == "wayland")
-            {
-                IntPtr display = SDL.GetPointerProperty(
-                    props,
-                    SDL.Props.WindowWaylandDisplayPointer,
-                    IntPtr.Zero
-                );
-                IntPtr surface = SDL.GetPointerProperty(
-                    props,
-                    SDL.Props.WindowWaylandSurfacePointer,
-                    IntPtr.Zero
-                );
-                source = SwapchainSource.CreateWayland(display, surface);
-            }
-            else if (driver == "x11")
-            {
-                var display = SDL.GetPointerProperty(
-                    props,
-                    SDL.Props.WindowX11DisplayPointer,
-                    IntPtr.Zero
-                );
-                var x11Window = (IntPtr)
-                    SDL.GetNumberProperty(props, SDL.Props.WindowX11WindowNumber, 0);
-                source = SwapchainSource.CreateXlib(display, x11Window);
-            }
-            else if (driver == "windows")
-            {
-                var hwnd = SDL.GetPointerProperty(
-                    props,
-                    SDL.Props.WindowWin32HWNDPointer,
-                    IntPtr.Zero
-                );
-                var hinstance = SDL.GetPointerProperty(
-                    props,
-                    SDL.Props.WindowWin32InstancePointer,
-                    IntPtr.Zero
-                );
-                source = SwapchainSource.CreateWin32(hwnd, hinstance);
-            }
-            else if (driver == "Android")
-            {
-                var surfaceHandle = SDL.GetPointerProperty(
-                    props,
-                    SDL.Props.WindowAndroidSurfacePointer,
-                    IntPtr.Zero
-                );
-                var jniEnv = SDL.GetAndroidJNIEnv();
-                source = SwapchainSource.CreateAndroidSurface(surfaceHandle, jniEnv);
-            }
-            else if (driver == "cocoa")
-            {
-                IntPtr nsWindow = SDL.GetPointerProperty(
-                    props,
-                    SDL.Props.WindowCocoaWindowPointer,
-                    IntPtr.Zero
-                );
-                source = SwapchainSource.CreateNSWindow(nsWindow);
-            }
-            else
-            {
-                Log.Error($"What is {driver}");
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error($"{ex}");
-        }
-
-        Width = (int)Size.X;
-        Height = (int)Size.Y;
-
-        var swapchainDesc = new SwapchainDescription(
-            source,
-            (uint)Width,
-            (uint)Height,
-            null, // 深度格式，可选
-            false // 垂直同步
-        );
-
-        WindowID = SDL.GetWindowID(WindowHandle);
-        GraphicsDeviceOptions Options = new GraphicsDeviceOptions
-        {
-            //自动otto
-            Debug = false,
-            PreferStandardClipSpaceYDirection = true,
-            SyncToVerticalBlank = false,
-        };
-        try
-        {
-            switch (Backend)
-            {
-                case GraphicBackend.Metal:
-                    if (GraphicsDevice.IsBackendSupported(GraphicsBackend.Metal))
-                        Dev = GraphicsDevice.CreateMetal(Options, swapchainDesc);
-                    break;
-                case GraphicBackend.Direct3D:
-                    if (GraphicsDevice.IsBackendSupported(GraphicsBackend.Direct3D11))
-                        Dev = GraphicsDevice.CreateD3D11(Options, swapchainDesc);
-                    break;
-                case GraphicBackend.Vulkan:
-                    if (GraphicsDevice.IsBackendSupported(GraphicsBackend.Vulkan))
-                        Dev = GraphicsDevice.CreateVulkan(Options, swapchainDesc);
-                    break;
-                case GraphicBackend.OpenGL:
-                    if (GraphicsDevice.IsBackendSupported(GraphicsBackend.OpenGL))
-                    {
-                        nint GLContext = SDL.GLCreateContext(WindowHandle);
-                        var info = new OpenGLPlatformInfo(
-                            openGLContextHandle: GLContext,
-                            getProcAddress: (name) => SDL.GLGetProcAddress(name),
-                            makeCurrent: (ctx) => SDL.GLMakeCurrent(WindowHandle, ctx), // 必须返回 bool
-                            getCurrentContext: SDL.GLGetCurrentContext,
-                            clearCurrentContext: () => SDL.GLMakeCurrent(WindowHandle, IntPtr.Zero),
-                            deleteContext: (ctx) => SDL.GLDestroyContext(ctx),
-                            swapBuffers: () => SDL.GLSwapWindow(WindowHandle),
-                            setSyncToVerticalBlank: (enabled) =>
-                                SDL.GLSetSwapInterval(enabled ? 1 : 0)
-                        );
-                        SDL.GLSetSwapInterval(0);
-
-                        Dev = GraphicsDevice.CreateOpenGL(
-                            Options,
-                            info,
-                            (uint)Size.X,
-                            (uint)Size.Y
-                        );
-                    }
-                    break;
-                default:
-                    if (GraphicsDevice.IsBackendSupported(GraphicsBackend.Vulkan))
-                        Dev = GraphicsDevice.CreateVulkan(Options, swapchainDesc);
-                    break;
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error($"{ex.Message}");
-            if (GraphicsDevice.IsBackendSupported(GraphicsBackend.Vulkan))
-                Dev = GraphicsDevice.CreateVulkan(Options, swapchainDesc);
-            else
-                Dispose();
-            return;
-        }
-
-        RenderBackend = (GraphicBackend)Backend;
-
-        //指令
-        if (Dev == null)
-        {
-            Log.Error("GraphicsDevice Failed");
-            Dispose();
-            return;
-        }
-
-        Log.Debug($"GraphicsDevice:{Dev.BackendType} {Dev.ApiVersion}");
-        Log.Debug($"GPU:{Dev.DeviceName}");
-
-        Collector = new();
-        Root = new(this, 0, 0);
-
-        //资源管理器
-        Audio = new TAudio(Resource);
-        Resource.AddType("Audio", Audio);
-        OnWindowResized();
-        //输入器
-        Input = new(this);
-        MainThread = new Thread(UpdateWindow);
-        MainThread.Start();
-        MainThread.Name = "Renderer";
-
-        //绑定事件
-        EventPool.TryAdd(
-            SDL.EventType.WindowResized,
-            (a) =>
-            {
-                OnWindowResized();
-            }
-        );
-        EventPool.TryAdd(
-            SDL.EventType.WindowFocusGained,
-            (a) =>
-            {
-                SDL.RaiseWindow(WindowHandle);
-                SDL.ShowWindow(WindowHandle);
-                if (SDL.GetMouseFocus() == WindowHandle)
-                {
-                    if (ShowCursor)
-                        SDL.ShowCursor();
-                    else
-                        SDL.HideCursor();
-                    SDL.SetWindowRelativeMouseMode(WindowHandle, EnableMouseRelative);
-                }
-                FocusGained?.Invoke();
-            }
-        );
-        EventPool.TryAdd(
-            SDL.EventType.WindowMouseEnter,
-            (a) =>
-            {
-                SDL.SetWindowRelativeMouseMode(WindowHandle, EnableMouseRelative && IsFocus);
-                if (ShowCursor)
-                    SDL.ShowCursor();
-                else
-                    SDL.HideCursor();
-            }
-        );
-        EventPool.TryAdd(
-            SDL.EventType.WindowMouseLeave,
-            (a) =>
-            {
-                SDL.SetWindowRelativeMouseMode(WindowHandle, false);
-            }
-        );
-        EventPool.TryAdd(
-            SDL.EventType.WindowRestored,
-            (a) =>
-            {
-                SDL.RaiseWindow(WindowHandle);
-                SDL.ShowWindow(WindowHandle);
-            }
-        );
-        EventPool.TryAdd(
-            SDL.EventType.WindowFocusLost,
-            (a) =>
-            {
-                SDL.SetWindowRelativeMouseMode(WindowHandle, false);
-                FocusLost?.Invoke();
-            }
-        );
-        RequestQuit = Dispose;
-    }
-
     /// <summary>
     /// 资产构建器:音频构建器
     /// </summary>
-    public virtual TAudio Audio { get; private set; }
+    public virtual TAudio Audio { get; protected set; }
 
     /// <summary>
     /// SDL3窗口ID
@@ -592,16 +293,16 @@ public abstract class WindowType : IDisposable, IName
             }
         }
     } = true;
-    internal virtual ConcurrentDictionary<SDL.EventType, Action<SDL.Event>> EventPool { get; } =
+    protected internal virtual ConcurrentDictionary<SDL.EventType, Action<SDL.Event>> EventPool { get; } =
         new();
 
     /// <summary>
     /// 当窗口获得焦点时
     /// </summary>
-    public event Action FocusGained;
+    public virtual event Action FocusGained;
 
     //当窗口失去焦点时
-    public event Action FocusLost;
+    public virtual event Action FocusLost;
 
     /// <summary>
     /// 窗口是否存在
@@ -630,7 +331,7 @@ public abstract class WindowType : IDisposable, IName
         }
     }
 
-    private void UpdateWindow()
+    protected virtual void UpdateWindow()
     {
         var sw = new Stopwatch();
         sw.Start();
@@ -827,7 +528,7 @@ public abstract class WindowType : IDisposable, IName
     private uint _newWidth,
         _newHeight;
 
-    private void OnWindowResized()
+    protected virtual void OnWindowResized()
     {
         _resizePending = true;
         SDL.GetWindowSize(WindowHandle, out _, out _);
@@ -878,5 +579,77 @@ public abstract class WindowType : IDisposable, IName
             tmp.Add(new(new(item.W, item.H), item.RefreshRate, item.PixelDensity));
         }
         return tmp.ToArray();
+    }
+
+    protected virtual void BindEvents()
+    {
+        //绑定事件
+        EventPool.TryAdd(
+            SDL.EventType.WindowResized,
+            (a) =>
+            {
+                OnWindowResized();
+            }
+        );
+        EventPool.TryAdd(
+            SDL.EventType.WindowFocusGained,
+            (a) =>
+            {
+                SDL.RaiseWindow(WindowHandle);
+                SDL.ShowWindow(WindowHandle);
+                if (SDL.GetMouseFocus() == WindowHandle)
+                {
+                    if (ShowCursor)
+                        SDL.ShowCursor();
+                    else
+                        SDL.HideCursor();
+                    SDL.SetWindowRelativeMouseMode(WindowHandle, EnableMouseRelative);
+                }
+                FocusGained?.Invoke();
+            }
+        );
+        EventPool.TryAdd(
+            SDL.EventType.WindowMouseEnter,
+            (a) =>
+            {
+                SDL.SetWindowRelativeMouseMode(WindowHandle, EnableMouseRelative && IsFocus);
+                if (ShowCursor)
+                    SDL.ShowCursor();
+                else
+                    SDL.HideCursor();
+            }
+        );
+        EventPool.TryAdd(
+            SDL.EventType.WindowMouseLeave,
+            (a) =>
+            {
+                SDL.SetWindowRelativeMouseMode(WindowHandle, false);
+            }
+        );
+        EventPool.TryAdd(
+            SDL.EventType.WindowRestored,
+            (a) =>
+            {
+                SDL.RaiseWindow(WindowHandle);
+                SDL.ShowWindow(WindowHandle);
+            }
+        );
+        EventPool.TryAdd(
+            SDL.EventType.WindowFocusLost,
+            (a) =>
+            {
+                SDL.SetWindowRelativeMouseMode(WindowHandle, false);
+                FocusLost?.Invoke();
+            }
+        );
+        RequestQuit = Dispose;
+    }
+
+    protected virtual void CreateResource()
+    {
+        Audio = new TAudio(Resource);
+        Resource.AddType("Audio", Audio);
+        Resource.AddType("Image", new TResourceSet(Dev, Renderer.TextureLayout));
+        Resource.AddType("Font", new TFont(Dev, Renderer.TextureLayout));
     }
 }

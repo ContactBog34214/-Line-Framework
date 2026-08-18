@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Text;
 using Line.Framework;
 using Line.Framework.Default.Graphics;
+using Line.Framework.Default.IO;
 using Line.Framework.Default.UIWidgets;
 using Line.Framework.Graphics;
 using Line.Framework.IO;
@@ -14,15 +15,15 @@ using Line.Framework.UI;
 using SDL3;
 #pragma warning disable CS8618
 
-namespace SG;
+namespace SimpleGame;
 
-public static class SimpleGame
+public static class SimpleGameMain
 {
-    static Window Host;
+    static WindowType Host;
     static Localization Localization;
     static Stopwatch sw = new();
     static readonly float SpinnerBoxSpeed = 3.5f;
-    static readonly float SpinnerBoxSize = 800;
+    static readonly float SpinnerBoxSize = 400;
     static Font font;
     static List<string> Fonts = ["GenJyuuGothic", "Noto"];
     static UIWidget Background;
@@ -43,7 +44,22 @@ public static class SimpleGame
         foreach (var name in names)
             Log.Debug($"Asset:{name}");
 
-        Host = new(Backend: GraphicBackend.Vulkan)
+        bool AndroidMode = false;
+        foreach (var item in args)
+        {
+            var splited = item.Split("=");
+            if (splited[0] == "--AndroidActity")
+            {
+                AndroidMode = true;
+            }
+        }
+        if (AndroidMode)
+            Host = new AndroidActity(Backend: GraphicBackend.Vulkan)
+            {
+                Title = "-Line-Framework example",
+                UpdatePerSecond = 10000,
+            };
+        else Host = new Window(Backend: GraphicBackend.Vulkan)
         {
             Title = "-Line-Framework example",
             UpdatePerSecond = 10000,
@@ -183,7 +199,7 @@ public static class SimpleGame
 
         //PerTest(20000, Host.Root);
 
-        Host.EnableMouseRelative = true;
+        //Host.EnableMouseRelative = true;
         Host.MouseSpeedScale = 1;
         cs.Visible = Host.EnableMouseRelative;
 

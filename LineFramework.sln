@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleGame", "SimpleGame\Si
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Line.Framework.Default", "Line.Framework.Default\Line.Framework.Default.csproj", "{B6040587-679C-48B7-B096-C3154DF4D978}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleGame.Android", "SimpleGame.Android\SimpleGame.Android.csproj", "{9DC3B72A-C183-45A0-B804-4FAADB301817}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -55,6 +57,18 @@ Global
 		{B6040587-679C-48B7-B096-C3154DF4D978}.Release|x64.Build.0 = Release|Any CPU
 		{B6040587-679C-48B7-B096-C3154DF4D978}.Release|x86.ActiveCfg = Release|Any CPU
 		{B6040587-679C-48B7-B096-C3154DF4D978}.Release|x86.Build.0 = Release|Any CPU
+		{9DC3B72A-C183-45A0-B804-4FAADB301817}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9DC3B72A-C183-45A0-B804-4FAADB301817}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9DC3B72A-C183-45A0-B804-4FAADB301817}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{9DC3B72A-C183-45A0-B804-4FAADB301817}.Debug|x64.Build.0 = Debug|Any CPU
+		{9DC3B72A-C183-45A0-B804-4FAADB301817}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{9DC3B72A-C183-45A0-B804-4FAADB301817}.Debug|x86.Build.0 = Debug|Any CPU
+		{9DC3B72A-C183-45A0-B804-4FAADB301817}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9DC3B72A-C183-45A0-B804-4FAADB301817}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9DC3B72A-C183-45A0-B804-4FAADB301817}.Release|x64.ActiveCfg = Release|Any CPU
+		{9DC3B72A-C183-45A0-B804-4FAADB301817}.Release|x64.Build.0 = Release|Any CPU
+		{9DC3B72A-C183-45A0-B804-4FAADB301817}.Release|x86.ActiveCfg = Release|Any CPU
+		{9DC3B72A-C183-45A0-B804-4FAADB301817}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
