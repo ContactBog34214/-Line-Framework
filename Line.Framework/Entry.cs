@@ -9,7 +9,7 @@ public static class Entry
     /// <summary>
     /// 基准频率(单位=秒)
     /// </summary>
-    public static double BaseFrequency { get; set; } = 200;
+    public static double BaseFrequency { get; set; } = 10000;
     private static Stopwatch stopwatch = new();
     /// <summary>
     /// 新增主线程托管任务
