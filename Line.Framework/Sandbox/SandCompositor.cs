@@ -55,7 +55,7 @@ namespace Line.Framework.Sandbox
                         {
                             if (u.ClipList != null)
                                 clip.AddRange(u.ClipList);
-                            clip.Add(GetClipArea(i, Size));
+                            clip.Add(GetClipArea(i, new(Offset, Size, Opacity, zIndex, i.Rotation.Value, null)));
                         }
                         UILayoutTable.Add(i, new(Offset, Size, Opacity, zIndex, i.Rotation.Value, clip));
                     }
@@ -304,10 +304,10 @@ namespace Line.Framework.Sandbox
             return widgets;
         }
 
-        private protected static Vector2[] GetClipArea(UIWidget tg, Vector2 renderArea)
+        private protected static Vector2[] GetClipArea(UIWidget tg, UIWidgetLayout table)
         {
-            var p = tg.GetPositionOnScreen();
-            var s = tg.GetSizeOnScreen();
+            var p = table.Position;
+            var s = table.Size;
             Vector2 ac = tg.Anchor;
             Vector2[] vert =
             [
@@ -334,12 +334,10 @@ namespace Line.Framework.Sandbox
                 //到绝对
                 target += p;
 
-                // 不在此处映射到 NDC，保留为屏幕像素坐标以便在渲染阶段统一转换
                 vert[i] = target;
             }
             return vert;
         }
-
         private protected Vertex[] GetVertices(Vertex[] vertex, Vector2 source, UIWidget s)
         {
             if (!UILayoutTable.TryGetValue(s, out var tb))

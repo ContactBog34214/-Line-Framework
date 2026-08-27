@@ -65,6 +65,7 @@ void main()
 
     public override void Render(Vertex[] vertices)
     {
+        if (!Host.Exists) return;
         var screenSize = Host.Size;
         if (_shaders == null)
             CreateShader(gd);

@@ -47,12 +47,24 @@ public abstract class UINode : IDisposable, IName, IIndexable
             return;
 
         //解除旧绑定
+        var op = _parent;
+        if (op != null)
+            lock (op._children)
+                try
+                {
+                    _parent._children.Remove(this);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex);
+                }
         _parent?.AddNodeTreeVersion();
-        _parent?._children.Remove(this);
 
         //新绑定
         _parent = value;
-        _parent?._children.Add(this);
+        if (_parent != null)
+            lock (_parent._children)
+                _parent._children.Add(this);
         _parent?.AddNodeTreeVersion();
 
         foreach (var i in _children.OrderBy(c => c?.Index ?? -100))

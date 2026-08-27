@@ -18,6 +18,11 @@
 
   <ItemGroup>
     <PackageReference Include="SDL3-CS" Version="3.4.10.5" />
+    <PackageReference Include="SDL3-CS.Android" Version="3.4.14.1" />
+    <PackageReference Include="SDL3-CS.iOS" Version="3.4.14.1" />
+    <PackageReference Include="SDL3-CS.Linux" Version="3.4.14.1" />
+    <PackageReference Include="SDL3-CS.MacOS" Version="3.4.14.1" />
+    <PackageReference Include="SDL3-CS.Windows" Version="3.4.14.1" />
     <PackageReference Include="Veldrid" Version="4.9.0" />
     <PackageReference Include="Veldrid.ImageSharp" Version="4.9.0" />
     <PackageReference Include="Veldrid.SPIRV" Version="1.0.15" />
