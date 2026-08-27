@@ -16,7 +16,7 @@ public class Window : WindowType
         int Height = 480,
         GraphicBackend? Backend = null,
         string Title = "Title"
-    )
+    ) : base()
     {
         //检查参数
         if (Width <= 0)

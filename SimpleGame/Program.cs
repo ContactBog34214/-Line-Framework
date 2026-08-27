@@ -54,12 +54,12 @@ public static class SimpleGameMain
             }
         }
         if (AndroidMode)
-            Host = new AndroidActity(Backend: GraphicBackend.Vulkan)
+            Host = new AndroidActity()
             {
                 Title = "-Line-Framework example",
                 UpdatePerSecond = 10000,
             };
-        else Host = new Window(Backend: GraphicBackend.Vulkan)
+        else Host = new Window(Backend: GraphicBackend.OpenGL)
         {
             Title = "-Line-Framework example",
             UpdatePerSecond = 10000,
@@ -221,6 +221,17 @@ public static class SimpleGameMain
 
         VisualTouch();
         Host.Scale = 1f;
+
+        Host.RequestQuit = async () =>
+        {
+            Host.Dispose();
+            await Entry.Cancel();
+        };
+        while (Host.Exists)
+        {
+            await Task.Delay(5);
+        }
+
         /*
         FileManager fm = new("/home/smellyfish/Documents/Projects/FMTest");
         fm.CompressFile = true;
@@ -266,7 +277,7 @@ public static class SimpleGameMain
         return sb.ToString();
     }
 
-    static void FPSPrinter()
+    static async Task FPSPrinter()
     {
         var perText = new UIText(Host.Resource)
         {
@@ -332,7 +343,16 @@ public static class SimpleGameMain
             Multiple = 5,
             TouchMode = TouchModes.None,
         };
-        Host.OnRender += renderChart.Update;
+        Stopwatch sw = new();
+        sw.Start();
+        double last = 0;
+        Entry.AddFunc(async _ =>
+        {
+            long tick = sw.ElapsedTicks;
+            double milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
+            renderChart.Update(milliseconds - last);
+            last = milliseconds;
+        }, 6000);
         PerformanceChart updateChart = new(Host.Resource)
         {
             Name = "updateChart",

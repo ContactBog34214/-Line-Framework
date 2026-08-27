@@ -9,12 +9,18 @@ using Line.Framework.Types;
 using Line.Framework.UI;
 using SDL3;
 using Veldrid;
-using Veldrid.OpenGL;
 
 namespace Line.Framework.IO;
 
 public abstract class WindowType : IDisposable, IName
 {
+    protected WindowType()
+    {
+        if (inited) return;
+        inited = true;
+        Entry.AddFunc(async _ => SDL.PumpEvents(), -1);
+    }
+    private static bool inited = false;
     /// <summary>
     /// 窗口标题
     /// </summary>
@@ -365,7 +371,7 @@ public abstract class WindowType : IDisposable, IName
                             wait = 0;
                         if (delay < wait)
                         {
-                            Task.Delay(TimeSpan.FromMicroseconds(wait - delay))
+                            Task.Delay(TimeSpan.FromMilliseconds(wait - delay))
                                 .GetAwaiter()
                                 .GetResult();
                             tick = sw.ElapsedTicks;
@@ -374,7 +380,6 @@ public abstract class WindowType : IDisposable, IName
                         }
                         if (delay >= wait)
                         {
-                            SDL.PumpEvents();
                             OnUpdate?.Invoke(delay);
                             UpdateMs = milliseconds;
                             while (true)
@@ -494,7 +499,7 @@ public abstract class WindowType : IDisposable, IName
                         wait = 0;
                     if (delay < wait)
                     {
-                        await Task.Delay(TimeSpan.FromMicroseconds(wait - delay));
+                        await Task.Delay(TimeSpan.FromMilliseconds(wait - delay));
 
                         tick = sw.ElapsedTicks;
                         milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
