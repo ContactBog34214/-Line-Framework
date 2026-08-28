@@ -9,14 +9,14 @@ namespace Line.Framework.IO;
 /// <summary>
 /// 虚拟文件管理器
 /// </summary>
-public class FileManager
+public class FileManager : IDisposable
 {
     private readonly Stopwatch Base = new();
 
     /// <summary>
     /// 根目录
     /// </summary>
-    public string WorkDir { get; private set; }
+    public string WorkDir { get; protected set; }
 
     /// <summary>
     /// 映射缓存
@@ -86,17 +86,17 @@ public class FileManager
     }
 
     private void CacheCollectorControlor()
-    {
-        WeakReference<FileManager> fm = new(this);
-        while (true)
+    { 
+        CancellationToken s = tokenSource.Token;
+        while (!tokenSource.Token.IsCancellationRequested)
         {
-            Thread.Sleep(5000);
-            if (fm.TryGetTarget(out _))
-                CacheCollector();
-            else
-                return;
+            if (s.WaitHandle.WaitOne(1000)) break;
+            CacheCollector();
         }
     }
+
+    public volatile bool _isDisposed = false;
+    public bool IsDisposed => _isDisposed;
 
     /// <summary>
     /// 调用缓存回收器回收缓存
@@ -882,4 +882,13 @@ public class FileManager
 
         return Convert.ToHexString(hashBytes).ToLowerInvariant();
     }
+    public void Dispose()
+    {
+        tokenSource.Cancel();
+        _isDisposed = true;
+        WorkDir = null;
+        cacheManagerThread?.Join(1000);
+        tokenSource.Dispose();
+    }
+    private CancellationTokenSource tokenSource = new();
 }
