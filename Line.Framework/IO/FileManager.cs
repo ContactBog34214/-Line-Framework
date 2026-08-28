@@ -95,7 +95,7 @@ public class FileManager : IDisposable
         }
     }
 
-    public volatile bool _isDisposed = false;
+    protected volatile bool _isDisposed = false;
     public bool IsDisposed => _isDisposed;
 
     /// <summary>
