@@ -39,6 +39,11 @@ public class Window : WindowType
         else if (Width > Height)
             SDL.SetHint(SDL.Hints.Orientations, "Landscape");
 
+        if (OperatingSystem.IsLinux() &&
+            !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")))
+            SDL.SetHint(SDL.Hints.VideoDriver, "wayland");
+
+
         SDL.Init(SDL.InitFlags.Video | SDL.InitFlags.Events);
         Log.Debug($"Video driver: {SDL.GetCurrentVideoDriver()}");
 

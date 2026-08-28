@@ -77,7 +77,6 @@ public class ResourceSetArg
 {
     public Texture Texture { get; init; }
     public ResourceSet ResourceSet { get; init; }
-
     internal ResourceSetArg(Texture t, ResourceSet rs)
     {
         Texture = t;

@@ -15,7 +15,78 @@ namespace Line.Framework.IO;
 
 public abstract class WindowType : IAsyncDisposable, IName
 {
+#if LINUX
+SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
+#endif
     protected static ConcurrentQueue<(SDL.Event Event, object[] Extra)> PollEvents { get; } = new();
+    protected nint IconSurfaceID { get; set; } = default;
+    /// <summary>
+    /// 使用Stream设置窗口图标
+    /// </summary>
+    /// <param name="流"></param>
+    /// <param name="自动关闭流"></param>
+    public void SetIcon(Stream iconStream, bool closeStream = false)
+    {
+        try
+        {
+            if (IconSurfaceID != nint.Zero)
+            {
+                SDL.DestroySurface(IconSurfaceID);
+                IconSurfaceID = nint.Zero;
+            }
+
+            using (var stream = SDL.IOFromStream(iconStream))
+            {
+                IconSurfaceID = SDL.LoadSurfaceIO(stream.Handle, false);
+
+                if (IconSurfaceID == nint.Zero)
+                {
+                    Log.Error($"Failed to load window icon: {SDL.GetError()}");
+                    return;
+                }
+
+                if (!SDL.SetWindowIcon(WindowHandle, IconSurfaceID))
+                {
+                    Log.Error($"Failed to set window icon: {SDL.GetError()}");
+
+                    SDL.DestroySurface(IconSurfaceID);
+                    IconSurfaceID = nint.Zero;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex);
+
+            if (IconSurfaceID != nint.Zero)
+            {
+                try
+                {
+                    SDL.DestroySurface(IconSurfaceID);
+                }
+                catch (Exception destroyEx)
+                {
+                    Log.Error(destroyEx);
+                }
+
+                IconSurfaceID = nint.Zero;
+            }
+        }
+        finally
+        {
+            if (closeStream)
+            {
+                try
+                {
+                    iconStream.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex);
+                }
+            }
+        }
+    }
     protected WindowType()
     {
         if (inited) return;
@@ -555,6 +626,7 @@ public abstract class WindowType : IAsyncDisposable, IName
             Log.Warning($"{ex.Message}");
         }
         if (WindowHandle != IntPtr.Zero) SDL.DestroyWindow(WindowHandle);
+        if (IconSurfaceID != nint.Zero) try { SDL.DestroySurface(IconSurfaceID); } catch (Exception ex) { Log.Error(ex); }
     }
 
     /// <summary>
