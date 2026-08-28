@@ -64,6 +64,7 @@ public static class SimpleGameMain
             Title = "-Line-Framework example",
             UpdatePerSecond = 10000,
         };
+        Host.SetIcon(assembly.GetManifestResourceStream("SimpleGame.assets.-L-F.png"));
         if (args.Contains("--OutputEvent")) Host.EnableEventOutput = true;
 
         await Host.Resource.Create(
