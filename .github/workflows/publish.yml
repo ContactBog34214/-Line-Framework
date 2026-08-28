@@ -2,86 +2,170 @@
 name: .NET Build and Publish
 
 on:
-  push:
-    branches: [ "main" ]
-    paths:
-      - '**/*.csproj'        # 仅当项目文件变更时才触发，避免频繁运行
+  workflow_dispatch:
 
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
+
     permissions:
       contents: write
 
     steps:
-        - uses: actions/checkout@v4
-          with:
-            fetch-depth: 0
-            fetch-tags: true
-    
-        - name: Setup .NET
-          uses: actions/setup-dotnet@v5
-          with:
-            dotnet-version: 10.0.x
-    
-        - name: Remove lock file if exists
-          run: |
-            rm -f ./Line.Framework/packages.lock.json || true
-            rm -f ./Line.Framework.Default/packages.lock.json || true
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
-        - name: Restore dependencies (all projects)
-          run: |
-            dotnet restore ./Line.Framework/ -p:RestorePackagesWithLockFile=false -p:RestoreLockedMode=false
-            dotnet restore ./Line.Framework.Default/ -p:RestorePackagesWithLockFile=false -p:RestoreLockedMode=false
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
 
-        - name: Build projects
-          run: |
-            dotnet build ./Line.Framework/ -c Release -o ./Line.Framework/bin/Release/net10.0/
-            dotnet build ./Line.Framework.Default/ -c Release -o ./Line.Framework.Default/bin/Release/net10.0/
+      - name: Calculate version
+        id: version
+        shell: bash
+        run: |
+          set -e
 
-        - name: Get core version from Line.Framework and apply to Default
-          id: get_versions
-          run: |
-            CORE_VER=$(grep -oP '(?<=<Version>).*?(?=</Version>)' ./Line.Framework/Line.Framework.csproj)
-            # 将 Default 的版本设置为 Core 版本（不直接修改 csproj，而是在打包时覆盖）
-            echo "core_version=$CORE_VER" >> $GITHUB_OUTPUT
-            echo "default_version=$CORE_VER" >> $GITHUB_OUTPUT
+          TZ=UTC
 
-        - name: Pack both projects (apply core version to Default)
-          run: |
-            dotnet pack -c Release ./Line.Framework/ -o ./packages
-            dotnet pack -c Release ./Line.Framework.Default/ -o ./packages /p:Version=${{ steps.get_versions.outputs.core_version }}
+          YEAR=$(TZ=$TZ date +%Y)
+          MONTH=$(TZ=$TZ date +%-m)
+          DAY=$(TZ=$TZ date +%d)
 
-        - name: Create and push tags
-          run: |
-            git config user.name github-actions
-            git config user.email github-actions@github.com
+          DATE_PART="${MONTH}${DAY}"
+          BASE_VERSION="${YEAR}.${DATE_PART}"
 
-            for tag in "v${{ steps.get_versions.outputs.core_version }}" "v${{ steps.get_versions.outputs.default_version }}"; do
-              if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
-                echo "Tag $tag already exists on origin, skipping"
-              elif git rev-parse "$tag" >/dev/null 2>&1; then
-                echo "Tag $tag already exists locally, skipping"
-              else
-                git tag "$tag"
-                git push origin "$tag"
+          echo "Date: ${YEAR}-${MONTH}-${DAY}"
+          echo "Base version: ${BASE_VERSION}"
+
+          MAX_NUMBER=-1
+
+          while IFS= read -r TAG; do
+            [ -z "$TAG" ] && continue
+
+            if [[ "$TAG" =~ ^v${BASE_VERSION//./\\.}\.([0-9]+)$ ]]; then
+              NUMBER="${BASH_REMATCH[1]}"
+
+              if (( NUMBER > MAX_NUMBER )); then
+                MAX_NUMBER=$NUMBER
               fi
-            done
+            fi
+          done < <(git tag -l "v${BASE_VERSION}.*")
 
-        - name: Create GitHub Release
-          uses: softprops/action-gh-release@v2
-          with:
-            tag_name: v${{ steps.get_versions.outputs.core_version }}
-            name: "Release (core) v${{ steps.get_versions.outputs.core_version }}"
-            files: ./packages/*.nupkg
-            generate_release_notes: true
+          NEXT_NUMBER=$((MAX_NUMBER + 1))
 
-        - name: Push both packages to NuGet.org
-          run: |
-            for pkg in ./packages/*.nupkg; do
-              echo "Pushing $pkg"
-              dotnet nuget push "$pkg" \
-                --source https://api.nuget.org/v3/index.json \
-                --api-key ${{ secrets.NUGET_API_KEY }} \
-                --skip-duplicate || true
-            done
+          VERSION="${BASE_VERSION}.${NEXT_NUMBER}"
+
+          echo "Existing max number: ${MAX_NUMBER}"
+          echo "Next version: ${VERSION}"
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Remove lock file if exists
+        run: |
+          rm -f ./Line.Framework/packages.lock.json || true
+          rm -f ./Line.Framework.Default/packages.lock.json || true
+
+      - name: Restore dependencies (all projects)
+        run: |
+          dotnet restore ./Line.Framework/ \
+            -p:RestorePackagesWithLockFile=false \
+            -p:RestoreLockedMode=false
+
+          dotnet restore ./Line.Framework.Default/ \
+            -p:RestorePackagesWithLockFile=false \
+            -p:RestoreLockedMode=false
+
+      # ============================================================
+      # Build
+      #
+      # /p:Version= 会覆盖 csproj 中的 Version
+      # 因此不需要修改 .csproj 文件
+      # ============================================================
+      - name: Build projects
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          dotnet build ./Line.Framework/ \
+            -c Release \
+            -o ./Line.Framework/bin/Release/net10.0/ \
+            /p:Version="$VERSION"
+
+          dotnet build ./Line.Framework.Default/ \
+            -c Release \
+            -o ./Line.Framework.Default/bin/Release/net10.0/ \
+            /p:Version="$VERSION"
+
+      # ============================================================
+      # Pack
+      # ============================================================
+      - name: Pack both projects
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          dotnet pack ./Line.Framework/ \
+            -c Release \
+            -o ./packages \
+            --no-build \
+            /p:Version="$VERSION"
+
+          dotnet pack ./Line.Framework.Default/ \
+            -c Release \
+            -o ./packages \
+            --no-build \
+            /p:Version="$VERSION"
+
+      # ============================================================
+      # 创建 Git Tag
+      #
+      # 两个 NuGet 包使用同一个版本，因此只需要一个 tag：
+      #
+      # v2026.302.0
+      # ============================================================
+      - name: Create and push tag
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="v${VERSION}"
+
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists on origin."
+            exit 1
+          fi
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists locally."
+            exit 1
+          fi
+
+          git tag "$TAG"
+          git push origin "$TAG"
+
+      # ============================================================
+      # GitHub Release
+      # ============================================================
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: "Release v${{ steps.version.outputs.version }}"
+          files: ./packages/*.nupkg
+          generate_release_notes: true
+
+      # ============================================================
+      # Push NuGet packages
+      # ============================================================
+      - name: Push both packages to NuGet.org
+        run: |
+          for pkg in ./packages/*.nupkg; do
+            echo "Pushing $pkg"
+
+            dotnet nuget push "$pkg" \
+              --source https://api.nuget.org/v3/index.json \
+              --api-key "${{ secrets.NUGET_API_KEY }}" \
+              --skip-duplicate
+          done
