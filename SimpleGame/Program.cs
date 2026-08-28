@@ -170,6 +170,7 @@ public static class SimpleGameMain
             Text = Localization.Get("SimpleGame.Title", ["Example"]),
             Index = 1,
             FontSize = 100,
+            AutoBreakLine = false
         };
         title.Size = new Coord2(title.GetTextSize(title.Text) / new Vector2(1, 1), new());
 

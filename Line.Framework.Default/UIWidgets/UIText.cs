@@ -12,6 +12,7 @@ namespace Line.Framework.Default.UIWidgets;
 
 public sealed class UIText : UIWidget
 {
+    public DynamicValue<bool> AutoBreakLine { get; set; } = false;
     public List<Texture> FontTexture { get; private set; } = [];
     public TrackableList<string> FontId { get; set; } = new();
     public DynamicValue<RgbaFloat> color { get; set; } = new RgbaFloat(1, 1, 1, 1);
@@ -23,7 +24,59 @@ public sealed class UIText : UIWidget
     }
     string _text = "";
     public DynamicValue<float> FontSize { get; set; } = 48;
+    public string GetTextAftarAutoBreakLine(string Source)
+    {
+        if (!AutoBreakLine) return Source;
+        if ((FontId?.Count ?? 0) == 0)
+            return Source;
+        UseFontIndex(0, out var font, out _);
+        if (font == null)
+            return Source;
 
+        if (string.IsNullOrEmpty(Source))
+            return "";
+        float currentWidth = 0;
+        int lineCount = 1;
+        Vector2 size = GetSizeOnScreen();
+
+        string Result = "";
+
+        foreach (char c in Source)
+        {
+            bool bk = false;
+            float advance = 0;
+        NextLine:
+            if (c == '\n' || bk)
+            {
+                Result += '\n';
+                currentWidth = advance;
+                lineCount++;
+                if (bk) Result += c;
+                continue;
+            }
+
+            // 字符前进量（与渲染完全一致）
+            SelectFont(c, out font, out double FontScale);
+            if (c == ' ')
+            {
+                advance = font.SpaceWidth * FontSize * LetterSpacing;
+            }
+            else
+            {
+                if (font == null)
+                    continue;
+                FontTexture cache = null;
+                cache = font.GetFontTexture(c).GetAwaiter().GetResult();
+                advance = (float)(cache.Advance * FontScale * LetterSpacing);
+            }
+            bk = AutoBreakLine && currentWidth + advance > size.X && Result.LastOrDefault() != '\n';
+            if (bk) goto NextLine;
+            currentWidth += advance;
+            Result += c;
+        }
+
+        return Result;
+    }
     public override async Task RendererContext(RendererContextArgs args)
     {
         if ((FontId?.Count ?? 0) <= 0)
@@ -48,7 +101,8 @@ public sealed class UIText : UIWidget
         // 基线起始位置（屏幕坐标）
         float lineHeight = FontSize / 1.4f;
         Vector2 baselinePos = new Vector2(0, 0);
-        var s = _text.Split('\n');
+        var t = GetTextAftarAutoBreakLine(_text);
+        var s = t.Split('\n');
 
         baselinePos.Y = (float)(-font.Ascender * FontScale);
         if (YAlignment == Alignment.Center)
@@ -67,7 +121,7 @@ public sealed class UIText : UIWidget
         uint i = 0;
         ResetOffset(s[i]);
         bool SkipLine = false;
-        foreach (char c in _text)
+        foreach (char c in t)
         {
             SelectFont(c, out font, out FontScale);
             if (c == '\n')
@@ -272,7 +326,7 @@ public sealed class UIText : UIWidget
     {
         if ((FontId?.Count ?? 0) == 0)
             return Vector2.Zero;
-        UseFontIndex(0, out var font, out var FontScale);
+        UseFontIndex(0, out var font, out _);
         if (font == null)
             return Vector2.One;
 
@@ -282,20 +336,22 @@ public sealed class UIText : UIWidget
         float maxWidth = 0;
         float currentWidth = 0;
         int lineCount = 1;
+        Vector2 size = GetSizeOnScreen();
 
         foreach (char c in s)
         {
-            if (c == '\n')
+            float advance = 0;
+        NextLine:
+            if (c == '\n' || (AutoBreakLine && currentWidth + advance > size.X))
             {
                 maxWidth = Math.Max(maxWidth, currentWidth);
-                currentWidth = 0;
+                currentWidth = advance;
                 lineCount++;
                 continue;
             }
 
             // 字符前进量（与渲染完全一致）
-            float advance;
-            SelectFont(c, out font, out FontScale);
+            SelectFont(c, out font, out double FontScale);
             if (c == ' ')
             {
                 advance = font.SpaceWidth * FontSize * LetterSpacing;
@@ -308,6 +364,7 @@ public sealed class UIText : UIWidget
                 cache = font.GetFontTexture(c).GetAwaiter().GetResult();
                 advance = (float)(cache.Advance * FontScale * LetterSpacing);
             }
+            if (AutoBreakLine && currentWidth + advance > size.X) goto NextLine;
             currentWidth += advance;
         }
         maxWidth = Math.Max(maxWidth, currentWidth);
