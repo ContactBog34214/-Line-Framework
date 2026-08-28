@@ -112,7 +112,7 @@ public class VirtualIM : InputManager, IDisposable
         if ((!MainSandbox.AllowGboalInput) && !MainSandbox.Focus) return;
         if (!MainSandbox.AllowTouch) return;
         if (Touch.Touches.TryGetValue(p.Id, out _)) return;
-        Touch.Touches.TryAdd(p.Id, p.point);
+        Touch.Touches.TryAdd(p.Id, new Sdl3TouchPoint() { Position = MainSandbox.MousePosition(p.point.Position) });
         FingerDown?.Invoke(p);
     }
     public override event Action<(ulong Id, Sdl3TouchPoint Finger)> FingerMove;
@@ -121,7 +121,7 @@ public class VirtualIM : InputManager, IDisposable
         if ((!MainSandbox.AllowGboalInput) && !MainSandbox.Focus) return;
         if (!MainSandbox.AllowTouch) return;
         if (!Touch.Touches.TryGetValue(p.Id, out var cs)) return;
-        cs.Position = p.point.Position;
+        cs.Position = MainSandbox.MousePosition(p.point.Position);
         FingerMove?.Invoke(p);
     }
     public override event Action<(ulong Id, Sdl3TouchPoint Finger)> FingerUp;
