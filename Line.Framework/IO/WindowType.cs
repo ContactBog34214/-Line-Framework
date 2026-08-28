@@ -81,7 +81,8 @@ public abstract class WindowType : IAsyncDisposable, IName
         set
         {
             field = value;
-            SDL.SetWindowRelativeMouseMode(WindowHandle, value);
+            if (!(AllowMouseLeave && IsPositionOnEdge(Input.Mouse.Position)))
+                SDL.SetWindowRelativeMouseMode(WindowHandle, value);
             if (IsFocus)
             {
                 if (ShowCursor)
@@ -148,7 +149,8 @@ public abstract class WindowType : IAsyncDisposable, IName
         get;
         set
         {
-            Dev?.SyncToVerticalBlank = value;
+            if (field != value)
+                Dev?.SyncToVerticalBlank = value;
             field = value;
         }
     } = false;
@@ -461,10 +463,7 @@ public abstract class WindowType : IAsyncDisposable, IName
                 if (EnableEventOutput) Log.Debug($"Event:{((SDL.EventType)ev.Event.Type).ToString()}");
             }
             if (
-                AllowMouseLeave &&
-                (0 == Input.Mouse.Position.X * Input.Mouse.Position.Y ||
-            Size.X <= Input.Mouse.Position.X ||
-            Size.Y <= Input.Mouse.Position.Y)
+                AllowMouseLeave && IsPositionOnEdge(Input.Mouse.Position)
             )
                 SDL.SetWindowRelativeMouseMode(WindowHandle, false);
 
@@ -486,6 +485,13 @@ public abstract class WindowType : IAsyncDisposable, IName
             }
             last = GetStopwatchMs(sw);
         }
+    }
+    public bool IsPositionOnEdge(Vector2 pos)
+    {
+        return 2 >= pos.X ||
+            2 >= pos.Y ||
+            Size.X - 2 <= pos.X ||
+            Size.Y - 2 <= pos.Y;
     }
     public static double GetStopwatchMs(Stopwatch stopwatch)
     {

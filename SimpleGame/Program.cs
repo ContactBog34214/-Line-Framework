@@ -199,7 +199,7 @@ public static class SimpleGameMain
 
         //PerTest(20000, Host.Root);
 
-        //Host.EnableMouseRelative = true;
+        Host.EnableMouseRelative = true;
         Host.MouseSpeedScale = 1;
         cs.Visible = Host.EnableMouseRelative;
 
