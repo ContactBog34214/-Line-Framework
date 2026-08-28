@@ -8,18 +8,26 @@ namespace Line.Framework.Resource;
 /// </summary>
 public class ResourceManager : IDisposable
 {
-    public void Dispose()
+    public virtual void Dispose()
     {
         List<IResource> resources = [];
         resources.AddRange(Resources.Values);
         foreach (var i in resources)
         {
-            i.Release();
-            i.Dispose();
+            try
+            {
+                i.Release();
+                i.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"{ex}");
+            }
         }
         Types.Clear();
+        IsDisposed=true;
     }
-
+    public bool IsDisposed { get; protected set; } = false;
     readonly ConcurrentDictionary<string, IResource> Resources = [];
     public bool AutoReleaseResources { get; set; } = true;
     readonly Dictionary<string, (ulong LastGetTime, ulong NumGet)> Rs = [];
@@ -32,7 +40,7 @@ public class ResourceManager : IDisposable
         _ = new Timer(async (a) => await OnReleaseTimer(a), null, 1500, 1500);
     }
 
-    async Task OnReleaseTimer(object a)
+    protected virtual async Task OnReleaseTimer(object a)
     {
         if (AutoReleaseResources)
             await ReleaseIdleResources();

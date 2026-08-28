@@ -194,7 +194,7 @@ public static class SimpleGameMain
 
         Host.UpdatePerSecond = Host.FramePerSecond;
 
-        FPSPrinter();
+        await FPSPrinter();
         Performance();
 
         //PerTest(20000, Host.Root);
@@ -224,8 +224,8 @@ public static class SimpleGameMain
 
         Host.RequestQuit = async () =>
         {
-            Host.Dispose();
             await Entry.Cancel();
+            await Host.DisposeAsync();
         };
         while (Host.Exists)
         {
@@ -343,16 +343,7 @@ public static class SimpleGameMain
             Multiple = 5,
             TouchMode = TouchModes.None,
         };
-        Stopwatch sw = new();
-        sw.Start();
-        double last = 0;
-        Entry.AddFunc(async _ =>
-        {
-            long tick = sw.ElapsedTicks;
-            double milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
-            renderChart.Update(milliseconds - last);
-            last = milliseconds;
-        }, 6000);
+        Host.OnRender += renderChart.Update;
         PerformanceChart updateChart = new(Host.Resource)
         {
             Name = "updateChart",

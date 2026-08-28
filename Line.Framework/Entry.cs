@@ -149,7 +149,7 @@ public static class Entry
             {
                 await Task.Delay(TimeSpan.FromMilliseconds(t), token.Token);
             }
-            catch (TaskCanceledException) {/*_*/}
+            catch (TaskCanceledException) {/*_*/return; }
         }
     }
 }

@@ -92,16 +92,16 @@ public class InputManager
         };
     }
 
-    protected virtual void OnKeyDown(Event evt)
+    protected virtual async Task OnKeyDown(Event evt,object[] _)
     {
         var K = (KeyCode)evt.Key.Key;
         Keyboard.Keys.Add(K);
         KeyDown?.Invoke(K);
     }
 
-    protected virtual void OnTextInput(Event evt)
+    protected virtual async Task OnTextInput(Event evt,object[] Extra)
     {
-        TextInput?.Invoke(Marshal.PtrToStringUTF8(evt.Text.Text));
+        TextInput?.Invoke(Extra[0].ToString());
     }
 
     /// <summary>
@@ -109,14 +109,14 @@ public class InputManager
     /// </summary>
     public virtual event Action<string> TextInput;
 
-    protected virtual void OnKeyUp(Event evt)
+    protected virtual async Task OnKeyUp(Event evt,object[] _)
     {
         var K = (KeyCode)evt.Key.Key;
         Keyboard.Keys.Remove(K);
         KeyUp?.Invoke(K);
     }
 
-    protected virtual void OnMouseDown(Event evt)
+    protected virtual async Task OnMouseDown(Event evt,object[] _)
     {
         var bt = SDL3MB2LFMB((MouseButtonFlags)evt.Button.Button);
         Mouse.down.Add(bt);
@@ -129,7 +129,7 @@ public class InputManager
         return (MouseButton)mousebutton;
     }
 
-    protected virtual void OnMouseUp(Event evt)
+    protected virtual async Task OnMouseUp(Event evt,object[] _)
     {
         var bt = SDL3MB2LFMB((MouseButtonFlags)evt.Button.Button);
         Mouse.down.Remove(bt);
@@ -137,7 +137,7 @@ public class InputManager
         CursorUp?.Invoke(Mouse);
     }
 
-    protected virtual void OnMouseWheel(Event evt)
+    protected virtual async Task OnMouseWheel(Event evt,object[] _)
     {
         Mouse.WheelDelta = new(evt.Wheel.X, evt.Wheel.Y);
         MouseWheel?.Invoke(Mouse);
@@ -173,7 +173,7 @@ public class InputManager
     public virtual bool IsMouseButtonDown(MouseButton button) => Mouse.IsMouseButtonDown(button);
 
     //触摸
-    protected virtual void OnFingerDown(Event evt)
+    protected virtual async Task OnFingerDown(Event evt,object[] _)
     {
         var id = evt.TFinger.FingerID;
         var position = new Vector2(evt.TFinger.X, evt.TFinger.Y);
@@ -189,7 +189,7 @@ public class InputManager
     /// </summary>
     public virtual event Action<(ulong Id, Sdl3TouchPoint Finger)> FingerDown;
 
-    protected virtual void OnFingerUp(Event evt)
+    protected virtual async Task OnFingerUp(Event evt,object[] _)
     {
         var id = evt.TFinger.FingerID;
         if (Touch.Touches.TryGetValue(id, out var touch))
@@ -208,7 +208,7 @@ public class InputManager
     /// </summary>
     public virtual event Action<(ulong Id, Sdl3TouchPoint Finger)> FingerUp;
 
-    protected virtual void OnFingerMove(Event evt)
+    protected virtual async Task OnFingerMove(Event evt,object[] _)
     {
         var id = evt.TFinger.FingerID;
         if (Touch.Touches.TryGetValue(id, out var touch))
