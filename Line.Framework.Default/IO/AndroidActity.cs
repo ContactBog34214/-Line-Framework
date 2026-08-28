@@ -149,7 +149,7 @@ public class AndroidActity : WindowType
             if (GraphicsDevice.IsBackendSupported(GraphicsBackend.Vulkan))
                 Dev = GraphicsDevice.CreateVulkan(Options, swapchainDesc);
             else
-                Dispose();
+                DisposeAsync().GetAwaiter().GetResult();
             return;
         }
 
@@ -159,7 +159,7 @@ public class AndroidActity : WindowType
         if (Dev == null)
         {
             Log.Error("GraphicsDevice Failed");
-            Dispose();
+            DisposeAsync().GetAwaiter().GetResult();
             return;
         }
 
@@ -169,11 +169,9 @@ public class AndroidActity : WindowType
         Collector = new();
         Root = new(this, 0, 0);
 
-        //输入器
-        Input = new(this);
-        MainThread = new Thread(UpdateWindow);
-        MainThread.Start();
-        MainThread.Name = "Renderer";
+        //渲染/更新
+        RenderTask = Render(TokenSource.Token);
+        UpdateTask = Update(TokenSource.Token);
 
         if (Renderer == null)
             Renderer = new Renderer(this);
@@ -186,7 +184,8 @@ public class AndroidActity : WindowType
         OnWindowResized();
     }
 
-    protected override Thread MainThread { get; }
     public override event Action FocusGained;
     public override event Action FocusLost;
+    protected override Task RenderTask { get; }
+    protected override Task UpdateTask { get; }
 }

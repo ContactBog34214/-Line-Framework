@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using Line.Framework.Graphics;
 using Line.Framework.Resource;
 using Line.Framework.Resource.Audio;
@@ -12,13 +13,30 @@ using Veldrid;
 
 namespace Line.Framework.IO;
 
-public abstract class WindowType : IDisposable, IName
+public abstract class WindowType : IAsyncDisposable, IName
 {
+    protected static ConcurrentQueue<(SDL.Event Event, object[] Extra)> PollEvents { get; } = new();
     protected WindowType()
     {
         if (inited) return;
         inited = true;
-        Entry.AddFunc(async _ => SDL.PumpEvents(), -1);
+        Entry.AddFunc(async _ =>
+        {
+            SDL.PumpEvents();
+            List<object> obj = [];
+            while (true)
+            {
+                var events = SDL.PollEvent(out var ev);
+                if (!events) break;
+                switch ((SDL.EventType)ev.Type)
+                {
+                    case SDL.EventType.TextInput:
+                        obj.Add(Marshal.PtrToStringUTF8(ev.Text.Text));
+                        break;
+                }
+                PollEvents.Enqueue(new(ev, obj.ToArray()));
+            }
+        }, -1);
     }
     private static bool inited = false;
     /// <summary>
@@ -52,7 +70,7 @@ public abstract class WindowType : IDisposable, IName
     /// <summary>
     /// 请求退出时执行的Action
     /// </summary>
-    public virtual Action RequestQuit { get; set; }
+    public virtual Func<Task> RequestQuit { get; set; }
 
     /// <summary>
     /// 启用相对鼠标模式
@@ -134,7 +152,6 @@ public abstract class WindowType : IDisposable, IName
             field = value;
         }
     } = false;
-    protected virtual Thread MainThread { get; }
 
     /// <summary>
     /// 渲染频率
@@ -299,7 +316,7 @@ public abstract class WindowType : IDisposable, IName
             }
         }
     } = true;
-    protected internal virtual ConcurrentDictionary<SDL.EventType, Action<SDL.Event>> EventPool { get; } =
+    protected internal virtual ConcurrentDictionary<SDL.EventType, Func<SDL.Event, object[], Task>> EventPool { get; } =
         new();
 
     /// <summary>
@@ -336,195 +353,149 @@ public abstract class WindowType : IDisposable, IName
             }
         }
     }
-
-    protected virtual void UpdateWindow()
+    protected virtual async Task Render(CancellationToken token)
     {
-        var sw = new Stopwatch();
+        Stopwatch sw = new();
+        double last = 0;
         sw.Start();
-        long tick = sw.ElapsedTicks;
-        double milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
-        double RenderMs = 0;
-        //开始考试
-        while (Exists)
+        while (!token.IsCancellationRequested)
         {
-            tick = sw.ElapsedTicks;
-            milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
-
-            //输入更新
-            void update()
+            //处理
+            Task invokeTask = null;
+            try
             {
-                double UpdateMs = 0;
-                while (Exists)
+                if (_resizePending)
                 {
-                    //防止冻结
-                    if (UpdatePerSecond <= 0 && UpdatePerSecond != -1)
-                    {
-                        UpdatePerSecond = -1;
-                    }
-                    try
-                    {
-                        tick = sw.ElapsedTicks;
-                        milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
-                        double delay = milliseconds - UpdateMs;
-                        double wait = 1000d / UpdatePerSecond;
-                        if (UpdatePerSecond == -1)
-                            wait = 0;
-                        if (delay < wait)
-                        {
-                            Task.Delay(TimeSpan.FromMilliseconds(wait - delay))
-                                .GetAwaiter()
-                                .GetResult();
-                            tick = sw.ElapsedTicks;
-                            milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
-                            delay = milliseconds - UpdateMs;
-                        }
-                        if (delay >= wait)
-                        {
-                            OnUpdate?.Invoke(delay);
-                            UpdateMs = milliseconds;
-                            while (true)
-                            {
-                                if (IsFocus)
-                                    SDL.SetHint(
-                                        SDL.Hints.MouseRelativeSpeedScale,
-                                        MouseSpeedScale.ToString()
-                                    );
-                                SDL.SetEventFilter(
-                                    (a, ref b) =>
-                                    {
-                                        if (b.Type == (uint)SDL.EventType.WindowCloseRequested)
-                                            try
-                                            {
-                                                RequestQuit?.Invoke(); if (
-                                    0 == Input.Mouse.Position.X * Input.Mouse.Position.Y ||
-                                Size.X <= Input.Mouse.Position.X ||
-                                Size.Y <= Input.Mouse.Position.Y
-                                )
-                                                    SDL.SetWindowRelativeMouseMode(WindowHandle, false);
-                                            }
-                                            catch (Exception ex)
-                                            {
-                                                Log.Error($"RequestQuit failed:{ex}");
-                                            }
-                                        return (
-                                                b.Window.WindowID == WindowID
-                                                || b.TFinger.WindowID == WindowID
-                                            )
-                                            && b.Type != (uint)SDL.EventType.WindowCloseRequested;
-                                    },
-                                    (nint)WindowID
-                                );
-
-                                var events = SDL.PollEvent(out var ev);
-
-                                if (!events)
-                                    break;
-                                List<Task> tasks = [];
-                                foreach (var item in EventPool)
-                                {
-                                    if (ev.Type == (uint)item.Key)
-                                    {
-                                        try
-                                        {
-                                            tasks.Add(Task.Run(() => item.Value?.Invoke(ev)));
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            Log.Error(ex);
-                                        }
-                                    }
-                                }
-
-                                if (EnableEventOutput) Log.Debug($"Event:{((SDL.EventType)ev.Type).ToString()}");
-                                try
-                                {
-                                    Task.WaitAll(tasks);
-                                }
-                                catch (Exception ex)
-                                {
-                                    Log.Error(ex);
-                                }
-                                if (
-                                    AllowMouseLeave &&
-                                    (0 == Input.Mouse.Position.X * Input.Mouse.Position.Y ||
-                                Size.X <= Input.Mouse.Position.X ||
-                                Size.Y <= Input.Mouse.Position.Y)
-                                )
-                                    SDL.SetWindowRelativeMouseMode(WindowHandle, false);
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error($"{ex}");
-                    }
+                    Dev?.WaitForIdle();
+                    _newWidth = (uint)Size.X;
+                    _newHeight = (uint)Size.Y;
+                    Dev?.MainSwapchain.Resize(_newWidth, _newHeight);
+                    _resizePending = false;
+                    Dev?.SyncToVerticalBlank = VSync;
                 }
+                await RendererContext();
+                Dev?.SwapBuffers();
             }
-            //开更新线程
-            if (
-                UpdateThread == null
-                || UpdateThread.ThreadState == System.Threading.ThreadState.Stopped
-            )
+            catch (Exception ex)
             {
-                UpdateThread?.Interrupt();
-                UpdateThread = new(update);
-                UpdateThread.Start();
+                Log.Error(ex);
             }
 
-            //处理大小更新
-            if (_resizePending)
+            //休眠
+            double waitTime = 0;
+            if (FramePerSecond > 0) waitTime = 1000d / FramePerSecond;
+            double ofs = GetStopwatchMs(sw) - last;
+            try
             {
-                Dev.WaitForIdle();
-                _newWidth = (uint)Size.X;
-                _newHeight = (uint)Size.Y;
-                Dev.MainSwapchain.Resize(_newWidth, _newHeight);
-                _resizePending = false;
-                Dev?.SyncToVerticalBlank = VSync;
+                invokeTask = Task.Run(() => OnRender?.Invoke(Math.Max(waitTime, ofs)), token);
+                await Task.Delay(TimeSpan.FromMilliseconds(Math.Max(0, waitTime - ofs)), token);
+                await invokeTask;
             }
-
-            //正式渲染
-            async Task render()
+            catch (TaskCanceledException)
+            {/*_*/return; }
+            catch (Exception ex)
             {
-                if (FramePerSecond <= 0 && FramePerSecond != -1)
-                {
-                    FramePerSecond = -1;
-                }
-                try
-                {
-                    tick = sw.ElapsedTicks;
-                    milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
-                    double delay = milliseconds - RenderMs;
-                    double wait = 1000d / FramePerSecond;
-                    if (FramePerSecond == -1)
-                        wait = 0;
-                    if (delay < wait)
-                    {
-                        await Task.Delay(TimeSpan.FromMilliseconds(wait - delay));
-
-                        tick = sw.ElapsedTicks;
-                        milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
-                        delay = milliseconds - RenderMs;
-                    }
-                    if (delay >= wait)
-                    {
-                        OnRender?.Invoke(delay);
-                        RenderMs = milliseconds;
-                        RendererContext().GetAwaiter().GetResult();
-                        Dev.SwapBuffers();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Log.Error($"{ex}");
-                }
+                Log.Error($"{ex}");
             }
-            render().GetAwaiter().GetResult();
+            last = GetStopwatchMs(sw);
         }
-        Dispose();
     }
+    protected virtual async Task Update(CancellationToken token)
+    {
+        Stopwatch sw = new();
+        double last = 0;
+        sw.Start();
+        Func<SDL.Event, bool> Filter = e => e.Window.WindowID == WindowID || e.TFinger.WindowID == WindowID;
+        while (!token.IsCancellationRequested)
+        {
+            //处理
+            if (IsFocus)
+                SDL.SetHint(
+                    SDL.Hints.MouseRelativeSpeedScale,
+                    MouseSpeedScale.ToString()
+                );
+            int count = PollEvents.Count;
+            for (int i = 0; i < count; i++)
+            {
+                if (token.IsCancellationRequested) return;
+                if (!PollEvents.TryDequeue(out var ev)) break;
+                if (!Filter(ev.Event))
+                {
+                    if (!Equals(ev, default))
+                        PollEvents.Enqueue(ev);
+                    continue;
+                }
+                foreach (var item in EventPool)
+                {
+                    if (token.IsCancellationRequested) return;
+                    if (ev.Event.Type == (uint)SDL.EventType.WindowCloseRequested)
+                    {
+                        try
+                        {
+                            if (RequestQuit != null)
+                                await RequestQuit.Invoke();
+                        }
+                        catch (TaskCanceledException)
+                        {
+                            return;
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error($"{ex}");
+                        }
+                    }
+                    if (ev.Event.Type == (uint)item.Key)
+                    {
+                        try
+                        {
+                            if (item.Value != null)
+                                await item.Value.Invoke(ev.Event, ev.Extra);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error(ex);
+                        }
+                    }
+                }
 
-    Thread UpdateThread;
+                if (EnableEventOutput) Log.Debug($"Event:{((SDL.EventType)ev.Event.Type).ToString()}");
+            }
+            if (
+                AllowMouseLeave &&
+                (0 == Input.Mouse.Position.X * Input.Mouse.Position.Y ||
+            Size.X <= Input.Mouse.Position.X ||
+            Size.Y <= Input.Mouse.Position.Y)
+            )
+                SDL.SetWindowRelativeMouseMode(WindowHandle, false);
+
+            //休眠
+            double waitTime = 0;
+            if (UpdatePerSecond > 0) waitTime = 1000d / UpdatePerSecond;
+            double ofs = GetStopwatchMs(sw) - last;
+            try
+            {
+                var invokeTask = Task.Run(() => OnUpdate?.Invoke(Math.Max(waitTime, ofs)), token);
+                await Task.Delay(TimeSpan.FromMilliseconds(Math.Max(0, waitTime - ofs)), token);
+                await invokeTask;
+            }
+            catch (TaskCanceledException)
+            {/*_*/return; }
+            catch (Exception ex)
+            {
+                Log.Error($"{ex}");
+            }
+            last = GetStopwatchMs(sw);
+        }
+    }
+    public static double GetStopwatchMs(Stopwatch stopwatch)
+    {
+        if (stopwatch == null) return 0;
+        return (double)stopwatch.ElapsedTicks / Stopwatch.Frequency * 1000.0;
+    }
+    protected abstract Task UpdateTask { get; }
+    protected abstract Task RenderTask { get; }
     private bool _resizePending = false;
+    protected virtual CancellationTokenSource TokenSource { get; set; } = new();
 
     /// <summary>
     /// 窗口资产管理器
@@ -554,20 +525,30 @@ public abstract class WindowType : IDisposable, IName
         }
     }
 
-    public virtual void Dispose()
+    public virtual async ValueTask DisposeAsync()
     {
-        SDL.DestroyWindow(WindowHandle);
-        Renderer?.Dispose();
-        Resource?.Dispose();
+        await TokenSource.CancelAsync();
         try
         {
+            Resource?.Dispose();
+            Root?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"{ex}");
+        }
+
+        Renderer?.Dispose();
+        try
+        {
+            Dev?.WaitForIdle();
             Dev?.Dispose();
         }
         catch (Exception ex)
         {
             Log.Warning($"{ex.Message}");
         }
-        Root?.Dispose();
+        if (WindowHandle != IntPtr.Zero) SDL.DestroyWindow(WindowHandle);
     }
 
     /// <summary>
@@ -591,14 +572,14 @@ public abstract class WindowType : IDisposable, IName
         //绑定事件
         EventPool.TryAdd(
             SDL.EventType.WindowResized,
-            (a) =>
+            async (a, _) =>
             {
                 OnWindowResized();
             }
         );
         EventPool.TryAdd(
             SDL.EventType.WindowFocusGained,
-            (a) =>
+            async (a, _) =>
             {
                 SDL.RaiseWindow(WindowHandle);
                 SDL.ShowWindow(WindowHandle);
@@ -615,7 +596,7 @@ public abstract class WindowType : IDisposable, IName
         );
         EventPool.TryAdd(
             SDL.EventType.WindowMouseEnter,
-            (a) =>
+            async (a, _) =>
             {
                 SDL.SetWindowRelativeMouseMode(WindowHandle, EnableMouseRelative && IsFocus);
                 if (ShowCursor)
@@ -626,14 +607,14 @@ public abstract class WindowType : IDisposable, IName
         );
         EventPool.TryAdd(
             SDL.EventType.WindowMouseLeave,
-            (a) =>
+            async (a, _) =>
             {
                 SDL.SetWindowRelativeMouseMode(WindowHandle, false);
             }
         );
         EventPool.TryAdd(
             SDL.EventType.WindowRestored,
-            (a) =>
+            async (a, _) =>
             {
                 SDL.RaiseWindow(WindowHandle);
                 SDL.ShowWindow(WindowHandle);
@@ -641,13 +622,13 @@ public abstract class WindowType : IDisposable, IName
         );
         EventPool.TryAdd(
             SDL.EventType.WindowFocusLost,
-            (a) =>
+            async (a, _) =>
             {
                 SDL.SetWindowRelativeMouseMode(WindowHandle, false);
                 FocusLost?.Invoke();
             }
         );
-        RequestQuit = Dispose;
+        RequestQuit = async () => await DisposeAsync();
     }
 
     protected virtual void CreateResource()

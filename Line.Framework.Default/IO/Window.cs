@@ -208,7 +208,7 @@ public class Window : WindowType
             if (GraphicsDevice.IsBackendSupported(GraphicsBackend.Vulkan))
                 Dev = GraphicsDevice.CreateVulkan(Options, swapchainDesc);
             else
-                Dispose();
+                DisposeAsync().GetAwaiter().GetResult();
             return;
         }
 
@@ -218,7 +218,7 @@ public class Window : WindowType
         if (Dev == null)
         {
             Log.Error("GraphicsDevice Failed");
-            Dispose();
+            DisposeAsync().GetAwaiter().GetResult();
             return;
         }
 
@@ -230,20 +230,21 @@ public class Window : WindowType
 
         //输入器
         Input = new(this);
-        MainThread = new Thread(UpdateWindow);
-        MainThread.Start();
-        MainThread.Name = "Renderer";
 
         if (Renderer == null)
             Renderer = new Renderer(this);
         if (Compositor == null)
             Compositor = new Compositor();
 
+        //渲染/更新
+        RenderTask = Render(TokenSource.Token);
+        UpdateTask = Update(TokenSource.Token);
+
         BindEvents();
         CreateResource();
 
         OnWindowResized();
     }
-
-    protected override Thread MainThread { get; }
+    protected override Task RenderTask { get; }
+    protected override Task UpdateTask { get; }
 }
