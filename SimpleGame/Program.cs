@@ -214,7 +214,7 @@ public static class SimpleGameMain
             FontId = Fonts,
             CursorColor = new(1f, 1f, 1f, 0.5f),
             FontSize = 100,
-            Text = "使用字体列表为 Mono,Font\n测试字体回退功能",
+            Text = "使用字体列表为 Mono,Font\n测试字体回退功能\n1\n2",
             Offset = new(0),
         };
 
