@@ -204,16 +204,15 @@ public sealed class RFont : IResource
     public bool IsLoaded => font != null;
 
     public object GetHandle() => font;
-    private CancellationTokenSource tokenSource=new();
+    private CancellationTokenSource tokenSource = new();
     public async Task Load()
     {
         if (IsLoaded)
             return;
         using (var ms = new MemoryStream(_fontData))
         {
-            tokenSource?.Dispose();
-            tokenSource=new();
-            font = new Font(dev, ms, pool, Layout,tokenSource.Token);
+            tokenSource?.TryReset();
+            font = new Font(dev, ms, pool, Layout, tokenSource.Token);
         }
     }
 
@@ -221,7 +220,8 @@ public sealed class RFont : IResource
     {
         if (!IsLoaded)
             return;
-        await tokenSource?.CancelAsync();
+        if (tokenSource != null)
+            await tokenSource.CancelAsync();
         font?.Dispose();
         font = null;
     }
@@ -232,6 +232,7 @@ public sealed class RFont : IResource
             return;
         Release().GetAwaiter().GetResult();
         _disposed = true;
+        tokenSource?.Dispose();
     }
 }
 
@@ -289,7 +290,7 @@ public sealed class Font : IDisposable
         backend = new FontBackend(stream, dev, pool.size);
         p = pool;
         _size = pool.size;
-        BuildThread = new(()=>BuildChar(token));
+        BuildThread = new(() => BuildChar(token));
         BuildThread.Start();
     }
 
@@ -374,7 +375,7 @@ public sealed class Font : IDisposable
         WeakReference weak = new(this);
         while (weak.IsAlive)
         {
-            if(token.IsCancellationRequested)return;
+            if (token.IsCancellationRequested) return;
             if (_size != p.size)
             {
                 foreach (var kv in TextureCache)

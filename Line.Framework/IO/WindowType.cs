@@ -215,16 +215,7 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
     /// <summary>
     /// 垂直同步
     /// </summary>
-    public virtual bool VSync
-    {
-        get;
-        set
-        {
-            if (field != value)
-                Dev?.SyncToVerticalBlank = value;
-            field = value;
-        }
-    } = false;
+    public virtual bool VSync { get; set; } = false;
 
     /// <summary>
     /// 渲染频率
@@ -444,9 +435,12 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
                     _newHeight = (uint)Size.Y;
                     Dev?.MainSwapchain.Resize(_newWidth, _newHeight);
                     _resizePending = false;
-                    Dev?.SyncToVerticalBlank = VSync;
+                    if ((Dev?.SyncToVerticalBlank ?? false) != VSync)
+                        Dev?.SyncToVerticalBlank = VSync;
                 }
                 await RendererContext();
+                if (token.IsCancellationRequested)
+                    return;
                 Dev?.SwapBuffers();
             }
             catch (Exception ex)
@@ -473,6 +467,7 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
             last = GetStopwatchMs(sw);
         }
     }
+    protected Task QuitTask = null;
     protected virtual async Task Update(CancellationToken token)
     {
         Stopwatch sw = new();
@@ -481,6 +476,18 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
         Func<SDL.Event, bool> Filter = e => e.Window.WindowID == WindowID || e.TFinger.WindowID == WindowID;
         while (!token.IsCancellationRequested)
         {
+            if (QuitTask?.IsCompleted ?? false)
+            {
+                try
+                {
+                    await QuitTask;
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex);
+                }
+                QuitTask = null;
+            }
             //处理
             if (IsFocus)
                 SDL.SetHint(
@@ -505,8 +512,8 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
                     {
                         try
                         {
-                            if (RequestQuit != null)
-                                await RequestQuit.Invoke();
+                            if (RequestQuit != null && (QuitTask == null || QuitTask.IsCompleted))
+                                QuitTask = Task.Run(RequestQuit.Invoke);
                         }
                         catch (TaskCanceledException)
                         {
@@ -601,10 +608,14 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
                 Renderer?.Render(cp);
         }
     }
-
+    protected int _isDisposed = 0;
+    public bool IsDisposed => Volatile.Read(ref _isDisposed) != 0;
     public virtual async ValueTask DisposeAsync()
     {
+        if (Interlocked.Exchange(ref _isDisposed, 1) != 0)
+            return;
         await TokenSource.CancelAsync();
+        if (RenderTask != null) await RenderTask;
         try
         {
             Resource?.Dispose();
