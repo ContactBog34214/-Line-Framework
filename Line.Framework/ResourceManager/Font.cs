@@ -9,150 +9,228 @@ internal sealed class FontBackend : IDisposable
 {
     private readonly GraphicsDevice _gd;
     private LunarLabsFonts.Font _font;
-    private float _fontScale;
-    private uint _fontSizeInPixels;
-    private readonly object _lock = new object();
+    private readonly object _lock = new();
     private bool _disposed;
 
-    private float _ascender;
-    private float _descender;
-    private float _lineHeight;
-
-    public float Ascender => _ascender;
-    public float Descender => _descender;
-    public float LineHeight => _lineHeight;
-
-    public FontBackend(Stream fontStream, GraphicsDevice graphicsDevice, uint initialSize = 48)
+    public FontBackend(
+        Stream fontStream,
+        GraphicsDevice graphicsDevice)
     {
-        _gd = graphicsDevice ?? throw new ArgumentNullException(nameof(graphicsDevice));
+        _gd = graphicsDevice
+            ?? throw new ArgumentNullException(nameof(graphicsDevice));
 
         using var ms = new MemoryStream();
         fontStream.CopyTo(ms);
-        byte[] fontData = ms.ToArray();
 
-        _font = new LunarLabsFonts.Font(fontData, null);
-        SetFontSize(initialSize);
+        _font = new LunarLabsFonts.Font(
+            ms.ToArray(),
+            null);
+    }
+    public float GetGlyphAdvance(
+        char c,
+        float pixelSize)
+    {
+        pixelSize =
+            MathF.Max(pixelSize, 1f);
+
+        ThrowIfDisposed();
+
+        float scale =
+            _font.ScaleInPixels(pixelSize);
+
+        _font.GetCodepointHMetrics(
+            c,
+            out int advanceWidth,
+            out _);
+
+        return advanceWidth * scale;
+
+    }
+    public bool HasGlyph(char c)
+    {
+        ThrowIfDisposed();
+
+        return _font.HasGlyph(c);
+    }
+    public FontMetrics GetFontMetrics(float pixelSize)
+    {
+        pixelSize = MathF.Max(pixelSize, 1f);
+
+        ThrowIfDisposed();
+
+        float scale =
+            _font.ScaleInPixels(pixelSize);
+
+        _font.GetFontVMetrics(
+            out int ascent,
+            out int descent,
+            out int lineGap);
+
+        return new FontMetrics
+        {
+            Scale = scale,
+
+            Ascender =
+                ascent * scale,
+
+            Descender =
+                descent * scale,
+
+            LineHeight =
+                (ascent - descent + lineGap) * scale
+        };
+
     }
 
-    public void SetFontSize(uint pixelSize)
+    public GlyphBuildResult BuildGlyph(
+        char c,
+        float pixelSize)
     {
-        if (pixelSize == 0)
-            throw new ArgumentOutOfRangeException(nameof(pixelSize));
+        pixelSize = MathF.Max(pixelSize, 1f);
+
+        float scale;
 
         lock (_lock)
         {
-            if (_disposed)
-                return;
-            _fontSizeInPixels = pixelSize;
-            _fontScale = _font.ScaleInPixels(pixelSize);
+            ThrowIfDisposed();
 
-            var metricsA = _font
-                .GetGlyphMetrics('A', _fontScale, _fontScale, 0, 0)
-                .GetAwaiter()
-                .GetResult();
-            // yOfs = distance from baseline to top of glyph (positive)
-            _ascender = metricsA.Bounds.Y;
-
-            var metricsG = _font
-                .GetGlyphMetrics('g', _fontScale, _fontScale, 0, 0)
-                .GetAwaiter()
-                .GetResult();
-            // Descender = baseline to bottom = yOfs - height
-            _descender =
-                metricsG.Bounds.Height > 0
-                    ? metricsG.Bounds.Y - metricsG.Bounds.Height
-                    : -pixelSize * 0.2f;
-            _lineHeight = _ascender - _descender;
+            scale =
+                _font.ScaleInPixels(pixelSize);
         }
-    }
 
-    public async Task<Texture> GetGlyphTexture(char c)
-    {
-        if (_disposed)
-            return CreateEmptyTexture();
+        var bitmap =
+            _font
+                .RenderGlyph(
+                    c,
+                    scale,
+                    Color.White,
+                    Color.Transparent)
+                .GetAwaiter()
+                .GetResult();
 
-        var result = await _font.RenderGlyph(c, _fontScale, Color.White, Color.Transparent);
-        if (result == null || result.Width == 0 || result.Height == 0)
-            return CreateEmptyTexture();
-
-        uint width = (uint)result.Width;
-        uint height = (uint)result.Height;
-        byte[] pixelData = result.Pixels;
-        lock (_lock)
+        if (bitmap == null ||
+            bitmap.Width <= 0 ||
+            bitmap.Height <= 0)
         {
-            Texture texture = _gd.ResourceFactory.CreateTexture(
+            return new GlyphBuildResult
+            {
+                Scale = scale
+            };
+        }
+
+        var metrics =
+            _font
+                .GetGlyphMetrics(
+                    c,
+                    scale,
+                    scale,
+                    0,
+                    0)
+                .GetAwaiter()
+                .GetResult();
+
+        _font.GetCodepointHMetrics(
+            c,
+            out int advanceWidth,
+            out _);
+
+        return new GlyphBuildResult
+        {
+            Width = (uint)bitmap.Width,
+            Height = (uint)bitmap.Height,
+
+            Pixels = bitmap.Pixels,
+
+            Advance =
+                advanceWidth * scale,
+
+            BearingX =
+                metrics.Bounds.X,
+
+            BearingY =
+                metrics.Bounds.Y,
+
+            Scale = scale
+        };
+    }
+    public Texture CreateTexture(
+        GlyphBuildResult glyph)
+    {
+        if (glyph.Width == 0 ||
+            glyph.Height == 0)
+        {
+            return CreateEmptyTexture();
+        }
+
+
+        ThrowIfDisposed();
+
+        var texture =
+            _gd.ResourceFactory.CreateTexture(
                 TextureDescription.Texture2D(
-                    width,
-                    height,
+                    glyph.Width,
+                    glyph.Height,
                     1,
                     1,
                     PixelFormat.R8_G8_B8_A8_UNorm,
-                    TextureUsage.Sampled
-                )
-            );
-            _gd.UpdateTexture(texture, pixelData, 0, 0, 0, width, height, 1, 0, 0);
-            return texture;
-        }
-    }
+                    TextureUsage.Sampled));
 
-    public void GetCharMetrics(
-        char c,
-        out uint width,
-        out uint height,
-        out float advance,
-        out float bearingX,
-        out float bearingY
-    )
-    {
-        lock (_lock)
-        {
-            if (_disposed)
-            {
-                width = height = 0;
-                advance = bearingX = bearingY = 0;
-                return;
-            }
+        _gd.UpdateTexture(
+            texture,
+            glyph.Pixels,
+            0,
+            0,
+            0,
+            glyph.Width,
+            glyph.Height,
+            1,
+            0,
+            0);
 
-            var result = _font
-                .RenderGlyph(c, _fontScale, Color.White, Color.Transparent)
-                .GetAwaiter()
-                .GetResult();
-            if (result == null || result.Width == 0 || result.Height == 0)
-            {
-                width = height = 0;
-                advance = bearingX = bearingY = 0;
-                return;
-            }
+        return texture;
 
-            width = (uint)result.Width;
-            height = (uint)result.Height;
-
-            var metrics = _font
-                .GetGlyphMetrics(c, _fontScale, _fontScale, 0, 0)
-                .GetAwaiter()
-                .GetResult();
-            _font.GetCodepointHMetrics(c, out int advanceWidth, out _);
-            advance = (int)Math.Floor(advanceWidth * _fontScale);
-            bearingX = metrics.Bounds.X;
-            bearingY = metrics.Bounds.Y;
-        }
     }
 
     private Texture CreateEmptyTexture()
     {
-        byte[] dummy = { 0, 0, 0, 0 }; // 修改为RGBA空纹理的默认数据
-        Texture tex = _gd.ResourceFactory.CreateTexture(
-            TextureDescription.Texture2D(
-                1,
-                1,
-                1,
-                1,
-                PixelFormat.R8_G8_B8_A8_UNorm,
-                TextureUsage.Sampled
-            )
-        );
-        _gd.UpdateTexture(tex, dummy, 0, 0, 0, 1, 1, 1, 0, 0);
-        return tex;
+        var texture =
+            _gd.ResourceFactory.CreateTexture(
+                TextureDescription.Texture2D(
+                    1,
+                    1,
+                    1,
+                    1,
+                    PixelFormat.R8_G8_B8_A8_UNorm,
+                    TextureUsage.Sampled));
+
+        byte[] data =
+        [
+            0,
+            0,
+            0,
+            0
+        ];
+
+        _gd.UpdateTexture(
+            texture,
+            data,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            0,
+            0);
+
+        return texture;
+    }
+
+    private void ThrowIfDisposed()
+    {
+        if (_disposed || _font == null)
+            throw new ObjectDisposedException(
+                nameof(FontBackend));
     }
 
     public void Dispose()
@@ -161,10 +239,39 @@ internal sealed class FontBackend : IDisposable
         {
             if (_disposed)
                 return;
+
             _font = null;
             _disposed = true;
         }
     }
+}
+
+internal readonly struct FontMetrics
+{
+    public float Scale { get; init; }
+
+    public float Ascender { get; init; }
+
+    public float Descender { get; init; }
+
+    public float LineHeight { get; init; }
+}
+
+internal sealed class GlyphBuildResult
+{
+    public uint Width { get; init; }
+
+    public uint Height { get; init; }
+
+    public byte[] Pixels { get; init; }
+
+    public float Advance { get; init; }
+
+    public float BearingX { get; init; }
+
+    public float BearingY { get; init; }
+
+    public float Scale { get; init; }
 }
 
 // ---------- 以下类保持不变（已正确适配）----------
@@ -177,10 +284,14 @@ public sealed class RFont : IResource
     GraphicsDevice dev;
     bool _disposed = false;
 
-    public RFont(GraphicsDevice gd, ResourceLayout rl, Stream stream)
+    public RFont(
+        GraphicsDevice gd,
+        ResourceLayout rl,
+        Stream stream)
     {
         dev = gd;
         Layout = rl;
+
         using (var ms = new MemoryStream())
         {
             stream.CopyTo(ms);
@@ -188,40 +299,52 @@ public sealed class RFont : IResource
         }
     }
 
-    uint Size
-    {
-        get => pool.size;
-        set { pool.size = value; }
-    }
-
     internal class DataPool
     {
         public uint size = 24;
-        public List<char> NullChar = [' ', '\n', '\r', '\t'];
+
+        public List<char> NullChar =
+        [
+            ' ',
+            '\n',
+            '\r',
+            '\t'
+        ];
+
         public float SpaceWidth = 0.25f;
     }
 
     public bool IsLoaded => font != null;
 
     public object GetHandle() => font;
+
     private CancellationTokenSource tokenSource = new();
+
     public async Task Load()
     {
         if (IsLoaded)
             return;
-        using (var ms = new MemoryStream(_fontData))
-        {
-            tokenSource?.TryReset();
-            font = new Font(dev, ms, pool, Layout, tokenSource.Token);
-        }
+
+        using var ms = new MemoryStream(_fontData);
+
+        tokenSource?.TryReset();
+
+        font = new Font(
+            dev,
+            ms,
+            pool,
+            Layout,
+            tokenSource.Token);
     }
 
     public async Task Release()
     {
         if (!IsLoaded)
             return;
+
         if (tokenSource != null)
             await tokenSource.CancelAsync();
+
         font?.Dispose();
         font = null;
     }
@@ -230,8 +353,13 @@ public sealed class RFont : IResource
     {
         if (_disposed)
             return;
-        Release().GetAwaiter().GetResult();
+
+        Release()
+            .GetAwaiter()
+            .GetResult();
+
         _disposed = true;
+
         tokenSource?.Dispose();
     }
 }
@@ -255,203 +383,417 @@ public sealed class TFont : ResourceType
 
 public sealed class Font : IDisposable
 {
-    private FontBackend backend;
-    private RFont.DataPool p;
-    private uint _size = 0;
-    private GraphicsDevice Dev;
-    private ResourceLayout Layout;
-    private readonly object _cacheLock = new object();
-    private ConcurrentDictionary<char, FontTexture> TextureCache = new();
+    private readonly FontBackend backend;
+    private readonly RFont.DataPool p;
 
-    public uint Size
-    {
-        get => p.size;
-        set
-        {
-            lock (_cacheLock)
-                p.size = value;
-        }
-    }
+    private readonly GraphicsDevice Dev;
+    private readonly ResourceLayout Layout;
 
-    public float Ascender => backend.Ascender;
-    public float Descender => backend.Descender;
-    public float LineHeight => backend.LineHeight;
+    private readonly ConcurrentDictionary<
+        (char Char, int Size),
+        FontTexture> TextureCache = new();
+
+    private readonly ConcurrentDictionary<
+        (char Char, int Size),
+        byte> PendingCharacters = new();
+
+    private readonly ConcurrentQueue<
+        (char Char, int Size)> CharQueue = new();
+
+    private readonly CancellationTokenSource
+        _buildCancellation = new();
+
+    private readonly Thread BuildThread;
+
+    private bool _disposed;
+
     public List<char> NullChar => p.NullChar;
+
     public float SpaceWidth
     {
         get => p.SpaceWidth;
         set => p.SpaceWidth = value;
     }
 
-    internal Font(GraphicsDevice dev, Stream stream, RFont.DataPool pool, ResourceLayout layout, CancellationToken token)
+    internal Font(
+        GraphicsDevice dev,
+        Stream stream,
+        RFont.DataPool pool,
+        ResourceLayout layout,
+        CancellationToken token)
     {
         Dev = dev;
         Layout = layout;
-        backend = new FontBackend(stream, dev, pool.size);
         p = pool;
-        _size = pool.size;
-        BuildThread = new(() => BuildChar(token));
+
+        backend = new FontBackend(
+            stream,
+            dev);
+
+        BuildThread = new Thread(
+            () => BuildChar(token))
+        {
+            IsBackground = true,
+            Name = "FontBuildThread"
+        };
+
         BuildThread.Start();
     }
 
-    public void Dispose()
+    private static int GetRasterSize(
+        float size)
     {
-        lock (_cacheLock)
+        return Math.Max(
+            1,
+            (int)MathF.Ceiling(size));
+    }
+
+    public float GetAscender(
+        float pixelSize)
+    {
+        return backend
+            .GetFontMetrics(pixelSize)
+            .Ascender;
+    }
+
+    public float GetDescender(
+        float pixelSize)
+    {
+        return backend
+            .GetFontMetrics(pixelSize)
+            .Descender;
+    }
+
+    public float GetLineHeight(
+        float pixelSize)
+    {
+        return backend
+            .GetFontMetrics(pixelSize)
+            .LineHeight;
+    }
+    public float GetGlyphAdvance(
+    char c,
+    float pixelSize)
+    {
+        return backend.GetGlyphAdvance(
+            c,
+            pixelSize);
+    }
+
+    public void CreateCharTexture(
+        char c,
+        float size)
+    {
+        int rasterSize =
+            GetRasterSize(size);
+
+        var key =
+            (c, rasterSize);
+
+        if (TextureCache.ContainsKey(key))
+            return;
+
+        if (!PendingCharacters.TryAdd(
+                key,
+                0))
         {
-            backend?.Dispose();
-            foreach (var kv in TextureCache)
-                kv.Value?.Dispose();
-            TextureCache?.Clear();
+            return;
         }
+
+        CharQueue.Enqueue(key);
+    }
+    public bool HasGlyph(char c) => backend.HasGlyph(c);
+    public bool HasCache(
+        char c,
+        float size)
+    {
+        int rasterSize =
+            GetRasterSize(size);
+
+        return TextureCache.ContainsKey(
+            (c, rasterSize));
     }
 
-    private readonly ConcurrentQueue<char> CharQueue = [];
-
-    public void CreateCharTexture(char c)
+    public Task<FontTexture> GetFontTexture(
+        char c,
+        float size)
     {
-        if (HasCache(c))
-            return;
-        if (CharQueue.Contains(c))
-            return;
-        CharQueue.Enqueue(c);
-    }
+        size = MathF.Max(size, 1f);
 
-    public async Task<FontTexture> GetFontTexture(char c)
-    {
-        try
+        if (_disposed)
+            return Task.FromResult<FontTexture>(null);
+
+        if (NullChar.Contains(c))
         {
-            if (NullChar.Contains(c))
-            {
-                uint w = c == ' ' ? _size * (uint)SpaceWidth : 0;
-                return new FontTexture
+            uint width =
+                c == ' '
+                    ? (uint)MathF.Max(
+                        size * SpaceWidth,
+                        1f)
+                    : 0;
+
+            return Task.FromResult(
+                new FontTexture
                 {
                     Texture = null,
                     ResourceSet = null,
-                    Width = w,
-                    Height = _size,
-                    Advance = 0,
+
+                    Width = width,
+                    Height = (uint)MathF.Ceiling(size),
+
+                    Advance = width,
+
                     BearingX = 0,
                     BearingY = 0,
-                };
-            }
 
-            {
-                if (_size != p.size)
-                {
-                    foreach (var kv in TextureCache)
-                        kv.Value?.Dispose();
-                    TextureCache.Clear();
-                    backend.SetFontSize(p.size);
-                    _size = p.size;
-                }
+                    FontSize = size,
 
-                if (TextureCache.TryGetValue(c, out var cached))
-                {
-                    if (cached.FontSize == _size)
-                        return cached;
-                    TextureCache.TryRemove(c, out _);
-                }
-
-                CreateCharTexture(c);
-                while (!HasCache(c))
-                {
-                    await Task.Delay(2);
-                    CreateCharTexture(c);
-                }
-                return await GetFontTexture(c);
-            }
+                    Scale = 1f
+                });
         }
-        catch (Exception ex)
+
+        int rasterSize =
+            GetRasterSize(size);
+
+        var key =
+            (c, rasterSize);
+
+        if (TextureCache.TryGetValue(
+                key,
+                out var cached))
         {
-            Log.Error($"{ex}");
+            cached.RequestedSize = size;
+            cached.Scale =
+                size / rasterSize;
+
+            return Task.FromResult(cached);
         }
+
+        CreateCharTexture(
+            c,
+            size);
+
+        return WaitForFontTexture(
+            c,
+            size,
+            rasterSize);
+    }
+
+    private async Task<FontTexture>
+        WaitForFontTexture(
+            char c,
+            float requestedSize,
+            int rasterSize)
+    {
+        while (!_disposed)
+        {
+            if (TextureCache.TryGetValue(
+                    (c, rasterSize),
+                    out var cached))
+            {
+                cached.RequestedSize =
+                    requestedSize;
+
+                cached.Scale =
+                    requestedSize / rasterSize;
+
+                return cached;
+            }
+
+            await Task.Delay(2);
+        }
+
         return null;
     }
 
-    public bool HasCache(char c) => TextureCache.TryGetValue(c, out _);
-
-    private void BuildChar(CancellationToken token)
+    private void BuildChar(
+        CancellationToken externalToken)
     {
-        WeakReference weak = new(this);
-        while (weak.IsAlive)
+        using var linked =
+            CancellationTokenSource.CreateLinkedTokenSource(
+                externalToken,
+                _buildCancellation.Token);
+
+        var token = linked.Token;
+
+        while (!token.IsCancellationRequested)
         {
-            if (token.IsCancellationRequested) return;
-            if (_size != p.size)
-            {
-                foreach (var kv in TextureCache)
-                    kv.Value?.Dispose();
-                TextureCache.Clear();
-                backend.SetFontSize(p.size);
-                _size = p.size;
-            }
-            if (CharQueue.Count == 0)
+            if (!CharQueue.TryDequeue(
+                    out var request))
             {
                 Thread.Sleep(2);
                 continue;
             }
-            Task[] tasks = new Task[CharQueue.Count];
-            for (int num = 0; num < tasks.Length; num++)
+
+            PendingCharacters.TryRemove(
+                request,
+                out _);
+
+            if (TextureCache.ContainsKey(request))
+                continue;
+
+            try
             {
-                var c = CharQueue.First();
-                tasks[num] = Task.Run(async () =>
-                {
-                    if (TextureCache.TryGetValue(c, out var cached))
-                    {
-                        if (cached.FontSize == _size)
-                            return cached;
-                        TextureCache.TryRemove(c, out _);
-                    }
-                    Texture r8Tex = await backend.GetGlyphTexture(c);
-                    var s = _size;
-                    backend.GetCharMetrics(
-                        c,
-                        out uint w,
-                        out uint h,
-                        out float adv,
-                        out float bx,
-                        out float by
-                    );
-                    var rs = Dev?.ResourceFactory.CreateResourceSet(
-                        new ResourceSetDescription(Layout, r8Tex)
-                    );
-                    var cache = new FontTexture
-                    {
-                        Texture = r8Tex,
-                        ResourceSet = rs,
-                        Width = w,
-                        Height = h,
-                        Advance = adv,
-                        BearingX = bx,
-                        BearingY = by,
-                        FontSize = s,
-                    };
-                    TextureCache.TryAdd(c, cache);
-                    return cache;
-                });
-                CharQueue.TryDequeue(out _);
+                BuildGlyph(
+                    request.Char,
+                    request.Size);
             }
-            Task.WaitAll(tasks);
+            catch (Exception ex)
+            {
+                Log.Error(
+                    $"Failed to build glyph " +
+                    $"'{request.Char}' " +
+                    $"size={request.Size}: {ex}");
+            }
         }
     }
 
-    private Task BuildTask;
-    private Thread BuildThread;
-}
+    private void BuildGlyph(
+        char c,
+        int rasterSize)
+    {
+        var key =
+            (c, rasterSize);
 
-public class FontTexture : IDisposable
-{
-    public Texture Texture { get; set; }
-    public ResourceSet ResourceSet { get; set; }
-    public uint Width { get; set; }
-    public uint Height { get; set; }
-    public float Advance { get; set; }
-    public float BearingX { get; set; }
-    public float BearingY { get; set; }
-    public uint FontSize { get; init; }
+        if (TextureCache.ContainsKey(key))
+            return;
+
+        // 注意这里：
+        // bitmap 真正以整数 rasterSize 生成。
+        var glyph =
+            backend.BuildGlyph(
+                c,
+                rasterSize);
+
+        if (glyph == null)
+            return;
+
+        if (glyph.Width == 0 ||
+            glyph.Height == 0)
+        {
+            TextureCache.TryAdd(
+                key,
+                new FontTexture
+                {
+                    Texture = null,
+                    ResourceSet = null,
+
+                    Width = 0,
+                    Height = 0,
+
+                    Advance = 0,
+                    BearingX = 0,
+                    BearingY = 0,
+
+                    FontSize = rasterSize,
+                    RequestedSize = rasterSize,
+                    Scale = 1f
+                });
+
+            return;
+        }
+
+        Texture texture =
+            backend.CreateTexture(glyph);
+
+        ResourceSet resourceSet =
+            Dev.ResourceFactory.CreateResourceSet(
+                new ResourceSetDescription(
+                    Layout,
+                    texture));
+
+        var cache =
+            new FontTexture
+            {
+                Texture = texture,
+                ResourceSet = resourceSet,
+
+                Width = glyph.Width,
+                Height = glyph.Height,
+
+                Advance = glyph.Advance,
+                BearingX = glyph.BearingX,
+                BearingY = glyph.BearingY,
+
+                FontSize = rasterSize,
+                RequestedSize = rasterSize,
+
+                Scale = 1f
+            };
+
+        if (!TextureCache.TryAdd(
+                key,
+                cache))
+        {
+            cache.Dispose();
+        }
+    }
 
     public void Dispose()
     {
-        Texture?.Dispose();
+        if (_disposed)
+            return;
+
+        _disposed = true;
+
+        _buildCancellation.Cancel();
+
+        if (BuildThread.IsAlive &&
+            !ReferenceEquals(
+                Thread.CurrentThread,
+                BuildThread))
+        {
+            BuildThread.Join();
+        }
+
+        foreach (var item in TextureCache)
+            item.Value?.Dispose();
+
+        TextureCache.Clear();
+
+        PendingCharacters.Clear();
+
+        CharQueue.Clear();
+
+        backend.Dispose();
+
+        _buildCancellation.Dispose();
+    }
+}
+
+public sealed class FontTexture : IDisposable
+{
+    public Texture Texture { get; set; }
+
+    public ResourceSet ResourceSet { get; set; }
+
+    // 原始 raster bitmap 尺寸
+    public uint Width { get; set; }
+
+    public uint Height { get; set; }
+
+    // 原始 raster 尺寸下的 metrics
+    public float Advance { get; set; }
+
+    public float BearingX { get; set; }
+
+    public float BearingY { get; set; }
+
+    // 实际生成 bitmap 的字号
+    public float FontSize { get; init; }
+
+    // UIText 当前请求的字号
+    public float RequestedSize { get; set; }
+
+    // RequestedSize / FontSize
+    public float Scale { get; set; }
+
+    public void Dispose()
+    {
         ResourceSet?.Dispose();
+        Texture?.Dispose();
+
+        ResourceSet = null;
+        Texture = null;
     }
 }

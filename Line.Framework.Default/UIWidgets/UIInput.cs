@@ -402,7 +402,7 @@ public class UIInput : UIWidget
         var tmp = MousePosition(cur);
         List<string> lines = Text.Split('\n').ToList();
         float topY = 0;
-        float bottomY = -Offset.Y;
+        float bottomY = -Offset.Y + ((TextWidget?.GetTextSize(lines[0]) ?? new(0, 0)).Y * TextWidget?.LineSpacing ?? 1) / 2;
         string Select = "";
         int Result = 0;
         if (tmp.Y < topY)
@@ -411,7 +411,7 @@ public class UIInput : UIWidget
             for (int i = 0; i < lines.Count; i++)
             {
                 topY = bottomY;
-                bottomY += (TextWidget?.GetTextSize(lines[i]) ?? new(0, 0)).Y;
+                bottomY += (TextWidget?.GetTextSize(lines[i]) ?? new(0, 0)).Y * TextWidget?.LineSpacing ?? 1;
                 Result += lines[i].Length;
                 if (tmp.Y >= topY && bottomY >= tmp.Y)
                 {
@@ -566,14 +566,14 @@ public class UIInput : UIWidget
                 var EndHeight = (TextWidget?.GetTextSize(sub) ?? new()).Y;
 
                 var Height =
-                    TextWidget?.GetTextSize(AllLinesBeforeCur[AllLinesBeforeCur.Length - 1]).Y ?? 0;
+                    TextWidget?.GetTextSize(AllLinesBeforeCur[AllLinesBeforeCur.Length - 1]).Y * TextWidget?.LineSpacing ?? 0;
                 if (EndHeight - Height == 0)
                 {
-                    Height = EndHeight = TextWidget?.GetTextSize(" ").Y ?? 0;
+                    Height = EndHeight = TextWidget?.GetTextSize(" ").Y * TextWidget?.LineSpacing ?? 0;
                 }
                 else if (Height == 0)
                 {
-                    Height = TextWidget?.GetTextSize(" ").Y ?? 0;
+                    Height = TextWidget?.GetTextSize(" ").Y * TextWidget?.LineSpacing ?? 0;
                 }
 
                 var sub2 = Text.Substring(0, cursor.EndPosition);
@@ -582,14 +582,14 @@ public class UIInput : UIWidget
                 var EndHeight2 = (TextWidget?.GetTextSize(sub2) ?? new()).Y;
 
                 var Height2 =
-                    TextWidget?.GetTextSize(AllLinesBeforeCur[AllLinesBeforeCur.Length - 1]).Y ?? 0;
+                    TextWidget?.GetTextSize(AllLinesBeforeCur[AllLinesBeforeCur.Length - 1]).Y * TextWidget?.LineSpacing ?? 0;
                 if (EndHeight2 - Height2 == 0)
                 {
-                    Height2 = EndHeight2 = TextWidget?.GetTextSize(" ").Y ?? 0;
+                    Height2 = EndHeight2 = TextWidget?.GetTextSize(" ").Y * TextWidget?.LineSpacing ?? 0;
                 }
                 else if (Height2 == 0)
                 {
-                    Height2 = TextWidget?.GetTextSize(" ").Y ?? 0;
+                    Height2 = TextWidget?.GetTextSize(" ").Y * TextWidget?.LineSpacing ?? 0;
                 }
                 if (Math.Abs(EndHeight - EndHeight2) < 0.5)
                 {

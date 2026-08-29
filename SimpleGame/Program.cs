@@ -73,21 +73,18 @@ public static class SimpleGameMain
             assembly.GetManifestResourceStream("SimpleGame.assets.CascadiaMono.ttf")
         );
         font = await Host.Resource.GetResource<Font>("Mono");
-        font?.Size = (uint)Host.Size.Y / 10 * 7;
         await Host.Resource.Create(
             "Font",
             "GenJyuuGothic",
             assembly.GetManifestResourceStream("SimpleGame.assets.GenJyuuGothic-Normal-2.ttf")
         );
         font = await Host.Resource.GetResource<Font>("GenJyuuGothic");
-        font?.Size = (uint)Host.Size.Y / 10 * 7;
         await Host.Resource.Create(
             "Font",
             "Noto",
             assembly.GetManifestResourceStream("SimpleGame.assets.NotoSansSC.ttf")
         );
         font = await Host.Resource.GetResource<Font>("Noto");
-        font?.Size = (uint)Host.Size.Y / 10 * 7;
 
         Log.Debug("Loaded Font");
 
@@ -217,7 +214,7 @@ public static class SimpleGameMain
             FontId = Fonts,
             CursorColor = new(1f, 1f, 1f, 0.5f),
             FontSize = 100,
-            Text = "使用字体列表为 Mono,Font\n测试字体回退功能",
+            Text = "使用字体列表为 Mono,Font\n测试字体回退功能\n1\n2",
             Offset = new(0),
         };
 
@@ -233,7 +230,6 @@ public static class SimpleGameMain
         {
             await Task.Delay(5);
         }
-
         /*
         FileManager fm = new("/home/smellyfish/Documents/Projects/FMTest");
         fm.CompressFile = true;
