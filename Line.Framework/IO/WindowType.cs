@@ -91,11 +91,11 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
     {
         if (inited) return;
         inited = true;
-        Entry.AddFunc(async _ =>
+        Entry.AddFunc(token =>
         {
             SDL.PumpEvents();
             List<object> obj = [];
-            while (true)
+            while (!token.IsCancellationRequested)
             {
                 var events = SDL.PollEvent(out var ev);
                 if (!events) break;
