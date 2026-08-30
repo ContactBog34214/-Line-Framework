@@ -5,7 +5,7 @@ namespace Line.Framework;
 
 public static class Entry
 {
-    private static ConcurrentDictionary<Func<CancellationToken, Task>, double> Funcs = new();
+    private static ConcurrentDictionary<Action<CancellationToken>, double> Funcs = new();
     /// <summary>
     /// 基准频率(单位=秒)
     /// </summary>
@@ -17,7 +17,7 @@ public static class Entry
     /// <param name="任务"></param>
     /// <param name="频率"></param>
     /// <exception cref="InvalidOperationException"></exception>
-    public static void AddFunc(Func<CancellationToken, Task> func, double Frequency)
+    public static void AddFunc(Action<CancellationToken> func, double Frequency)
     {
         if (Frequency <= 0 && Frequency != -1) throw new InvalidOperationException($"Frequency cannot be {Frequency}");
         if (!Funcs.TryAdd(func, Frequency)) throw new InvalidOperationException("Action already exists");
@@ -28,7 +28,7 @@ public static class Entry
     /// <param name="任务"></param>
     /// <param name="频率"></param>
     /// <exception cref="InvalidOperationException"></exception>
-    public static void UpdateFunc(Func<CancellationToken, Task> func, double Frequency)
+    public static void UpdateFunc(Action<CancellationToken> func, double Frequency)
     {
         if (Frequency <= 0 && Frequency != -1) throw new InvalidOperationException($"Frequency cannot be {Frequency}");
         if (!Funcs.TryGetValue(func, out var val)) throw new InvalidOperationException("Action does not exist");
@@ -39,7 +39,7 @@ public static class Entry
     /// </summary>
     /// <param name="任务"></param>
     /// <returns>频率</returns>
-    public static double GetFuncFrequency(Func<CancellationToken, Task> func)
+    public static double GetFuncFrequency(Action<CancellationToken> func)
     {
         if (Funcs.TryGetValue(func, out var val)) return val;
         return 0;
@@ -48,14 +48,13 @@ public static class Entry
     /// 移除托管任务
     /// </summary>
     /// <param name="任务"></param>
-    public static void RemoveFunc(Func<CancellationToken, Task> func)
+    public static void RemoveFunc(Action<CancellationToken> func)
     {
         Funcs.TryRemove(func, out _);
     }
     private static bool MainThreadRunning = false;
     private static CancellationTokenSource token = new();
     private static Task MainTask = null;
-    private static Task LoopTask = null;
     /// <summary>
     /// 附带托管运行主程序
     /// </summary>
@@ -67,18 +66,18 @@ public static class Entry
     {
         if (MainThreadRunning) throw new InvalidOperationException($"Main is already running");
         MainThreadRunning = true;
+        token?.Dispose();
         token = new();
         try
         {
             MainTask = main(token.Token, args);
-            LoopTask = MainLoop();
+            MainLoop();
             await MainTask;
         }
         finally
         {
             MainThreadRunning = false;
         }
-        if (LoopTask != null) await LoopTask;
     }
     /// <summary>
     /// 停止主程序运行
@@ -97,24 +96,23 @@ public static class Entry
         if (token != null) token.Cancel();
         if (!MainThreadRunning) return;
         MainTask?.Dispose();
-        LoopTask?.Dispose();
         MainThreadRunning = false;
     }
     /// <summary>
     /// 是否运行中
     /// </summary>
     public static bool Running => MainThreadRunning;
-    private static async Task MainLoop()
+    private static void MainLoop()
     {
         stopwatch.Restart();
-        ConcurrentDictionary<Func<CancellationToken, Task>, double> lastExecuteTime = new();
+        ConcurrentDictionary<Action<CancellationToken>, double> lastExecuteTime = new();
         double LastSleep = 0;
-        while (Running && !token.Token.IsCancellationRequested)
+        while ((!(MainTask?.IsCompleted ?? true)) && Running && !token.Token.IsCancellationRequested)
         {
             long tick = stopwatch.ElapsedTicks;
             double milliseconds = (double)tick / Stopwatch.Frequency * 1000.0;
 
-            IEnumerable<Task> Executions = Funcs
+            IEnumerable<Action<CancellationToken>> Executions = Funcs
             .Where(f =>
             {
                 double r = 0;
@@ -128,16 +126,17 @@ public static class Entry
                 lastExecuteTime.TryUpdate(f.Key, milliseconds, last);
                 return true;
             })
-            .Select(f => f.Key.Invoke(token.Token));
+            .Select(f => f.Key);
 
-            try
-            {
-                await Task.WhenAll(Executions.Where(f => f != null));
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex);
-            }
+            foreach (var i in Executions)
+                try
+                {
+                    i.Invoke(token.Token);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex);
+                }
             //休眠
             double wait = 0;
             if (BaseFrequency > 0) wait = 1000d / BaseFrequency;
@@ -147,7 +146,7 @@ public static class Entry
             LastSleep = milliseconds + t;
             try
             {
-                await Task.Delay(TimeSpan.FromMilliseconds(t), token.Token);
+                Task.Delay(TimeSpan.FromMilliseconds(t), token.Token).GetAwaiter().GetResult();
             }
             catch (TaskCanceledException) {/*_*/return; }
         }
