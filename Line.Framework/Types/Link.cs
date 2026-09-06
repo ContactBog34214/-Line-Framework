@@ -48,6 +48,7 @@ public class DynamicValue<T>
             throw new InvalidOperationException("This DynamicValue is read-only");
         val = value;
         usingLambda = false;
+        OnChange?.Invoke(value);
     }
 
     /// <summary>
@@ -66,6 +67,7 @@ public class DynamicValue<T>
         }
         else
             fc = Lambda;
+        OnChange?.Invoke(Value ?? default);
     }
 
     /// <summary>
@@ -100,4 +102,5 @@ public class DynamicValue<T>
     public static implicit operator DynamicValue<T>(T value) => new DynamicValue<T>(value);
 
     public static implicit operator DynamicValue<T>(Func<T> lambda) => new DynamicValue<T>(lambda);
+    public event Action<T> OnChange;
 }
