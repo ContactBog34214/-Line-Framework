@@ -8,19 +8,36 @@ namespace Line.Framework.Default.Graphics
 {
     public class Compositor : ICompositor
     {
+        private protected const float Deg2Rad = MathF.PI / 180f;
         private protected readonly Dictionary<UIWidget, UIWidgetLayout> UILayoutTable = new();
+        /// <summary>
+        /// 使用并行请求控件绘制：当为true时，启用并行请求
+        /// 当为false时，禁用并行请求
+        /// 当为null时，由合成器自动决定
+        /// </summary>
+        public DynamicValue<bool?> ParallelRequestContext { get; set; } = null;
 
         public virtual async Task<Vertex[]> Composite(UIWidget root)
         {
             bool clipMode = EnableClip;
             List<UIWidget> ws = trees(root);
+            bool? t = ParallelRequestContext?.Value ?? null;
+            bool ParallelReqMode = t ?? true;
+            if (t == null)
+            {
+                if (ws.Count < 48)
+                {
+                    ParallelReqMode = false;
+                }
+            }
 
             UILayoutTable.Clear();
 
             int zIndex = 0;
             Vector2 ScreenSize = new();
             Collector collector = new();
-            Task[] tasks = new Task[ws.Count];
+            Task[] tasks = null;
+            if (ParallelReqMode) tasks = new Task[ws.Count];
 
             foreach (var i in ws)
             {
@@ -60,7 +77,7 @@ namespace Line.Framework.Default.Graphics
                     continue;
                 }
                 UILayoutTable.Add(i, new(Offset, Size, Opacity, zIndex, i.Rotation.Value, clip));
-                tasks[zIndex] = Task.Run(async () =>
+                Func<Task> action = async () =>
                 {
                     var item = i;
                     if (item is UIWidget target && UILayoutTable.TryGetValue(item, out var table))
@@ -84,11 +101,14 @@ namespace Line.Framework.Default.Graphics
                             Log.Error($"{ex}");
                         }
                     }
-                });
+                };
+                if (ParallelReqMode)
+                    tasks[zIndex] = Task.Run(action);
+                else await action();
                 zIndex++;
             }
 
-            await Task.WhenAll(tasks.Where(c => c != null));
+            if (tasks != null) await Task.WhenAll(tasks.Where(c => c != null));
             if (UILayoutTable.TryGetValue(root, out var val))
                 ScreenSize = val.Size;
 
@@ -98,7 +118,7 @@ namespace Line.Framework.Default.Graphics
             long TotalThreadCount = commands.Count;
             var values = new ConcurrentBag<(uint, Vertex[])>();
 
-            void CTV(DrawCommand i, int idx)
+            Vertex[] CTV(DrawCommand i, int idx)
             {
                 try
                 {
@@ -113,7 +133,6 @@ namespace Line.Framework.Default.Graphics
                         {
                             var verts = i;
                             //顶点组处理
-                            List<Vertex> v = [];
                             foreach (var c in verts.Vert)
                             {
                                 var a = GetVertices(
@@ -127,7 +146,6 @@ namespace Line.Framework.Default.Graphics
                                             c.Opacity
                                         ),
                                     ],
-                                    ScreenSize,
                                     verts.Source
                                 )[0];
                                 tasks.Add(
@@ -147,22 +165,12 @@ namespace Line.Framework.Default.Graphics
                         }
                         if (tasks.Count != 0)
                         {
+                            List<Vertex> op = [];
                             for (int v = 0; v < tasks.Count; v += 3)
                             {
                                 if (v + 2 >= tasks.Count)
                                     break;
                                 List<Vertex[]> tmp = [];
-                                Vertex[] VertToVPC(Vertex[] vertices)
-                                {
-                                    var ctmp = new List<Vertex> { };
-
-                                    for (int vr = 0; vr < vertices.Length; vr++)
-                                    {
-                                        var tg = vertices[vr];
-                                        ctmp.Add(tg);
-                                    }
-                                    return ctmp.ToArray();
-                                }
 
                                 tmp.Add([tasks[v + 0], tasks[v + 1], tasks[v + 2]]);
                                 var st = tasks[v];
@@ -183,7 +191,7 @@ namespace Line.Framework.Default.Graphics
                                         {
                                             foreach (
                                                 var item in GeometryClipper.ClipTriangleByQuad(
-                                                    VertToVPC(tmp[ptr]),
+                                                    tmp[ptr],
                                                     quad
                                                 )
                                             )
@@ -202,7 +210,7 @@ namespace Line.Framework.Default.Graphics
                                                         )
                                                     );
                                                 }
-                                                tmp2.Add(vertices.ToArray());
+                                                tmp2.Add([.. vertices]);
                                             }
                                         }
                                     tmp.Clear();
@@ -210,11 +218,17 @@ namespace Line.Framework.Default.Graphics
                                     tmp.AddRange(tmp2);
                                 }
 
-                                foreach (var item in tmp)
+                                op.AddRange(new Func<IEnumerable<Vertex>>(() =>
                                 {
-                                    values.Add(new((uint)idx, item));
-                                }
+                                    var t = new List<Vertex>();
+                                    foreach (var i in tmp)
+                                    {
+                                        t.AddRange(i);
+                                    }
+                                    return t;
+                                })());
                             }
+                            return [.. op];
                         }
                     }
                 }
@@ -222,18 +236,21 @@ namespace Line.Framework.Default.Graphics
                 {
                     Log.Error($"{ex}");
                 }
+                return [];
             }
 
-            await Parallel.ForAsync(
+            Vertex[][] vs = new Vertex[commands.Count][];
+            Parallel.For(
                 0,
                 TotalThreadCount,
-                async (idx, _) => CTV(commands[(int)idx], (int)idx)
+                idx => vs[idx] = CTV(commands[(int)idx], (int)idx)
             );
 
             List<Vertex> result = [];
-            foreach (var i in values.OrderBy(c => c.Item1).Select(c => c.Item2))
+            foreach (var i in vs)
             {
-                result.AddRange(i);
+                if (i != default)
+                    result.AddRange(i);
             }
 
             return result.ToArray();
@@ -267,7 +284,6 @@ namespace Line.Framework.Default.Graphics
                 Rotation = r;
             }
         }
-
         private protected static List<UIWidget> trees(UIWidget root)
         {
             List<UIWidget> widgets = new();
@@ -311,11 +327,10 @@ namespace Line.Framework.Default.Graphics
                 new((1 - ac.X) * s.X, -ac.Y * s.Y),
             ];
 
+            float cos = (float)Math.Cos(tg.Rotation * Math.PI / 180f);
+            float sin = (float)Math.Sin(tg.Rotation * Math.PI / 180f);
             for (int i = 0; i < vert.Length; i++)
             {
-                float cos = (float)Math.Cos(tg.Rotation * Math.PI / 180f);
-                float sin = (float)Math.Sin(tg.Rotation * Math.PI / 180f);
-
                 var target = vert[i];
                 //旋转
                 var pos = target;
@@ -333,46 +348,33 @@ namespace Line.Framework.Default.Graphics
             return vert;
         }
 
-        private protected Vertex[] GetVertices(Vertex[] vertex, Vector2 source, UIWidget s)
+        private protected Vertex[] GetVertices(Vertex[] vertex, UIWidget s)
         {
-            if (!UILayoutTable.TryGetValue(s, out var tb))
-                return vertex;
-            float cos = (float)Math.Cos(tb.Rotation * Math.PI / 180f);
-            float sin = (float)Math.Sin(tb.Rotation * Math.PI / 180f);
-            var tmp = vertex;
+            var tb = UILayoutTable[s];
 
-            for (var i = 0; i < tmp.Length; i++)
+            float cos = MathF.Cos(tb.Rotation * Deg2Rad);
+            float sin = MathF.Sin(tb.Rotation * Deg2Rad);
+
+            for (int i = 0; i < vertex.Length; i++)
             {
-                var target = tmp[i];
-                //颜色处理
-                RgbaFloat rgba = new(
-                    target.Color.R,
-                    target.Color.G,
-                    target.Color.B,
-                    target.Color.A
-                );
-                target.Color = rgba;
+                var target = vertex[i];
 
-                //从绝对映射到相对锚点
                 var size = tb.Size;
                 target.Position -= s.Anchor * size;
 
-                //旋转
                 var pos = target.Position;
-                var rp = target.Position;
-                rp.X = pos.X * cos - pos.Y * sin;
-                rp.Y = pos.Y * cos + pos.X * sin;
+                target.Position = new Vector2(
+                    pos.X * cos - pos.Y * sin,
+                    pos.Y * cos + pos.X * sin
+                );
 
-                //映射回前面
-                rp += s.Anchor * size;
+                target.Position += s.Anchor * size;
+                target.Position += tb.Position;
 
-                //到绝对
-                rp += tb.Position;
-
-                target.Position = rp;
-                tmp[i] = target;
+                vertex[i] = target;
             }
-            return tmp;
+
+            return vertex;
         }
     }
 
@@ -457,12 +459,10 @@ namespace Line.Framework.Default.Graphics
 
                 if (curIn && nextIn)
                 {
-                    output.Add(cur);
                     output.Add(next);
                 }
                 else if (curIn && !nextIn)
                 {
-                    output.Add(cur);
                     output.Add(Intersect(cur, next, a, b));
                 }
                 else if (!curIn && nextIn)
@@ -501,7 +501,7 @@ namespace Line.Framework.Default.Graphics
                 p1.Color.R + (p2.Color.R - p1.Color.R) * t,
                 p1.Color.G + (p2.Color.G - p1.Color.G) * t,
                 p1.Color.B + (p2.Color.B - p1.Color.B) * t,
-                p1.Color.A + (p2.Color.A * p2.Opacity - p1.Color.A * p1.Opacity) * t
+                p1.Color.A + (p2.Color.A - p1.Color.A) * t
             );
 
             Vector2 uv =
