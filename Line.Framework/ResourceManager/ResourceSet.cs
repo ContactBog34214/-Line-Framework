@@ -25,9 +25,22 @@ public class RResourceSet : IResource
 
     public async Task Load()
     {
-        if (t == null)
-            return;
+        if (ImgStream == null) return;
         if (resourceSet != null)
+            return;
+        ImgStream.Position = 0;
+        var image = new ImageSharpTexture(ImgStream, EnableMipmap);
+        if (t != null)
+            try
+            {
+                t?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"Cannot Dispose Texture:{ex}");
+            }
+        t = image.CreateDeviceTexture(parent.Dev, parent.Dev.ResourceFactory);
+        if (t == null)
             return;
         resourceSet = parent.Dev.ResourceFactory.CreateResourceSet(
             new ResourceSetDescription(parent.Layout, t)
@@ -36,24 +49,38 @@ public class RResourceSet : IResource
 
     public async Task Release()
     {
-        if (resourceSet == null)
-            return;
-        resourceSet.Dispose();
+        resourceSet?.Dispose();
         resourceSet = null;
+        t?.Dispose();
+        t = null;
     }
 
     public void Dispose()
     {
+        ImgStream?.Dispose();
         Release().GetAwaiter().GetResult();
-        t.Dispose();
+        if (!(t?.IsDisposed ?? true)) t.Dispose();
     }
 
     public RResourceSet(Stream stream, TResourceSet tr)
     {
         parent = tr;
-        var image = new ImageSharpTexture(stream);
-        t = image.CreateDeviceTexture(parent.Dev, parent.Dev.ResourceFactory);
+        if (stream.CanSeek) stream.Position = 0;
+        ImgStream = new MemoryStream();
+        stream.CopyTo(ImgStream);
     }
+    private readonly Stream ImgStream;
+    public bool EnableMipmap
+    {
+        get; set
+        {
+            if (value == field) return;
+            field = value;
+            var tmp = IsLoaded;
+            Release().GetAwaiter().GetResult();
+            if (tmp) Load().GetAwaiter().GetResult();
+        }
+    } = true;
 }
 
 public class TResourceSet : ResourceType
