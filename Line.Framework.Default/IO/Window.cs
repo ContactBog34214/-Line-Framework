@@ -9,7 +9,7 @@ namespace Line.Framework.Default.Graphics;
 public class Window : WindowType
 {
     public override RendererType Renderer { get; }
-    public override ICompositor Compositor { get; }
+    public override ICompositor Compositor { get; set; }
 
     public Window(
         int Width = 640,

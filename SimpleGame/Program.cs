@@ -108,6 +108,7 @@ public static class SimpleGameMain
             Parent = Host.Root,
             Position = new Coord2(new(), new(0)),
             Anchor = new Vector2(0),
+            Compositor = new Compositor(),
         };
 
         Background = new UIBox()
@@ -181,7 +182,7 @@ public static class SimpleGameMain
             spinnerBox.Rotation = r;
             Image.Rotation = r;
         };
-        Host.FramePerSecond = 1000;
+        Host.FramePerSecond = 5000;
         Host.FocusGained += () =>
         {
             Host.VSync = false;

@@ -11,7 +11,7 @@ public class AndroidActity : WindowType
 {
     public virtual nint ActivityHandle => WindowHandle;
     public override RendererType Renderer { get; }
-    public override ICompositor Compositor { get; }
+    public override ICompositor Compositor { get; set; }
     public override float FramePerSecond { get; set; } = 144;
     public override float UpdatePerSecond { get; set; } = 1000;
     public AndroidActity(

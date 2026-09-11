@@ -28,7 +28,6 @@ public class InsideSandbox : UIScreen
         OR = a => OnRender?.Invoke(a);
         OU = a => OnUpdate?.Invoke(a);
     }
-    protected virtual SandCompositor Compositor { get; } = new();
     public override InputManager InputManager => MainSandbox.IM;
     public override event Action<double> OnRender;
     public override event Action<double> OnUpdate;
