@@ -223,7 +223,6 @@ public static class SimpleGameMain
 
         Host.RequestQuit = async () =>
         {
-            await Entry.Cancel();
             await Host.DisposeAsync();
         };
         while (Host.Exists)
