@@ -297,7 +297,7 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
     /// <summary>
     /// 合成器
     /// </summary>
-    public abstract ICompositor Compositor { get; }
+    public abstract ICompositor Compositor { get; set; }
 
     /// <summary>
     /// 当窗口更新时

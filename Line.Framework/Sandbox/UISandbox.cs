@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Line.Framework.Graphics;
 using Line.Framework.IO;
 using Line.Framework.Types;
 using Line.Framework.UI;
@@ -98,7 +99,7 @@ public class UISandbox : UIWidget
         IM?.Dispose();
         base.Dispose();
     }
-    protected virtual SandCompositor Compositor { get; } = new();
+    public required virtual ICompositor Compositor { get; set; }
     public override async Task RendererContext(RendererContextArgs args)
     {
         Sandbox.Parent = null;
