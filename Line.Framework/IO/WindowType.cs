@@ -636,8 +636,11 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
         {
             Log.Warning($"{ex.Message}");
         }
-        if (WindowHandle != IntPtr.Zero) SDL.DestroyWindow(WindowHandle);
-        if (IconSurfaceID != nint.Zero) try { SDL.DestroySurface(IconSurfaceID); } catch (Exception ex) { Log.Error(ex); }
+        Entry.DoOnMainThread(_ =>
+        {
+            if (WindowHandle != IntPtr.Zero) SDL.DestroyWindow(WindowHandle);
+            if (IconSurfaceID != nint.Zero) try { SDL.DestroySurface(IconSurfaceID); } catch (Exception ex) { Log.Error(ex); }
+        });
     }
 
     /// <summary>

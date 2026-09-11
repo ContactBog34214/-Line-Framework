@@ -6,6 +6,7 @@ namespace Line.Framework;
 public static class Entry
 {
     private static ConcurrentDictionary<Action<CancellationToken>, double> Funcs = new();
+    private static ConcurrentQueue<Action<CancellationToken>> OnceFuncs = new();
     /// <summary>
     /// 基准频率(单位=秒)
     /// </summary>
@@ -21,6 +22,10 @@ public static class Entry
     {
         if (Frequency <= 0 && Frequency != -1) throw new InvalidOperationException($"Frequency cannot be {Frequency}");
         if (!Funcs.TryAdd(func, Frequency)) throw new InvalidOperationException("Action already exists");
+    }
+    public static void DoOnMainThread(Action<CancellationToken> action)
+    {
+        OnceFuncs.Enqueue(action);
     }
     /// <summary>
     /// 更新主线程托管任务频率
@@ -137,6 +142,17 @@ public static class Entry
                 {
                     Log.Error(ex);
                 }
+            while (OnceFuncs.TryDequeue(out var result))
+            {
+                try
+                {
+                    result?.Invoke(token.Token);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex);
+                }
+            }
             //休眠
             double wait = 0;
             if (BaseFrequency > 0) wait = 1000d / BaseFrequency;
