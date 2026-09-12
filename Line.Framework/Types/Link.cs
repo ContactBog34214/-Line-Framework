@@ -24,17 +24,35 @@ public class DynamicValue<T>
         SetValue(value);
         ReadOnly = readOnly;
     }
+    public DynamicValue(T value, Action<T> WhenUpdate, bool readOnly = false)
+    {
+        SetValue(value);
+        ReadOnly = readOnly;
+        OnChange += WhenUpdate;
+    }
 
     public DynamicValue(Func<T> lambda, bool readOnly = false)
     {
         SetValueAsLambda(lambda);
         ReadOnly = readOnly;
     }
+    public DynamicValue(Func<T> lambda, Action<T> WhenUpdate, bool readOnly = false)
+    {
+        SetValueAsLambda(lambda);
+        ReadOnly = readOnly;
+        OnChange += WhenUpdate;
+    }
 
     public DynamicValue(bool readOnly = false)
     {
         SetValue(default);
         ReadOnly = readOnly;
+    }
+    public DynamicValue(Action<T> WhenUpdate, bool readOnly = false)
+    {
+        SetValue(default);
+        ReadOnly = readOnly;
+        OnChange += WhenUpdate;
     }
 
     /// <summary>
