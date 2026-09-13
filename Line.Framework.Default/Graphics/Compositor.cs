@@ -10,6 +10,7 @@ namespace Line.Framework.Default.Graphics
     {
         private protected const float Deg2Rad = MathF.PI / 180f;
         private protected readonly Dictionary<UIWidget, UIWidgetLayout> UILayoutTable = new();
+
         /// <summary>
         /// 使用并行请求控件绘制：当为true时，启用并行请求
         /// 当为false时，禁用并行请求
@@ -17,10 +18,12 @@ namespace Line.Framework.Default.Graphics
         /// </summary>
         public DynamicValue<bool?> ParallelRequestContext { get; set; } = null;
 
+        protected List<UIWidget> ws = [];
+
         public virtual async Task<Vertex[]> Composite(UIWidget root)
         {
             bool clipMode = EnableClip;
-            List<UIWidget> ws = trees(root);
+            ws = trees(root);
             bool? t = ParallelRequestContext?.Value ?? null;
             bool ParallelReqMode = t ?? true;
             if (t == null)
@@ -37,7 +40,8 @@ namespace Line.Framework.Default.Graphics
             Vector2 ScreenSize = new();
             Collector collector = new();
             Task[] tasks = null;
-            if (ParallelReqMode) tasks = new Task[ws.Count];
+            if (ParallelReqMode)
+                tasks = new Task[ws.Count];
 
             foreach (var i in ws)
             {
@@ -69,7 +73,12 @@ namespace Line.Framework.Default.Graphics
                     {
                         if (u.ClipList != null)
                             clip.AddRange(u.ClipList);
-                        clip.Add(GetClipArea(i, new(Offset, Size, Opacity, zIndex, i.Rotation.Value, null)));
+                        clip.Add(
+                            GetClipArea(
+                                i,
+                                new(Offset, Size, Opacity, zIndex, i.Rotation.Value, null)
+                            )
+                        );
                     }
                 }
                 else
@@ -104,11 +113,13 @@ namespace Line.Framework.Default.Graphics
                 };
                 if (ParallelReqMode)
                     tasks[zIndex] = Task.Run(action);
-                else await action();
+                else
+                    await action();
                 zIndex++;
             }
 
-            if (tasks != null) await Task.WhenAll(tasks.Where(c => c != null));
+            if (tasks != null)
+                await Task.WhenAll(tasks.Where(c => c != null));
             if (UILayoutTable.TryGetValue(root, out var val))
                 ScreenSize = val.Size;
 
@@ -118,7 +129,7 @@ namespace Line.Framework.Default.Graphics
             long TotalThreadCount = commands.Count;
             var values = new ConcurrentBag<(uint, Vertex[])>();
 
-            Vertex[] CTV(DrawCommand i, int idx)
+            Vertex[] CTV(DrawCommand i)
             {
                 try
                 {
@@ -218,15 +229,17 @@ namespace Line.Framework.Default.Graphics
                                     tmp.AddRange(tmp2);
                                 }
 
-                                op.AddRange(new Func<IEnumerable<Vertex>>(() =>
-                                {
-                                    var t = new List<Vertex>();
-                                    foreach (var i in tmp)
+                                op.AddRange(
+                                    new Func<IEnumerable<Vertex>>(() =>
                                     {
-                                        t.AddRange(i);
-                                    }
-                                    return t;
-                                })());
+                                        var t = new List<Vertex>();
+                                        foreach (var i in tmp)
+                                        {
+                                            t.AddRange(i);
+                                        }
+                                        return t;
+                                    })()
+                                );
                             }
                             return [.. op];
                         }
@@ -240,11 +253,7 @@ namespace Line.Framework.Default.Graphics
             }
 
             Vertex[][] vs = new Vertex[commands.Count][];
-            Parallel.For(
-                0,
-                TotalThreadCount,
-                idx => vs[idx] = CTV(commands[(int)idx], (int)idx)
-            );
+            Parallel.For(0, TotalThreadCount, idx => vs[idx] = CTV(commands[(int)idx]));
 
             List<Vertex> result = [];
             foreach (var i in vs)
@@ -253,7 +262,8 @@ namespace Line.Framework.Default.Graphics
                     result.AddRange(i);
             }
 
-            return result.ToArray();
+            ws.Clear();
+            return [.. result];
         }
 
         public DynamicValue<bool> EnableClip { get; set; } = true;
@@ -284,34 +294,40 @@ namespace Line.Framework.Default.Graphics
                 Rotation = r;
             }
         }
+
+        private protected static List<UIWidget> widgets = new();
+        private protected static HashSet<UIWidget> visited = new();
+
         private protected static List<UIWidget> trees(UIWidget root)
         {
-            List<UIWidget> widgets = new();
-            HashSet<UIWidget> visited = new();
-
-            void Collect(UIWidget node, int i = 0)
+            widgets.Clear();
+            visited.Clear();
+            lock (widgets)
             {
-                if (node == null)
-                    return;
-
-                if (!visited.Add(node))
-                    return; // 已访问或正在访问
-
-                if (!node.Visible)
-                    return;
-
-                widgets.Add(node);
-
-                var sortedChildren = node.Children.Where(c => c != null).OrderBy(c => c.Index);
-
-                foreach (var child in sortedChildren)
+                void Collect(UIWidget node, int i = 0)
                 {
-                    Collect(child as UIWidget, i + 1);
-                }
-            }
+                    if (node == null)
+                        return;
 
-            Collect(root);
-            return widgets;
+                    if (!visited.Add(node))
+                        return; // 已访问或正在访问
+
+                    if (!node.Visible)
+                        return;
+
+                    widgets.Add(node);
+
+                    var sortedChildren = node.Children.Where(c => c != null).OrderBy(c => c.Index);
+
+                    foreach (var child in sortedChildren)
+                    {
+                        Collect(child as UIWidget, i + 1);
+                    }
+                }
+
+                Collect(root);
+                return [.. widgets];
+            }
         }
 
         private protected static Vector2[] GetClipArea(UIWidget tg, UIWidgetLayout table)
@@ -363,10 +379,7 @@ namespace Line.Framework.Default.Graphics
                 target.Position -= s.Anchor * size;
 
                 var pos = target.Position;
-                target.Position = new Vector2(
-                    pos.X * cos - pos.Y * sin,
-                    pos.Y * cos + pos.X * sin
-                );
+                target.Position = new Vector2(pos.X * cos - pos.Y * sin, pos.Y * cos + pos.X * sin);
 
                 target.Position += s.Anchor * size;
                 target.Position += tb.Position;
