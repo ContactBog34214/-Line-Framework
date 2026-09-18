@@ -2,6 +2,7 @@ using System.Numerics;
 using Line.Framework.Graphics;
 using Veldrid;
 using Rectangle = System.Drawing.RectangleF;
+using RgbaFloat = Line.Framework.Types.RgbaFloat;
 
 namespace Line.Framework.UI;
 
@@ -132,7 +133,7 @@ public class UIDrawCollector
             t.RemoveAt(t.Count - 1);
             if (two)
                 t.RemoveAt(t.Count - 1);
-            v = t.ToArray();
+            v = [..t];
         }
         lock (vertLock)
         {
@@ -148,7 +149,7 @@ public class UIDrawCollector
     }
 }
 
-public class DrawCommand
+public struct DrawCommand
 {
     public Vertex[] Vert { get; set; }
     public float Z { get; set; }

@@ -17,11 +17,13 @@ namespace Line.Framework.Default.Graphics
         /// 当为null时，由合成器自动决定
         /// </summary>
         public DynamicValue<bool?> ParallelRequestContext { get; set; } = null;
-
+        public virtual UIDrawCollector UsingCollector { protected get; set; }
         protected List<UIWidget> ws = [];
 
         public virtual async Task<Vertex[]> Composite(UIWidget root)
         {
+            UsingCollector ??= new Collector();
+            UsingCollector.Clear();
             bool clipMode = EnableClip;
             ws = trees(root);
             bool? t = ParallelRequestContext?.Value ?? null;
@@ -38,7 +40,6 @@ namespace Line.Framework.Default.Graphics
 
             int zIndex = 0;
             Vector2 ScreenSize = new();
-            Collector collector = new();
             Task[] tasks = null;
             if (ParallelReqMode)
                 tasks = new Task[ws.Count];
@@ -101,7 +102,7 @@ namespace Line.Framework.Default.Graphics
                                     Y = table.Position.Y,
                                     width = table.Size.X,
                                     height = table.Size.Y,
-                                    Collector = collector,
+                                    Collector = UsingCollector,
                                 }
                             );
                         }
@@ -123,7 +124,9 @@ namespace Line.Framework.Default.Graphics
             if (UILayoutTable.TryGetValue(root, out var val))
                 ScreenSize = val.Size;
 
-            var commands = collector.GetOrdered(ws);
+            List<DrawCommand> commands=[];
+            commands = UsingCollector.Verts;
+            if (UsingCollector is Collector c) commands = c.GetOrdered(ws);
             if (commands.Count == 0)
                 return [];
             long TotalThreadCount = commands.Count;
@@ -165,7 +168,7 @@ namespace Line.Framework.Default.Graphics
                                         a.Color,
                                         a.UV,
                                         c.Texture,
-                                        c?.ResourceSet ?? null,
+                                        c.ResourceSet ?? null,
                                         table.Opacity
                                     )
                                     {
@@ -674,16 +677,24 @@ namespace Line.Framework.Default.Graphics
                 Vertex.TryAdd(source, [tmp]);
             VertsDirty = true;
         }
-
+        readonly List<DrawCommand> result = [];
         public List<DrawCommand> GetOrdered(List<UIWidget> ws)
         {
-            List<DrawCommand> result = [];
+            result.Clear();
             foreach (var i in ws)
             {
                 if (Vertex.TryGetValue(i, out var val))
                     result.AddRange(val);
             }
             return result;
+        }
+        public override void Clear()
+        {
+            base.Clear();
+            result.Clear();
+            Vertex.Clear();
+            Verts.Clear();
+            VertsDirty = true;
         }
     }
 }
