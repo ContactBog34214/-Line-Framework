@@ -197,7 +197,7 @@ public static class SimpleGameMain
         await FPSPrinter();
         Performance();
 
-        //PerTest(20000, Host.Root);
+        PerTest(100, Host.Root);
 
         Host.EnableMouseRelative = true;
         Host.MouseSpeedScale = 1;
@@ -312,13 +312,19 @@ public static class SimpleGameMain
     {
         for (int i = 0; i < num; i++)
         {
-            _ = new UIBox()
+            _ = new UIInput(Host.Resource)
             {
-                Name = $"_PerTest",
+                Name = "Input",
+                Position = new Coord2(new(0, -120), new(0.5f, 1)),
+                Size = new Coord2(new(600, 200), new()),
+                Anchor = new Vector2(0.5f),
+                Parent = Background,
                 Index = 100,
-                Parent = root,
-                Visible = true,
-                //Size = new Coord2(new(200), new()),
+                FontId = Fonts,
+                CursorColor = new(1f, 1f, 1f, 0.5f),
+                FontSize = 100,
+                Text = "使用字体列表为 Mono,Font\n测试字体回退功能\n1\n2",
+                Offset = new(0),
             };
         }
     }

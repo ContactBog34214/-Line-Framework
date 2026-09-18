@@ -509,12 +509,15 @@ public class UIInput : UIWidget
         TextWidget?.Text = Text;
         HintWidget?.Text = Hint;
     }
-
+    protected UIDrawCollector _collector;
     public override async Task RendererContext(RendererContextArgs args)
     {
+        _collector ??= new InsideDrawCollector(args.Collector,this);
+        if(_collector is InsideDrawCollector c)c.ChangeMainCollector(args.Collector);
+        
+        _collector.Clear();
         SyncChildrenAtt();
         await base.RendererContext(args);
-        UIDrawCollector collector = new();
         bool usingHint = (Text?.Length ?? 0) == 0;
         RendererContextArgs Args = new()
         {
@@ -522,7 +525,7 @@ public class UIInput : UIWidget
             Y = args.Y,
             width = args.width,
             height = args.height,
-            Collector = collector,
+            Collector = _collector,
         };
         if (usingHint)
         {
@@ -537,10 +540,12 @@ public class UIInput : UIWidget
             TextWidget?.RendererContext(Args);
         }
         var cl = args.Collector;
-        foreach (var i in collector.Verts.Select(i => i.Vert))
-        {
-            cl.DrawVertex(i, this);
-        }
+        if(_collector is InsideDrawCollector isdc)isdc.Submit();
+        else
+            foreach (var i in _collector.Verts.Select(i => i.Vert))
+            {
+                cl.DrawVertex(i, this);
+            }
 
         void DrawSelectArea(Cursor cursor, RgbaFloat color)
         {
