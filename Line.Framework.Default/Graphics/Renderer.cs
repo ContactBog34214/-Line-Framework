@@ -264,7 +264,7 @@ void main()
         _shaders = gd.ResourceFactory.CreateFromSpirv(vertexShaderDesc, fragmentShaderDesc);
     }
 
-    public struct VertexPositionColor
+    protected struct VertexPositionColor
     {
         public Vector2 Position; // This is the position, in normalized device coordinates.
         public RgbaFloat Color; // This is the color of the vertex.
@@ -280,7 +280,7 @@ void main()
         public const uint SizeInBytes = 32;
     }
 
-    public class VertexTask
+    protected struct VertexTask
     {
         public Vector2 Position { get; set; }
         public RgbaFloat Color { get; set; }

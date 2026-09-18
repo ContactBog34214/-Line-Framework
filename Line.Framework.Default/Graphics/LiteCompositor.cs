@@ -122,7 +122,7 @@ namespace Line.Framework.Default.Graphics
                                         a.Color,
                                         a.UV,
                                         c.Texture,
-                                        c?.ResourceSet ?? null,
+                                        c.ResourceSet ?? null,
                                         table.Opacity
                                     )
                                 );

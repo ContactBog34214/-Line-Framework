@@ -12,7 +12,7 @@
     <ProjectReference Include="../SimpleGame/SimpleGame.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="SDL3-CS" Version="3.4.14.1" />
-    <PackageReference Include="SDL3-CS.Android" Version="3.4.14.1" />
+    <PackageReference Include="SDL3-CS" Version="3.4.16.1" />
+    <PackageReference Include="SDL3-CS.Android" Version="3.4.16" />
   </ItemGroup>
 </Project>
