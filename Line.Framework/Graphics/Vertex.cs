@@ -7,7 +7,7 @@ namespace Line.Framework.Graphics;
 /// <summary>
 /// 顶点类型
 /// </summary>
-public struct Vertex
+public class Vertex
 {
     /// <summary>
     /// 位置
