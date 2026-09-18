@@ -23,7 +23,7 @@ namespace Line.Framework.Default.Graphics
         public virtual async Task<Vertex[]> Composite(UIWidget root)
         {
             bool clipMode = EnableClip;
-            ws = trees(root);
+            trees(root, ref ws);
             bool? t = ParallelRequestContext?.Value ?? null;
             bool ParallelReqMode = t ?? true;
             if (t == null)
@@ -294,40 +294,41 @@ namespace Line.Framework.Default.Graphics
                 Rotation = r;
             }
         }
+        private protected static readonly ConcurrentBag<HashSet<UIWidget>> FreeTreeGetCaches = [];
 
-        private protected static List<UIWidget> widgets = new();
-        private protected static HashSet<UIWidget> visited = new();
-
-        private protected static List<UIWidget> trees(UIWidget root)
+        private protected static void trees(UIWidget root, ref List<UIWidget> Result)
         {
-            widgets.Clear();
+            Result??=[];
+            List<UIWidget> listObj=Result;
+            HashSet<UIWidget> cache = default;
+            if (!FreeTreeGetCaches.TryTake(out cache)) cache = [];
+            var visited = cache;
+
+            Result.Clear();
             visited.Clear();
-            lock (widgets)
+            void Collect(UIWidget node)
             {
-                void Collect(UIWidget node, int i = 0)
+                if (node == null)
+                    return;
+
+                if (!visited.Add(node))
+                    return; // 已访问或正在访问
+
+                if (!node.Visible)
+                    return;
+
+                listObj.Add(node);
+
+                var sortedChildren = node.Children.Where(c => c != null).OrderBy(c => c.Index);
+
+                foreach (var child in sortedChildren)
                 {
-                    if (node == null)
-                        return;
-
-                    if (!visited.Add(node))
-                        return; // 已访问或正在访问
-
-                    if (!node.Visible)
-                        return;
-
-                    widgets.Add(node);
-
-                    var sortedChildren = node.Children.Where(c => c != null).OrderBy(c => c.Index);
-
-                    foreach (var child in sortedChildren)
-                    {
-                        Collect(child as UIWidget, i + 1);
-                    }
+                    Collect(child as UIWidget);
                 }
-
-                Collect(root);
-                return [.. widgets];
             }
+
+            Collect(root);
+            FreeTreeGetCaches.Add(visited);
         }
 
         private protected static Vector2[] GetClipArea(UIWidget tg, UIWidgetLayout table)
