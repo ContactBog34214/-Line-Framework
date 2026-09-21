@@ -606,6 +606,7 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
             var cp = await Compositor?.Composite(Root);
             if (cp != null)
                 Renderer?.Render(cp);
+            Parallel.ForEach(cp,v=>v.Free());
         }
     }
     protected int _isDisposed = 0;

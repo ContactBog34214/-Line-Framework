@@ -96,14 +96,14 @@ namespace Line.Framework.Default.Graphics
                         try
                         {
                             await target.RendererContext(
-                                new RendererContextArgs
-                                {
-                                    X = table.Position.X,
-                                    Y = table.Position.Y,
-                                    width = table.Size.X,
-                                    height = table.Size.Y,
-                                    Collector = UsingCollector,
-                                }
+                                RendererContextArgs.New
+                                (
+                                    table.Position.X,
+                                    table.Position.Y,
+                                    table.Size.X,
+                                    table.Size.Y,
+                                    UsingCollector
+                                )
                             );
                         }
                         catch (Exception ex)
@@ -130,7 +130,6 @@ namespace Line.Framework.Default.Graphics
             if (commands.Count == 0)
                 return [];
             long TotalThreadCount = commands.Count;
-            var values = new ConcurrentBag<(uint, Vertex[])>();
 
             Vertex[] CTV(DrawCommand i)
             {
@@ -151,7 +150,7 @@ namespace Line.Framework.Default.Graphics
                             {
                                 var a = GetVertices(
                                     [
-                                        new(
+                                        Vertex.New(
                                             c.Position,
                                             c.Color,
                                             c.UV,
@@ -163,17 +162,15 @@ namespace Line.Framework.Default.Graphics
                                     verts.Source
                                 )[0];
                                 tasks.Add(
-                                    new(
+                                    Vertex.New(
                                         a.Position,
                                         a.Color,
                                         a.UV,
                                         c.Texture,
                                         c.ResourceSet ?? null,
-                                        table.Opacity
+                                        table.Opacity,
+                                        table.ClipList
                                     )
-                                    {
-                                        Clips = table.ClipList,
-                                    }
                                 );
                             }
                         }
@@ -194,10 +191,10 @@ namespace Line.Framework.Default.Graphics
                                     var p = st.Clips[clip];
                                     Vertex[] quad =
                                     [
-                                        new(p[0], new(1, 1, 1, 1f), new(), null, null, 1),
-                                        new(p[1], new(1, 1, 1, 1f), new(), null, null, 1),
-                                        new(p[2], new(1, 1, 1, 1f), new(), null, null, 1),
-                                        new(p[3], new(1, 1, 1, 1f), new(), null, null, 1),
+                                        Vertex.New(p[0], new(1, 1, 1, 1f), new(), null, null, 1),
+                                        Vertex.New(p[1], new(1, 1, 1, 1f), new(), null, null, 1),
+                                        Vertex.New(p[2], new(1, 1, 1, 1f), new(), null, null, 1),
+                                        Vertex.New(p[3], new(1, 1, 1, 1f), new(), null, null, 1),
                                     ];
                                     List<Vertex[]> tmp2 = [];
                                     if (EnableClip)
@@ -214,7 +211,7 @@ namespace Line.Framework.Default.Graphics
                                                 foreach (var item2 in item)
                                                 {
                                                     vertices.Add(
-                                                        new(
+                                                        Vertex.New(
                                                             item2.Position,
                                                             item2.Color,
                                                             item2.UV,
@@ -537,7 +534,7 @@ namespace Line.Framework.Default.Graphics
                     )
                 ) * t;
 
-            return new Vertex(pos, col, new(new(), uv), p1.Texture, p1.ResourceSet, 1);
+            return Vertex.New(pos, col, new(new(), uv), p1.Texture, p1.ResourceSet, 1);
         }
 
         // ===================== TRIANGULATE (SAFE FAN) =====================

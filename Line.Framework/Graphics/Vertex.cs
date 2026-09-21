@@ -7,7 +7,7 @@ namespace Line.Framework.Graphics;
 /// <summary>
 /// 顶点类型
 /// </summary>
-public class Vertex
+public class Vertex : IRecycable
 {
     /// <summary>
     /// 位置
@@ -52,5 +52,29 @@ public class Vertex
         Texture = t;
         ResourceSet = rs;
         Opacity = o;
+    }
+    public Vertex() { }
+    public static Vertex New(Vector2 p, Types.RgbaFloat c, Coord2 u, Texture t, ResourceSet rs, float o, IEnumerable<Vector2[]> clip = default)
+    {
+        var result = Recycable.New<Vertex>();
+        result.Position = p;
+        result.Color = c;
+        result.UV = u;
+        result.Texture = t;
+        result.ResourceSet = rs;
+        result.Opacity = o;
+        if (clip != default)
+            result.Clips.AddRange(clip);
+        return result;
+    }
+    public void Reset()
+    {
+        Clips.Clear();
+        Position = default;
+        Color = default;
+        UV = default;
+        Texture = default;
+        ResourceSet = default;
+        Opacity = default;
     }
 }
