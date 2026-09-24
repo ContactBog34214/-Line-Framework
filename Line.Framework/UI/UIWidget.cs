@@ -223,7 +223,7 @@ public abstract class UIWidget : UINode
     }
 }
 
-public class RendererContextArgs : IRecyclable
+public struct RendererContextArgs
 {
     public double X { get; set; }
     public double Y { get; set; }
@@ -243,12 +243,14 @@ public class RendererContextArgs : IRecyclable
         UIDrawCollector c = default
         )
     {
-        var result = Recyclable<RendererContextArgs>.New();
-        result.X = x;
-        result.Y = y;
-        result.width = w;
-        result.height = h;
-        result.Collector = c;
+        var result = new RendererContextArgs
+        {
+            X = x,
+            Y = y,
+            width = w,
+            height = h,
+            Collector = c
+        };
         return result;
     }
 }

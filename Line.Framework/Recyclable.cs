@@ -72,36 +72,36 @@ public static class Recyclable
     }
 }
 
-public static class Recyclable<T> where  T : class, IRecyclable, new()
+public static class Recyclable<T> where T : class, IRecyclable, new()
 {
-    public static bool Enabled { get; set; }= true;
+    public static bool Enabled { get; set; } = false;
     private static readonly ConcurrentBag<T> pool = [];
     /// <summary>
     /// It is a soft limiter
     /// </summary>
     public static int? Limit { get; set; } = null;
-    public static T New()
+    public static T New(bool reset = false)
     {
-        if(!Enabled)return new();
+        if (!Enabled) return new();
         if (!pool.TryTake(out var request)) request = new();
         T result = request;
-        result.Reset();
+        if (reset) result.Reset();
         return result;
     }
-    public static T Get()
+    public static T Get(bool reset = false)
     {
-        if(!Enabled)return default;
+        if (!Enabled) return default;
         if (!pool.TryTake(out var request)) return default;
         T result = request;
-        result.Reset();
+        if (reset) result.Reset();
         return result;
     }
     public static void Free(T obj)
     {
-        if(!Enabled)return;
+        if (!Enabled) return;
         if (Limit != null)
         {
-            if(Limit<=pool.Count)return;
+            if (Limit <= pool.Count) return;
         }
         pool.Add(obj);
     }

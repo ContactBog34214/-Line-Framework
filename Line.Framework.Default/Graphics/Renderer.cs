@@ -170,7 +170,6 @@ void main()
                 cl.SetGraphicsResourceSet(0, rs);
                 cl.Draw(num, 1, index, 0);
                 index += num;
-                Parallel.ForEach(i, Recyclable<VertexTask>.Free);
             }
 
             cl.End();
@@ -281,7 +280,7 @@ void main()
         public const uint SizeInBytes = 32;
     }
 
-    protected class VertexTask : IRecyclable
+    protected struct VertexTask : IRecyclable
     {
         public Vector2 Position { get; set; }
         public RgbaFloat Color { get; set; }
@@ -291,7 +290,7 @@ void main()
         public float Opacity { get; set; }
         public static VertexTask New(Vector2 p, Types.RgbaFloat c, Vector2 u, Texture t, ResourceSet rs, float o)
         {
-            var result = Recyclable<VertexTask>.New();
+            var result = new VertexTask();
             result.Position = p;
             result.Color = c;
             result.UV = u;
@@ -323,18 +322,21 @@ void main()
         _textureResourceSet?.Dispose();
     }
 
-    private static VertexTask Export(Vertex vertex)
+    protected static VertexTask Export(Vertex vertex)
     {
-        return VertexTask.New(
-
-            vertex.Position,
-            vertex.Color,
-                vertex.UV.scale
+        return new()
+        {
+            Position = vertex.Position,
+            Color = vertex.Color,
+            UV = vertex.UV.scale
                 + vertex.UV.offset
-                    / new Vector2(vertex.Texture?.Width ?? 1, vertex.Texture?.Height ?? 1),
-            vertex.Texture,
-            vertex.ResourceSet,
-            vertex.Opacity
-        );
+                    / new Vector2(
+                        vertex.Texture?.Width ?? 1,
+                        vertex.Texture?.Height ?? 1
+                    ),
+            Texture = vertex.Texture,
+            ResourceSet = vertex.ResourceSet,
+            Opacity = vertex.Opacity
+        };
     }
 }

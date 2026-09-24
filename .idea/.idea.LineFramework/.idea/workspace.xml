@@ -14,26 +14,7 @@
     <configurations />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="71622979-426b-45e2-855b-d611876e5b4e" name="更改" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/.idea.LineFramework/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/.idea.LineFramework/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Line.Framework.Default/Graphics/Compositor.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Line.Framework.Default/Graphics/Compositor.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Line.Framework.Default/Graphics/LiteCompositor.cs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Line.Framework.Default/Graphics/Renderer.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Line.Framework.Default/Graphics/Renderer.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Line.Framework.Default/UIWidgets/PerformanceChart.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Line.Framework.Default/UIWidgets/PerformanceChart.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Line.Framework.Default/UIWidgets/UIBox.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Line.Framework.Default/UIWidgets/UIBox.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Line.Framework.Default/UIWidgets/UIButton.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Line.Framework.Default/UIWidgets/UIButton.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Line.Framework.Default/UIWidgets/UICircle.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Line.Framework.Default/UIWidgets/UICircle.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Line.Framework.Default/UIWidgets/UIImage.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Line.Framework.Default/UIWidgets/UIImage.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Line.Framework.Default/UIWidgets/UIText.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Line.Framework.Default/UIWidgets/UIText.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Line.Framework/Graphics/ICompositor.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Line.Framework/Graphics/ICompositor.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Line.Framework/Graphics/RendererType.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Line.Framework/Graphics/RendererType.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Line.Framework/Graphics/Vertex.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Line.Framework/Graphics/Vertex.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Line.Framework/IO/WindowType.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Line.Framework/IO/WindowType.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Line.Framework/Recyclable.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Line.Framework/Recyclable.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Line.Framework/UI/InsideDrawCollector.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Line.Framework/UI/InsideDrawCollector.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Line.Framework/UI/UIDrawCollector.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Line.Framework/UI/UIDrawCollector.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Line.Framework/UI/UIWidget.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Line.Framework/UI/UIWidget.cs" afterDir="false" />
-    </list>
+    <list default="true" id="71622979-426b-45e2-855b-d611876e5b4e" name="更改" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -74,61 +55,61 @@
   <component name="MetaFilesCheckinStateConfiguration" checkMetaFiles="true" />
   <component name="NextEditCompletionFeaturesState">
     <decayedCancelled>
-      <entry key="MS100" value="0.0" />
-      <entry key="MS500" value="1.7949702968441227E-84" />
-      <entry key="S2" value="1.1574821879978313E-21" />
-      <entry key="S5" value="4.220906448506699E-9" />
-      <entry key="S10" value="6.496866804967434E-5" />
-      <entry key="S30" value="0.042024191989714896" />
-      <entry key="S60" value="0.35799258127051237" />
-      <entry key="M2" value="2.360317929218222" />
-      <entry key="M5" value="12.138434543463628" />
-      <entry key="M10" value="33.784933147987" />
-      <entry key="M15" value="60.50525419329032" />
-      <entry key="M30" value="140.98173434734537" />
-      <entry key="H1" value="263.6883681670643" />
-      <entry key="H2" value="399.46414649179434" />
-      <entry key="H4" value="509.7804734388493" />
-      <entry key="D1" value="638.0694779371717" />
-      <entry key="W1" value="664.4574271620246" />
+      <entry key="MS100" value="1.0" />
+      <entry key="MS500" value="1.0000000000016924" />
+      <entry key="S2" value="1.0011405931588018" />
+      <entry key="S5" value="1.066504694830222" />
+      <entry key="S10" value="1.2578850418894887" />
+      <entry key="S30" value="1.6366384259931448" />
+      <entry key="S60" value="1.8171039319651674" />
+      <entry key="M2" value="2.1779008051328637" />
+      <entry key="M5" value="5.247441687694403" />
+      <entry key="M10" value="17.366849943533406" />
+      <entry key="M15" value="36.336551210859156" />
+      <entry key="M30" value="106.45085441214664" />
+      <entry key="H1" value="229.4733313013519" />
+      <entry key="H2" value="375.65063554368953" />
+      <entry key="H4" value="499.19762490017354" />
+      <entry key="D1" value="646.857184756161" />
+      <entry key="W1" value="677.6798036089849" />
     </decayedCancelled>
     <decayedSelected>
-      <entry key="MS100" value="1.0" />
-      <entry key="MS500" value="1.0" />
-      <entry key="S2" value="1.0" />
-      <entry key="S5" value="1.0000000047977329" />
-      <entry key="S10" value="1.0000692672407094" />
-      <entry key="S30" value="1.0450705106427591" />
-      <entry key="S60" value="1.4657981068016543" />
-      <entry key="M2" value="4.089048505624237" />
-      <entry key="M5" value="15.457948355879543" />
-      <entry key="M10" value="33.252008202103106" />
-      <entry key="M15" value="50.393479140394355" />
-      <entry key="M30" value="99.30147661611358" />
-      <entry key="H1" value="180.8057029065455" />
-      <entry key="H2" value="278.0996791926495" />
-      <entry key="H4" value="359.8559983225704" />
-      <entry key="D1" value="456.52543312741375" />
-      <entry key="W1" value="476.5492041893538" />
+      <entry key="MS100" value="6.460487929497692E-6" />
+      <entry key="MS500" value="0.10575351313370905" />
+      <entry key="S2" value="1.079465902032574" />
+      <entry key="S5" value="1.9962214753106917" />
+      <entry key="S10" value="2.7168571727317414" />
+      <entry key="S30" value="4.058550674321122" />
+      <entry key="S60" value="4.8884984422298015" />
+      <entry key="M2" value="6.225297174315182" />
+      <entry key="M5" value="10.992432950491473" />
+      <entry key="M10" value="22.379524243159487" />
+      <entry key="M15" value="36.326117671868985" />
+      <entry key="M30" value="81.83073159822594" />
+      <entry key="H1" value="164.1328936188871" />
+      <entry key="H2" value="267.99477290176765" />
+      <entry key="H4" value="358.6220514486872" />
+      <entry key="D1" value="468.81743368766683" />
+      <entry key="W1" value="491.994569756942" />
     </decayedSelected>
     <decayedShown>
-      <entry key="MS100" value="0.00579892019776972" />
-      <entry key="MS500" value="0.357000994921266" />
-      <entry key="S2" value="0.7729783971291766" />
-      <entry key="S5" value="0.9021254741708759" />
-      <entry key="S10" value="0.9499306172845524" />
-      <entry key="S30" value="1.0686591715569782" />
-      <entry key="S60" value="1.8083360731554394" />
-      <entry key="M2" value="6.421527627515667" />
-      <entry key="M5" value="27.548704221584458" />
-      <entry key="M10" value="66.97961458659782" />
-      <entry key="M15" value="110.83450824549774" />
-      <entry key="M30" value="240.20869303955487" />
-      <entry key="H1" value="444.4204225934969" />
-      <entry key="H2" value="677.5055173379184" />
-      <entry key="H4" value="869.5983628576626" />
-      <entry key="D1" value="1094.5868029815338" />
-      <entry key="W1" value="1141.0054211818795" />
+      <entry key="MS100" value="0.006801215061479599" />
+      <entry key="MS500" value="0.40638733509395303" />
+      <entry key="S2" value="1.5345627613396258" />
+      <entry key="S5" value="2.6346083146546064" />
+      <entry key="S10" value="3.6568580263034423" />
+      <entry key="S30" value="5.522864267691038" />
+      <entry key="S60" value="6.60044934033798" />
+      <entry key="M2" value="8.33758878222333" />
+      <entry key="M5" value="16.196914216618204" />
+      <entry key="M10" value="39.70468107514707" />
+      <entry key="M15" value="72.61584475394038" />
+      <entry key="M30" value="188.22157542451257" />
+      <entry key="H1" value="393.5406034147912" />
+      <entry key="H2" value="643.5899493850403" />
+      <entry key="H4" value="857.7820858594265" />
+      <entry key="D1" value="1115.666359254057" />
+      <entry key="W1" value="1169.6731336309874" />
     </decayedShown>
   </component>
   <component name="ProblemsViewState">
@@ -170,6 +151,13 @@
     "nodejs_package_manager_path": "npm",
     "settings.editor.selected.configurable": "preferences.keymap",
     "to.speed.mode.migration.done": "true"
+  },
+  "keyToStringList": {
+    "GitStage.ChangesTree.GroupingKeys": [
+      "directory",
+      "module",
+      "repository"
+    ]
   }
 }]]></component>
   <component name="RunManager" selected=".NET 项目.SimpleGame.Desktop">
@@ -220,7 +208,8 @@
   <component name="VcsManagerConfiguration">
     <option name="CLEAR_INITIAL_COMMIT_MESSAGE" value="true" />
     <MESSAGE value="添加InsideDrawCollector" />
-    <option name="LAST_COMMIT_MESSAGE" value="" />
+    <MESSAGE value="添加泛型可回收类和集成可回收类" />
+    <option name="LAST_COMMIT_MESSAGE" value="添加泛型可回收类和集成可回收类" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
@@ -237,19 +226,6 @@
           <properties exception="System.Threading.ThreadAbortException" breakIfHandledByOtherCode="false" displayValue="System.Threading.ThreadAbortException" />
           <option name="timeStamp" value="3" />
         </breakpoint>
-        <line-breakpoint enabled="true" type="DotNet Breakpoints">
-          <url>file://$PROJECT_DIR$/Line.Framework/Graphics/Vertex.cs</url>
-          <line>55</line>
-          <properties documentPath="$PROJECT_DIR$/Line.Framework/Graphics/Vertex.cs" containingFunctionPresentation="构造函数 'Vertex'">
-            <startOffsets>
-              <option value="1090" />
-            </startOffsets>
-            <endOffsets>
-              <option value="1091" />
-            </endOffsets>
-          </properties>
-          <option name="timeStamp" value="18" />
-        </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>
     <pin-to-top-manager>
