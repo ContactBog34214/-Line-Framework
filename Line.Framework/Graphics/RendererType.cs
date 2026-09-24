@@ -17,8 +17,9 @@ public abstract class RendererType : IDisposable
     /// <summary>
     /// 渲染顶点
     /// </summary>
+    /// <param name="vertices"></param>
     /// <param name="由合成器输出的顶点数组"></param>
-    public abstract void Render(Vertex[] vertices);
+    public abstract void Render(IEnumerable<Vertex> vertices);
     protected virtual WindowType Host { get; }
 
     protected RendererType(WindowType window)

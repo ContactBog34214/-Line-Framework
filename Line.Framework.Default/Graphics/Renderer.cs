@@ -63,7 +63,7 @@ void main()
     DeviceBuffer _vertexBuffer;
     public override ResourceLayout TextureLayout => _textureLayout;
 
-    public override void Render(Vertex[] vertices)
+    public override void Render(IEnumerable<Vertex> vertices)
     {
         if (!Host.Exists) return;
         var screenSize = Host.Size;
@@ -170,7 +170,7 @@ void main()
                 cl.SetGraphicsResourceSet(0, rs);
                 cl.Draw(num, 1, index, 0);
                 index += num;
-                Parallel.ForEach(i, c => c.Free());
+                Parallel.ForEach(i, Recyclable<VertexTask>.Free);
             }
 
             cl.End();
@@ -281,7 +281,7 @@ void main()
         public const uint SizeInBytes = 32;
     }
 
-    protected class VertexTask : IRecycable
+    protected class VertexTask : IRecyclable
     {
         public Vector2 Position { get; set; }
         public RgbaFloat Color { get; set; }
@@ -291,7 +291,7 @@ void main()
         public float Opacity { get; set; }
         public static VertexTask New(Vector2 p, Types.RgbaFloat c, Vector2 u, Texture t, ResourceSet rs, float o)
         {
-            var result = Recycable.New<VertexTask>();
+            var result = Recyclable<VertexTask>.New();
             result.Position = p;
             result.Color = c;
             result.UV = u;

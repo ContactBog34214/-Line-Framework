@@ -20,7 +20,7 @@ namespace Line.Framework.Default.Graphics
         public virtual UIDrawCollector UsingCollector { protected get; set; }
         protected List<UIWidget> ws = [];
 
-        public virtual async Task<Vertex[]> Composite(UIWidget root)
+        public virtual async Task<IEnumerable<Vertex>> Composite(UIWidget root)
         {
             UsingCollector ??= new Collector();
             UsingCollector.Clear();
@@ -131,7 +131,7 @@ namespace Line.Framework.Default.Graphics
                 return [];
             long TotalThreadCount = commands.Count;
 
-            Vertex[] CTV(DrawCommand i)
+            IEnumerable<Vertex> CTV(DrawCommand i)
             {
                 try
                 {
@@ -241,7 +241,7 @@ namespace Line.Framework.Default.Graphics
                                     })()
                                 );
                             }
-                            return [.. op];
+                            return op;
                         }
                     }
                 }
@@ -252,7 +252,7 @@ namespace Line.Framework.Default.Graphics
                 return [];
             }
 
-            Vertex[][] vs = new Vertex[commands.Count][];
+            var vs = new IEnumerable<Vertex>[commands.Count];
             Parallel.For(0, TotalThreadCount, idx => vs[idx] = CTV(commands[(int)idx]));
 
             List<Vertex> result = [];
@@ -263,7 +263,7 @@ namespace Line.Framework.Default.Graphics
             }
 
             ws.Clear();
-            return [.. result];
+            return result;
         }
 
         public DynamicValue<bool> EnableClip { get; set; } = true;
@@ -650,12 +650,13 @@ namespace Line.Framework.Default.Graphics
             }
         } = [];
 
-        public override void DrawVertex(Vertex[] v, UIWidget source)
+        public override void DrawVertex(IEnumerable<Vertex> v, UIWidget source)
         {
-            if (v.Length % 3 != 0)
+            int count = v.Count();
+            if (count % 3 != 0)
             {
                 var t = v.ToList();
-                bool two = v.Length % 3 == 2;
+                bool two = count % 3 == 2;
                 t.RemoveAt(t.Count - 1);
                 if (two)
                     t.RemoveAt(t.Count - 1);

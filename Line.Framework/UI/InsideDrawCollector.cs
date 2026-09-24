@@ -12,13 +12,19 @@ public sealed class InsideDrawCollector(UIDrawCollector collector, UIWidget widg
     public void ChangeMainCollector(UIDrawCollector collector) => _mainCollector = collector;
     public Vertex[] Results { get; private set; } = [];
     private ConcurrentDictionary< UIWidget,List<Vertex>> C { get; }= [];
-    public override void DrawVertex(Vertex[] v, UIWidget source)
+    public override void DrawVertex(IEnumerable<Vertex> v, UIWidget source)
     {
+        int count = v.Count();
         bool exist=C.TryGetValue(source,out var verts);
         verts ??= [];
-        for (int i = 0; i < v.Length - 2; i += 3)
+        List<Vertex> group = [];
+        foreach (var i in v)
         {
-            verts.AddRange([v[i],v[i+1],v[i+2]]);
+            group.Add(i);
+            if(group.Count>=3)
+                verts.AddRange(group);
+            else continue;
+            group.Clear();
         }
         if (!exist) C.TryAdd(source,verts);
     }

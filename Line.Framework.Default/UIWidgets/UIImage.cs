@@ -3,8 +3,6 @@ using Line.Framework.Resource;
 using Line.Framework.Resource.Graphic;
 using Line.Framework.Types;
 using Line.Framework.UI;
-using Veldrid;
-using RgbaFloat = Line.Framework.Types.RgbaFloat;
 
 namespace Line.Framework.Default.UIWidgets;
 
@@ -26,8 +24,8 @@ public class UIImage : UIWidget
 
         //背景
         var BackgroundColor = this.BackgroundColor?.Value ?? new(0, 0, 0, 0);
-        var tl = new Vertex(new(0, 0), BackgroundColor, new(new(), new(0, 0)), null, null, 1);
-        var tr = new Vertex(
+        var tl = Vertex.New(new(0, 0), BackgroundColor, new(new(), new(0, 0)), null, null, 1);
+        var tr = Vertex.New(
             new((float)args.width, 0),
             BackgroundColor,
             new(new(), new(1, 0)),
@@ -35,7 +33,7 @@ public class UIImage : UIWidget
             null,
             1
         );
-        var bl = new Vertex(
+        var bl = Vertex.New(
             new(0, (float)args.height),
             BackgroundColor,
             new(new(), new(0, 1)),
@@ -43,7 +41,7 @@ public class UIImage : UIWidget
             null,
             1
         );
-        var br = new Vertex(
+        var br = Vertex.New(
             new((float)args.width, (float)args.height),
             BackgroundColor,
             new(new(), new(1, 1)),
@@ -64,8 +62,8 @@ public class UIImage : UIWidget
             return;
 
         var Color = this.Color?.Value ?? new(1, 1, 1, 1);
-        var ttl = new Vertex(new(0, 0), Color, new(new(), new(0, 0)), Texture, ResourceSet, 1);
-        var ttr = new Vertex(
+        var ttl = Vertex.New(new(0, 0), Color, new(new(), new(0, 0)), Texture, ResourceSet, 1);
+        var ttr = Vertex.New(
             new((float)args.width, 0),
             Color,
             new(new(), new(1, 0)),
@@ -73,7 +71,7 @@ public class UIImage : UIWidget
             ResourceSet,
             1
         );
-        var tbl = new Vertex(
+        var tbl = Vertex.New(
             new(0, (float)args.height),
             Color,
             new(new(), new(0, 1)),
@@ -81,7 +79,7 @@ public class UIImage : UIWidget
             ResourceSet,
             1
         );
-        var tbr = new Vertex(
+        var tbr = Vertex.New(
             new((float)args.width, (float)args.height),
             Color,
             new(new(), new(1, 1)),

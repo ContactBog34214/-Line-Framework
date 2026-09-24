@@ -49,8 +49,8 @@ public class PerformanceChart : UIWidget
 
         void RenderBox(Vector2 Position, Vector2 Size, RgbaFloat color)
         {
-            var tl = new Vertex(Position, color, new(new(), new(0, 0)), null, null, 1);
-            var tr = new Vertex(
+            var tl = Vertex.New(Position, color, new(new(), new(0, 0)), null, null, 1);
+            var tr = Vertex.New(
                 Position + new Vector2(Size.X, 0),
                 color,
                 new(new(), new(1, 0)),
@@ -58,7 +58,7 @@ public class PerformanceChart : UIWidget
                 null,
                 1
             );
-            var bl = new Vertex(
+            var bl = Vertex.New(
                 Position + new Vector2(0, Size.Y),
                 color,
                 new(new(), new(0, 1)),
@@ -66,7 +66,7 @@ public class PerformanceChart : UIWidget
                 null,
                 1
             );
-            var br = new Vertex(
+            var br = Vertex.New(
                 Position + new Vector2(Size.X, Size.Y),
                 color,
                 new(new(), new(1, 1)),
@@ -129,7 +129,8 @@ public class PerformanceChart : UIWidget
                     cl += DynamicMarkColorDelta ?? new();
                 }
                 DrawLine(h, cl);
-                UIDrawCollector VCollector = new();
+                VCollector ??= new(args.Collector,this);
+                VCollector.ChangeMainCollector(args.Collector);
                 RendererContextArgs VRender = new()
                 {
                     width = args.width - 2 * markSize,
@@ -142,10 +143,7 @@ public class PerformanceChart : UIWidget
                 Text.Offset = Sc;
                 Text.Text = MarkPrefix?.Invoke(i) ?? i.ToString();
                 await Text.RendererContext(VRender);
-                foreach (var text in VCollector.Verts)
-                {
-                    collector.DrawVertex(text.Vert, this);
-                }
+                VCollector.Submit();
             }
             DrawLine(totalHeight, selColor);
 
@@ -184,6 +182,7 @@ public class PerformanceChart : UIWidget
         }
     } = new List<string> { "" };
     public Func<double, string> MarkPrefix { get; set; } = new((db) => $"{db}");
+    private InsideDrawCollector VCollector;
     public DynamicValue<RgbaFloat> MarkColor { get; set; } = new RgbaFloat(1, 1, 1, 1f);
     public DynamicValue<bool> DynamicMarkColor { get; set; } = true;
     public DynamicValue<float> MarkFontSize

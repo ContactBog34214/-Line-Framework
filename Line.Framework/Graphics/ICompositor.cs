@@ -12,5 +12,5 @@ public interface ICompositor
     /// </summary>
     /// <param name="起始UI控件"></param>
     /// <returns>顶点数组</returns>
-    Task<Vertex[]> Composite(UIWidget Root);
+    Task<IEnumerable<Vertex>> Composite(UIWidget Root);
 }
