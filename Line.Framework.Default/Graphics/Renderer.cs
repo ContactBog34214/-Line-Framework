@@ -63,7 +63,7 @@ void main()
     DeviceBuffer _vertexBuffer;
     public override ResourceLayout TextureLayout => _textureLayout;
 
-    public override void Render(Vertex[] vertices)
+    public override void Render(IEnumerable<Vertex> vertices)
     {
         if (!Host.Exists) return;
         var screenSize = Host.Size;
@@ -132,7 +132,7 @@ void main()
         }
 
         if (t.Count != 0)
-            Tasks.Add(t.ToArray());
+            Tasks.Add([.. t]);
         //顶点缓冲区大小检查
         uint totalSize = (uint)(tot * VertexPositionColor.SizeInBytes);
         if (_vertexBuffer == null || totalSize > _vertexBuffer.SizeInBytes)
@@ -280,7 +280,7 @@ void main()
         public const uint SizeInBytes = 32;
     }
 
-    protected struct VertexTask
+    protected struct VertexTask : IRecyclable
     {
         public Vector2 Position { get; set; }
         public RgbaFloat Color { get; set; }
@@ -288,6 +288,26 @@ void main()
         public Texture Texture { get; set; }
         public ResourceSet ResourceSet { get; set; }
         public float Opacity { get; set; }
+        public static VertexTask New(Vector2 p, Types.RgbaFloat c, Vector2 u, Texture t, ResourceSet rs, float o)
+        {
+            var result = new VertexTask();
+            result.Position = p;
+            result.Color = c;
+            result.UV = u;
+            result.Texture = t;
+            result.ResourceSet = rs;
+            result.Opacity = o;
+            return result;
+        }
+        public void Reset()
+        {
+            Position = default;
+            Color = default;
+            UV = default;
+            Texture = default;
+            ResourceSet = default;
+            Opacity = default;
+        }
     }
 
     public override void Dispose()
@@ -302,19 +322,21 @@ void main()
         _textureResourceSet?.Dispose();
     }
 
-    private static VertexTask Export(Vertex vertex)
+    protected static VertexTask Export(Vertex vertex)
     {
         return new()
         {
             Position = vertex.Position,
-            UV =
-                vertex.UV.scale
-                + vertex.UV.offset
-                    / new Vector2(vertex.Texture?.Width ?? 1, vertex.Texture?.Height ?? 1),
             Color = vertex.Color,
+            UV = vertex.UV.scale
+                + vertex.UV.offset
+                    / new Vector2(
+                        vertex.Texture?.Width ?? 1,
+                        vertex.Texture?.Height ?? 1
+                    ),
             Texture = vertex.Texture,
             ResourceSet = vertex.ResourceSet,
-            Opacity = vertex.Opacity,
+            Opacity = vertex.Opacity
         };
     }
 }

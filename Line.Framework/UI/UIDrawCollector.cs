@@ -29,7 +29,7 @@ public class UIDrawCollector
     /// <param name="源UI控件"></param>
     public virtual void DrawRect(Rectangle rect, RgbaFloat color, UIWidget source)
     {
-        var tl = new Vertex(
+        var tl = Vertex.New(
             new Vector2(0, 0) + new Vector2(rect.X, rect.Y),
             color,
             new(new(), new(0, 0)),
@@ -37,7 +37,7 @@ public class UIDrawCollector
             null,
             1
         );
-        var tr = new Vertex(
+        var tr = Vertex.New(
             new Vector2(rect.Width, 0) + new Vector2(rect.X, rect.Y),
             color,
             new(new(), new(1, 0)),
@@ -45,7 +45,7 @@ public class UIDrawCollector
             null,
             1
         );
-        var bl = new Vertex(
+        var bl = Vertex.New(
             new Vector2(0, rect.Height) + new Vector2(rect.X, rect.Y),
             color,
             new(new(), new(0, 1)),
@@ -53,7 +53,7 @@ public class UIDrawCollector
             null,
             1
         );
-        var br = new Vertex(
+        var br = Vertex.New(
             new Vector2(rect.Width, rect.Height) + new Vector2(rect.X, rect.Y),
             color,
             new(new(), new(1, 1)),
@@ -81,7 +81,7 @@ public class UIDrawCollector
         UIWidget source
     )
     {
-        var tl = new Vertex(
+        var tl = Vertex.New(
             new Vector2(0, 0) + new Vector2(rect.X, rect.Y),
             color,
             new(new(), new(0, 0)),
@@ -89,7 +89,7 @@ public class UIDrawCollector
             textureResourceSet,
             1
         );
-        var tr = new Vertex(
+        var tr = Vertex.New(
             new Vector2(rect.Width, 0) + new Vector2(rect.X, rect.Y),
             color,
             new(new(), new(1, 0)),
@@ -97,7 +97,7 @@ public class UIDrawCollector
             textureResourceSet,
             1
         );
-        var bl = new Vertex(
+        var bl = Vertex.New(
             new Vector2(0, rect.Height) + new Vector2(rect.X, rect.Y),
             color,
             new(new(), new(0, 1)),
@@ -105,7 +105,7 @@ public class UIDrawCollector
             textureResourceSet,
             1
         );
-        var br = new Vertex(
+        var br = Vertex.New(
             new Vector2(rect.Width, rect.Height) + new Vector2(rect.X, rect.Y),
             color,
             new(new(), new(1, 1)),
@@ -124,12 +124,13 @@ public class UIDrawCollector
     /// </summary>
     /// <param name="顶点数组"></param>
     /// <param name="源UI控件"></param>
-    public virtual void DrawVertex(Vertex[] v, UIWidget source)
+    public virtual void DrawVertex(IEnumerable<Vertex> v, UIWidget source)
     {
-        if (v.Length % 3 != 0)
+        int count = v.Count();
+        if (count % 3 != 0)
         {
             var t = v.ToList();
-            bool two = v.Length % 3 == 2;
+            bool two = count % 3 == 2;
             t.RemoveAt(t.Count - 1);
             if (two)
                 t.RemoveAt(t.Count - 1);
@@ -151,7 +152,7 @@ public class UIDrawCollector
 
 public struct DrawCommand
 {
-    public Vertex[] Vert { get; set; }
+    public IEnumerable<Vertex> Vert { get; set; }
     public float Z { get; set; }
     public UIWidget Source { get; set; }
 }

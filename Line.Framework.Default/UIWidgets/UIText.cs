@@ -925,7 +925,7 @@ public sealed class UIText : UIWidget
         UIDrawCollector collector)
     {
         var tl =
-            new Vertex(
+            Vertex.New(
                 position,
                 color.Value,
                 new(new(), new(0, 0)),
@@ -934,7 +934,7 @@ public sealed class UIText : UIWidget
                 1);
 
         var tr =
-            new Vertex(
+            Vertex.New(
                 position +
                     new Vector2(size.X, 0),
                 color.Value,
@@ -944,7 +944,7 @@ public sealed class UIText : UIWidget
                 1);
 
         var bl =
-            new Vertex(
+            Vertex.New(
                 position +
                     new Vector2(0, size.Y),
                 color.Value,
@@ -954,7 +954,7 @@ public sealed class UIText : UIWidget
                 1);
 
         var br =
-            new Vertex(
+            Vertex.New(
                 position + size,
                 color.Value,
                 new(new(), new(1, 1)),

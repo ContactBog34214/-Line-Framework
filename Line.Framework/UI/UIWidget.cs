@@ -42,9 +42,9 @@ public abstract class UIWidget : UINode
         if (Parent != null && Parent is UIWidget i)
         {
             i = Parent as UIWidget;
-            si = (i?.GetSizeOnScreen()??new()) * (i?.Anchor??new());
+            si = (i?.GetSizeOnScreen() ?? new()) * (i?.Anchor ?? new());
             pa = i;
-            of = i?.ChildrenOffset??new();
+            of = i?.ChildrenOffset ?? new();
         }
         return new(
             s.Value.X * (Position.Value.scale.X + of.scale.X)
@@ -167,7 +167,7 @@ public abstract class UIWidget : UINode
     public static UIWidget FindWidgetPointTouched(UIWidget w, Vector2 Point)
     {
         UIWidget[] Children = w.Children.OfType<UIWidget>().OrderBy(c => c.Index).ToArray();
-        for (int i = Children.Length; ; )
+        for (int i = Children.Length; ;)
         {
             i--;
             if (i < 0)
@@ -199,7 +199,7 @@ public abstract class UIWidget : UINode
     public static bool IsWidgetPointTouched(UIWidget w, UIWidget t, Vector2 Point)
     {
         UIWidget[] Children = w.Children.OfType<UIWidget>().OrderBy(c => c.Index).ToArray();
-        for (int i = Children.Length; ; )
+        for (int i = Children.Length; ;)
         {
             i--;
             if (i < 0)
@@ -223,13 +223,36 @@ public abstract class UIWidget : UINode
     }
 }
 
-public class RendererContextArgs
+public struct RendererContextArgs
 {
     public double X { get; set; }
     public double Y { get; set; }
     public double width { get; set; }
     public double height { get; set; }
     public UIDrawCollector Collector { get; set; }
+    public void Reset()
+    {
+        X = Y = width = height = default;
+        Collector = default;
+    }
+    public static RendererContextArgs New(
+        double x = 0,
+        double y = 0,
+        double w = 0,
+        double h = 0,
+        UIDrawCollector c = default
+        )
+    {
+        var result = new RendererContextArgs
+        {
+            X = x,
+            Y = y,
+            width = w,
+            height = h,
+            Collector = c
+        };
+        return result;
+    }
 }
 
 public enum TouchModes

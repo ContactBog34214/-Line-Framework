@@ -14,11 +14,7 @@
     <configurations />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="71622979-426b-45e2-855b-d611876e5b4e" name="更改" comment="">
-      <change beforePath="$PROJECT_DIR$/Line.Framework.Default/Graphics/Compositor.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Line.Framework.Default/Graphics/Compositor.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Line.Framework.Default/UIWidgets/UIInput.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Line.Framework.Default/UIWidgets/UIInput.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SimpleGame/Program.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SimpleGame/Program.cs" afterDir="false" />
-    </list>
+    <list default="true" id="71622979-426b-45e2-855b-d611876e5b4e" name="更改" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -43,6 +39,7 @@
   }
 }</component>
   <component name="HighlightingSettingsPerFile">
+    <setting file="file://$APPLICATION_CONFIG_DIR$/resharper-host/DecompilerCache/decompiler/0950efc9e14f49bcb4eec6519a8af627dbba00/f3/94aca964/Monitor.cs" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/Line.Framework/UI/InsideDrawCollector.cs" root0="FORCE_HIGHLIGHTING" />
     <setting file="mock:///Immediate Window" root0="FORCE_HIGHLIGHTING" />
   </component>
@@ -59,60 +56,60 @@
   <component name="NextEditCompletionFeaturesState">
     <decayedCancelled>
       <entry key="MS100" value="1.0" />
-      <entry key="MS500" value="1.0000295329958575" />
-      <entry key="S2" value="1.1299891928713583" />
-      <entry key="S5" value="1.8303521576943829" />
-      <entry key="S10" value="2.5706513980157353" />
-      <entry key="S30" value="3.4445000059282767" />
-      <entry key="S60" value="3.9867191061018192" />
-      <entry key="M2" value="5.718908556107235" />
-      <entry key="M5" value="13.903634333458886" />
-      <entry key="M10" value="27.15181318384587" />
-      <entry key="M15" value="41.37986268707738" />
-      <entry key="M30" value="85.98050542713669" />
-      <entry key="H1" value="149.0048912405177" />
-      <entry key="H2" value="206.58595060794303" />
-      <entry key="H4" value="246.30681046571397" />
-      <entry key="D1" value="286.91756702464903" />
-      <entry key="W1" value="294.6813252723196" />
+      <entry key="MS500" value="1.0000000000016924" />
+      <entry key="S2" value="1.0011405931588018" />
+      <entry key="S5" value="1.066504694830222" />
+      <entry key="S10" value="1.2578850418894887" />
+      <entry key="S30" value="1.6366384259931448" />
+      <entry key="S60" value="1.8171039319651674" />
+      <entry key="M2" value="2.1779008051328637" />
+      <entry key="M5" value="5.247441687694403" />
+      <entry key="M10" value="17.366849943533406" />
+      <entry key="M15" value="36.336551210859156" />
+      <entry key="M30" value="106.45085441214664" />
+      <entry key="H1" value="229.4733313013519" />
+      <entry key="H2" value="375.65063554368953" />
+      <entry key="H4" value="499.19762490017354" />
+      <entry key="D1" value="646.857184756161" />
+      <entry key="W1" value="677.6798036089849" />
     </decayedCancelled>
     <decayedSelected>
-      <entry key="MS100" value="0.0" />
-      <entry key="MS500" value="6.3872438462052795E-292" />
-      <entry key="S2" value="2.858335128921216E-73" />
-      <entry key="S5" value="1.909694925646184E-29" />
-      <entry key="S10" value="9.63894478088751E-15" />
-      <entry key="S30" value="9.683667734941182E-5" />
-      <entry key="S60" value="0.04114176585145009" />
-      <entry key="M2" value="0.9835961027306753" />
-      <entry key="M5" value="8.219348124815545" />
-      <entry key="M10" value="22.796119778487924" />
-      <entry key="M15" value="38.18068650474745" />
-      <entry key="M30" value="81.4203541255055" />
-      <entry key="H1" value="137.2009122007053" />
-      <entry key="H2" value="185.83718864013952" />
-      <entry key="H4" value="218.61996946161366" />
-      <entry key="D1" value="251.66482830780365" />
-      <entry key="W1" value="257.93616134610704" />
+      <entry key="MS100" value="6.460487929497692E-6" />
+      <entry key="MS500" value="0.10575351313370905" />
+      <entry key="S2" value="1.079465902032574" />
+      <entry key="S5" value="1.9962214753106917" />
+      <entry key="S10" value="2.7168571727317414" />
+      <entry key="S30" value="4.058550674321122" />
+      <entry key="S60" value="4.8884984422298015" />
+      <entry key="M2" value="6.225297174315182" />
+      <entry key="M5" value="10.992432950491473" />
+      <entry key="M10" value="22.379524243159487" />
+      <entry key="M15" value="36.326117671868985" />
+      <entry key="M30" value="81.83073159822594" />
+      <entry key="H1" value="164.1328936188871" />
+      <entry key="H2" value="267.99477290176765" />
+      <entry key="H4" value="358.6220514486872" />
+      <entry key="D1" value="468.81743368766683" />
+      <entry key="W1" value="491.994569756942" />
     </decayedSelected>
     <decayedShown>
-      <entry key="MS100" value="0.9138314502294005" />
-      <entry key="MS500" value="0.9821690430241522" />
-      <entry key="S2" value="1.125361009860229" />
-      <entry key="S5" value="1.8281644591513944" />
-      <entry key="S10" value="2.5693666415743093" />
-      <entry key="S30" value="3.441398131547359" />
-      <entry key="S60" value="4.0152992678006845" />
-      <entry key="M2" value="6.674904285609357" />
-      <entry key="M5" value="22.07407260017567" />
-      <entry key="M10" value="49.890233918369724" />
-      <entry key="M15" value="79.49827320709389" />
-      <entry key="M30" value="167.3349352317236" />
-      <entry key="H1" value="286.1497993180131" />
-      <entry key="H2" value="392.3849582877891" />
-      <entry key="H4" value="464.90423535350425" />
-      <entry key="D1" value="538.5780550508654" />
-      <entry key="W1" value="552.6168507388734" />
+      <entry key="MS100" value="0.006801215061479599" />
+      <entry key="MS500" value="0.40638733509395303" />
+      <entry key="S2" value="1.5345627613396258" />
+      <entry key="S5" value="2.6346083146546064" />
+      <entry key="S10" value="3.6568580263034423" />
+      <entry key="S30" value="5.522864267691038" />
+      <entry key="S60" value="6.60044934033798" />
+      <entry key="M2" value="8.33758878222333" />
+      <entry key="M5" value="16.196914216618204" />
+      <entry key="M10" value="39.70468107514707" />
+      <entry key="M15" value="72.61584475394038" />
+      <entry key="M30" value="188.22157542451257" />
+      <entry key="H1" value="393.5406034147912" />
+      <entry key="H2" value="643.5899493850403" />
+      <entry key="H4" value="857.7820858594265" />
+      <entry key="D1" value="1115.666359254057" />
+      <entry key="W1" value="1169.6731336309874" />
     </decayedShown>
   </component>
   <component name="ProblemsViewState">
@@ -144,7 +141,7 @@
     "cidr.known.project.marker": "true",
     "codeWithMe.voiceChat.enabledByDefault": "false",
     "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
-    "git-widget-placeholder": "main",
+    "git-widget-placeholder": "perf.优化资源生命周期",
     "junie.onboarding.icon.badge.shown": "true",
     "last_opened_file_path": "/home/smellyfish/targz/openlogic-openjdk-21.0.12+8-linux-x64",
     "node.js.detected.package.eslint": "true",
@@ -154,6 +151,13 @@
     "nodejs_package_manager_path": "npm",
     "settings.editor.selected.configurable": "preferences.keymap",
     "to.speed.mode.migration.done": "true"
+  },
+  "keyToStringList": {
+    "GitStage.ChangesTree.GroupingKeys": [
+      "directory",
+      "module",
+      "repository"
+    ]
   }
 }]]></component>
   <component name="RunManager" selected=".NET 项目.SimpleGame.Desktop">
@@ -204,7 +208,8 @@
   <component name="VcsManagerConfiguration">
     <option name="CLEAR_INITIAL_COMMIT_MESSAGE" value="true" />
     <MESSAGE value="添加InsideDrawCollector" />
-    <option name="LAST_COMMIT_MESSAGE" value="" />
+    <MESSAGE value="添加泛型可回收类和集成可回收类" />
+    <option name="LAST_COMMIT_MESSAGE" value="添加泛型可回收类和集成可回收类" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
@@ -223,6 +228,11 @@
         </breakpoint>
       </breakpoints>
     </breakpoint-manager>
+    <pin-to-top-manager>
+      <pinned-members>
+        <PinnedItemInfo parentTag="Frame#Line.Framework.Recycable.FindPool" memberName="result" />
+      </pinned-members>
+    </pin-to-top-manager>
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

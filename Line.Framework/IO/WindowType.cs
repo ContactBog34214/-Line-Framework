@@ -606,6 +606,10 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
             var cp = await Compositor?.Composite(Root);
             if (cp != null)
                 Renderer?.Render(cp);
+            foreach (var i in cp)
+            {
+                Recyclable<Vertex>.Free(i);
+            }
         }
     }
     protected int _isDisposed = 0;

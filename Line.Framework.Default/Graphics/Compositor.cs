@@ -20,7 +20,7 @@ namespace Line.Framework.Default.Graphics
         public virtual UIDrawCollector UsingCollector { protected get; set; }
         protected List<UIWidget> ws = [];
 
-        public virtual async Task<Vertex[]> Composite(UIWidget root)
+        public virtual async Task<IEnumerable<Vertex>> Composite(UIWidget root)
         {
             UsingCollector ??= new Collector();
             UsingCollector.Clear();
@@ -96,14 +96,14 @@ namespace Line.Framework.Default.Graphics
                         try
                         {
                             await target.RendererContext(
-                                new RendererContextArgs
-                                {
-                                    X = table.Position.X,
-                                    Y = table.Position.Y,
-                                    width = table.Size.X,
-                                    height = table.Size.Y,
-                                    Collector = UsingCollector,
-                                }
+                                RendererContextArgs.New
+                                (
+                                    table.Position.X,
+                                    table.Position.Y,
+                                    table.Size.X,
+                                    table.Size.Y,
+                                    UsingCollector
+                                )
                             );
                         }
                         catch (Exception ex)
@@ -130,9 +130,8 @@ namespace Line.Framework.Default.Graphics
             if (commands.Count == 0)
                 return [];
             long TotalThreadCount = commands.Count;
-            var values = new ConcurrentBag<(uint, Vertex[])>();
 
-            Vertex[] CTV(DrawCommand i)
+            IEnumerable<Vertex> CTV(DrawCommand i)
             {
                 try
                 {
@@ -151,7 +150,7 @@ namespace Line.Framework.Default.Graphics
                             {
                                 var a = GetVertices(
                                     [
-                                        new(
+                                        Vertex.New(
                                             c.Position,
                                             c.Color,
                                             c.UV,
@@ -163,17 +162,15 @@ namespace Line.Framework.Default.Graphics
                                     verts.Source
                                 )[0];
                                 tasks.Add(
-                                    new(
+                                    Vertex.New(
                                         a.Position,
                                         a.Color,
                                         a.UV,
                                         c.Texture,
                                         c.ResourceSet ?? null,
-                                        table.Opacity
+                                        table.Opacity,
+                                        table.ClipList
                                     )
-                                    {
-                                        Clips = table.ClipList,
-                                    }
                                 );
                             }
                         }
@@ -194,10 +191,10 @@ namespace Line.Framework.Default.Graphics
                                     var p = st.Clips[clip];
                                     Vertex[] quad =
                                     [
-                                        new(p[0], new(1, 1, 1, 1f), new(), null, null, 1),
-                                        new(p[1], new(1, 1, 1, 1f), new(), null, null, 1),
-                                        new(p[2], new(1, 1, 1, 1f), new(), null, null, 1),
-                                        new(p[3], new(1, 1, 1, 1f), new(), null, null, 1),
+                                        Vertex.New(p[0], new(1, 1, 1, 1f), new(), null, null, 1),
+                                        Vertex.New(p[1], new(1, 1, 1, 1f), new(), null, null, 1),
+                                        Vertex.New(p[2], new(1, 1, 1, 1f), new(), null, null, 1),
+                                        Vertex.New(p[3], new(1, 1, 1, 1f), new(), null, null, 1),
                                     ];
                                     List<Vertex[]> tmp2 = [];
                                     if (EnableClip)
@@ -214,7 +211,7 @@ namespace Line.Framework.Default.Graphics
                                                 foreach (var item2 in item)
                                                 {
                                                     vertices.Add(
-                                                        new(
+                                                        Vertex.New(
                                                             item2.Position,
                                                             item2.Color,
                                                             item2.UV,
@@ -244,7 +241,7 @@ namespace Line.Framework.Default.Graphics
                                     })()
                                 );
                             }
-                            return [.. op];
+                            return op;
                         }
                     }
                 }
@@ -255,7 +252,7 @@ namespace Line.Framework.Default.Graphics
                 return [];
             }
 
-            Vertex[][] vs = new Vertex[commands.Count][];
+            var vs = new IEnumerable<Vertex>[commands.Count];
             Parallel.For(0, TotalThreadCount, idx => vs[idx] = CTV(commands[(int)idx]));
 
             List<Vertex> result = [];
@@ -266,7 +263,7 @@ namespace Line.Framework.Default.Graphics
             }
 
             ws.Clear();
-            return [.. result];
+            return result;
         }
 
         public DynamicValue<bool> EnableClip { get; set; } = true;
@@ -537,7 +534,7 @@ namespace Line.Framework.Default.Graphics
                     )
                 ) * t;
 
-            return new Vertex(pos, col, new(new(), uv), p1.Texture, p1.ResourceSet, 1);
+            return Vertex.New(pos, col, new(new(), uv), p1.Texture, p1.ResourceSet, 1);
         }
 
         // ===================== TRIANGULATE (SAFE FAN) =====================
@@ -653,12 +650,13 @@ namespace Line.Framework.Default.Graphics
             }
         } = [];
 
-        public override void DrawVertex(Vertex[] v, UIWidget source)
+        public override void DrawVertex(IEnumerable<Vertex> v, UIWidget source)
         {
-            if (v.Length % 3 != 0)
+            int count = v.Count();
+            if (count % 3 != 0)
             {
                 var t = v.ToList();
-                bool two = v.Length % 3 == 2;
+                bool two = count % 3 == 2;
                 t.RemoveAt(t.Count - 1);
                 if (two)
                     t.RemoveAt(t.Count - 1);

@@ -197,7 +197,7 @@ public static class SimpleGameMain
         await FPSPrinter();
         Performance();
 
-        PerTest(100, Host.Root);
+        //PerTest(100, Host.Root);
 
         Host.EnableMouseRelative = true;
         Host.MouseSpeedScale = 1;

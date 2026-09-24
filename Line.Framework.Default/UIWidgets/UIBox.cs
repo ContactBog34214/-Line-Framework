@@ -6,7 +6,7 @@ namespace Line.Framework.Default.UIWidgets;
 
 public class UIBox : UIWidget
 {
-    public RgbaFloat color { get; set; } = new(0, 0, 0, 1f);
+    public Types.RgbaFloat color { get; set; } = new(0, 0, 0, 1f);
     readonly Action<RendererContextArgs> RenderAction;
 
     public override async Task RendererContext(RendererContextArgs args)
@@ -26,7 +26,7 @@ public class UIBox : UIWidget
             {
                 return;
             }
-            var tl = new Vertex(
+            var tl = Vertex.New(
                 new(0, 0),
                 color,
                 new(new(), new(0, 0)),
@@ -34,7 +34,7 @@ public class UIBox : UIWidget
                 null,
                 1
             );
-            var tr = new Vertex(
+            var tr = Vertex.New(
                 new((float)args.width, 0),
                 color,
                 new(new(), new(1, 0)),
@@ -42,7 +42,7 @@ public class UIBox : UIWidget
                 null,
                 1
             );
-            var bl = new Vertex(
+            var bl = Vertex.New(
                 new(0, (float)args.height),
                 color,
                 new(new(), new(0, 1)),
@@ -50,7 +50,7 @@ public class UIBox : UIWidget
                 null,
                 1
             );
-            var br = new Vertex(
+            var br = Vertex.New(
                 new((float)args.width, (float)args.height),
                 color,
                 new(new(), new(1, 1)),
