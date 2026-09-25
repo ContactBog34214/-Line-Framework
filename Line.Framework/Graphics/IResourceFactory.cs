@@ -1,6 +1,6 @@
 namespace Line.Framework.Graphics;
 
-public interface IResourceFectory
+public interface IResourceFactory
 {
     IShader CreateShader(ShaderCreateInfo createInfo);
     IFrameBuffer CreateFrameBuffer();
