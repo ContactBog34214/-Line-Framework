@@ -1,0 +1,31 @@
+namespace Line.Framework.Graphics;
+
+public enum PixelFormats
+{
+    R8UNorm,
+    R8G8UNorm,
+    R8G8B8UNorm,
+    R8G8B8A8UNorm,
+    B8G8R8A8UNorm,
+    R16UNorm,
+    R16G16UNorm,
+    R16G16B16A16UNorm,
+    R8SNorm,
+    R8G8SNorm,
+    R8G8B8A8SNorm,
+    R16SNorm,
+    R16G16SNorm,
+    R16G16B16A16SNorm,
+    R16Float,
+    R16G16Float,
+    R16G16B16A16Float,
+    R32Float,
+    R32G32Float,
+    R32G32B32A32Float,
+    R8UInt,
+    R8G8UInt,
+    R8G8B8A8UInt,
+    R8SInt,
+    R8B8SInt,
+    R8G8B8A8SInt,
+}

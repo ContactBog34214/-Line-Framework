@@ -24,4 +24,8 @@ public enum GraphicBackend
     /// OpenGL:Windows Linux Android支持
     /// </summary>
     OpenGL,
+    /// <summary>
+    /// Software:仅SDL3下支持
+    /// </summary>
+    Software,
 }
