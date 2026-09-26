@@ -2,6 +2,7 @@ using System.Numerics;
 using System.Text;
 using Line.Framework.Graphics;
 using Line.Framework.IO;
+using SDL3;
 using Veldrid;
 using Veldrid.SPIRV;
 

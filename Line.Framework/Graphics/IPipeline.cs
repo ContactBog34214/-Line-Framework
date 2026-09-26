@@ -1,7 +1,8 @@
+using Line.Framework.Types;
+
 namespace Line.Framework.Graphics;
 
-public interface IPipeline : IDisposable
+public interface IPipeline : IDisposable,IName
 {
     PipelineType Type { get; }
-    string Name { get; }
 }

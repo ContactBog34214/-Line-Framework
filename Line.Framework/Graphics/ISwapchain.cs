@@ -1,8 +1,9 @@
+using Line.Framework.Types;
+
 namespace Line.Framework.Graphics;
 
-public interface ISwapchain : IDisposable
+public interface ISwapchain : IDisposable,IName
 {
-    string Name { get; }
     void Resize(int width, int height);
     IFrameBuffer FrameBuffer { get; }
 }
