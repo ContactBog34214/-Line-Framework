@@ -5,7 +5,7 @@ namespace Line.Framework.Default.Graphics.Veldrid;
 
 public sealed class VeldridShader : IShader
 {
-    private readonly Shader shader;
+    internal readonly Shader shader;
 
     public string Name => shader.Name;
 
@@ -18,18 +18,7 @@ public sealed class VeldridShader : IShader
     internal VeldridShader(Shader _s)
     {
         shader = _s;
-        switch (shader.Stage)
-        {
-            case ShaderStages.Vertex:
-                Stage = ShaderStage.Vertex;
-                break;
-            case ShaderStages.Fragment:
-                Stage = ShaderStage.Fragment;
-                break;
-            default:
-                Stage = default;
-                break;
-        }
+        Stage = VeldridConverter.ConvertShaderStage(_s.Stage);
     }
     internal static ShaderStages GetStages(ShaderStage stage)
     {

@@ -211,7 +211,7 @@ void main()
                 1,
                 1,
                 1,
-                PixelFormat.R8_G8_B8_A8_UNorm,
+                global::Veldrid.PixelFormat.R8_G8_B8_A8_UNorm,
                 TextureUsage.Sampled
             )
         );

@@ -2,5 +2,5 @@ namespace Line.Framework.Graphics;
 
 public struct OutputAttachmentDescription
 {
-    public PixelFormats PixelFormats { get; set; }
+    public PixelFormat PixelFormats { get; set; }
 }

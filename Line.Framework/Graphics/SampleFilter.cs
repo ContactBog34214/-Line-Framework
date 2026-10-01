@@ -1,6 +1,6 @@
 namespace Line.Framework.Graphics;
 
-public enum Filter
+public enum SampleFilter
 {
     Nearest,
     Linear

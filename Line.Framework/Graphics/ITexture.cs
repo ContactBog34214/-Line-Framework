@@ -10,7 +10,7 @@ public interface ITexture : IDisposable, IName
     uint MipLevels { get; }
     uint Depth { get; }
     TextureType Type { get; }
-    PixelFormats Format { get; }
-    TextureSampleCount SampleCount { get; }
+    PixelFormat Format { get; }
+    SampleCount SampleCount { get; }
     TextureUsage Usage { get; }
 }

@@ -12,7 +12,6 @@ using Line.Framework.Resource.Graphic;
 using Line.Framework.Sandbox;
 using Line.Framework.Types;
 using Line.Framework.UI;
-using SDL3;
 #pragma warning disable CS8618
 
 namespace SimpleGame;

@@ -1,10 +1,9 @@
 namespace Line.Framework.Graphics;
 
-public enum PixelFormats
+public enum PixelFormat
 {
     R8UNorm,
     R8G8UNorm,
-    R8G8B8UNorm,
     R8G8B8A8UNorm,
     B8G8R8A8UNorm,
     R16UNorm,
@@ -26,6 +25,6 @@ public enum PixelFormats
     R8G8UInt,
     R8G8B8A8UInt,
     R8SInt,
-    R8B8SInt,
+    R8G8SInt,
     R8G8B8A8SInt,
 }
