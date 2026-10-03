@@ -28,10 +28,10 @@ public sealed class VeldridDevice : IGraphicsDevice
             case GraphicBackend.OpenGL:
                 throw new NotSupportedException();
         }
-        ResourceFectory = new VeldridResourceFactory(graphicsDevice);
+        ResourceFactory = new VeldridResourceFactory(graphicsDevice);
     }
 
-    public IResourceFactory ResourceFectory { get; }
+    public IResourceFactory ResourceFactory { get; }
 
     public void Dispose()
     {

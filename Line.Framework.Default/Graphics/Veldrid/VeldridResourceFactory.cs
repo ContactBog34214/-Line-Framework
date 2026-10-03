@@ -26,11 +26,6 @@ public sealed class VeldridResourceFactory : IResourceFactory
         }
     }
 
-    public IFrameBuffer CreateFrameBuffer()
-    {
-        throw new NotImplementedException();
-    }
-
     public IDeviceBuffer CreateBuffer(BufferCreateInfo createInfo)
     {
         var buffer = dev.ResourceFactory.CreateBuffer(new()

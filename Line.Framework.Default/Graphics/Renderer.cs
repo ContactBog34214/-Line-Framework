@@ -5,6 +5,14 @@ using Line.Framework.IO;
 using SDL3;
 using Veldrid;
 using Veldrid.SPIRV;
+using BufferUsage = Veldrid.BufferUsage;
+using FaceCullMode = Veldrid.FaceCullMode;
+using FrontFace = Veldrid.FrontFace;
+using PolygonFillMode = Veldrid.PolygonFillMode;
+using PrimitiveTopology = Veldrid.PrimitiveTopology;
+using RasterizerStateDescription = Veldrid.RasterizerStateDescription;
+using TextureUsage = Veldrid.TextureUsage;
+using VertexLayoutDescription = Veldrid.VertexLayoutDescription;
 
 namespace Line.Framework.Default.Graphics;
 

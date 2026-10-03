@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Text;
 using Line.Framework;
 using Line.Framework.Default.Graphics;
+using Line.Framework.Default.Graphics.Veldrid;
 using Line.Framework.Default.IO;
 using Line.Framework.Default.UIWidgets;
 using Line.Framework.Graphics;
@@ -225,6 +226,9 @@ public static class SimpleGameMain
         {
             await Host.DisposeAsync();
         };
+
+        VeldridDevice device = new(GraphicBackend.Vulkan);
+
         while (Host.Exists)
         {
             await Task.Delay(5);
