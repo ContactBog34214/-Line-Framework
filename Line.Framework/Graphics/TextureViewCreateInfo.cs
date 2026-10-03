@@ -26,4 +26,5 @@ public struct TextureViewCreateInfo
     /// Number of array layers in this view.
     /// </summary>
     public uint ArrayLayers { get; set; }
+    public PixelFormat? FormatOverride { get; set; }
 }

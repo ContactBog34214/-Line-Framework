@@ -107,13 +107,53 @@ public sealed class VeldridResourceFactory : IResourceFactory
     {
         var buffer = dev.ResourceFactory.CreateFramebuffer(new()
         {
-            ColorTargets=createInfo.ColorTargets,
+            ColorTargets = [.. createInfo.ColorTargets.Select(VeldridConverter.ConvertFramebufferAttachmentDescription)],
+            DepthTarget = createInfo.DepthStencilTarget.HasValue
+                ? VeldridConverter.ConvertFramebufferAttachmentDescription(createInfo.DepthStencilTarget.Value)
+                : null
         });
+        try
+        {
+            return new VeldridFrameBuffer(buffer);
+        }
+        catch
+        {
+            buffer?.Dispose();
+            throw;
+        }
     }
 
     public IPipeline CreatePipeline(PipelineCreateInfo createInfo)
     {
         throw new NotImplementedException();
+    }
+
+    public ITextureView CreateTextureView(TextureViewCreateInfo createInfo)
+    {
+        if (createInfo.TargetTexture is not VeldridTexture texture) throw new InvalidDataException();
+        var view = dev.ResourceFactory.CreateTextureView(new TextureViewDescription()
+        {
+            ArrayLayers = createInfo.ArrayLayers,
+            BaseArrayLayer = createInfo.BaseArrayLayer,
+            BaseMipLevel = createInfo.BaseMipLevel,
+            Format = createInfo.FormatOverride.HasValue
+                ? VeldridConverter.ConvertPixelFormat(createInfo.FormatOverride.Value)
+                : null,
+            MipLevels = createInfo.MipLevels,
+            Target = texture.texture,
+        });
+        try
+        {
+            return new VeldridTextureView(view)
+            {
+                TargetTexture = createInfo.TargetTexture,
+            };
+        }
+        catch
+        {
+            view?.Dispose();
+            throw;
+        }
     }
 
     internal VeldridResourceFactory(GraphicsDevice device)

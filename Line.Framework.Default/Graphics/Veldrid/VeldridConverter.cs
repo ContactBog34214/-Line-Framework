@@ -502,5 +502,13 @@ public static class VeldridConverter
             _ => throw new NotSupportedException()
         };
     }
-
+    public static global::Veldrid.FramebufferAttachmentDescription ConvertFramebufferAttachmentDescription(FramebufferAttachmentDescription description)
+    {
+        return new()
+        {
+            ArrayLayer=description.Target.ArrayLayers,
+            MipLevel=description.Target.MipLevels,
+            Target=((VeldridTexture)description.Target.TargetTexture).texture,
+        };
+    }
 }
