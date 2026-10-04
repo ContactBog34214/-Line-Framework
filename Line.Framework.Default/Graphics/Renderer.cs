@@ -11,6 +11,7 @@ using FrontFace = Veldrid.FrontFace;
 using PolygonFillMode = Veldrid.PolygonFillMode;
 using PrimitiveTopology = Veldrid.PrimitiveTopology;
 using RasterizerStateDescription = Veldrid.RasterizerStateDescription;
+using ShaderSetDescription = Veldrid.ShaderSetDescription;
 using TextureUsage = Veldrid.TextureUsage;
 using VertexLayoutDescription = Veldrid.VertexLayoutDescription;
 
