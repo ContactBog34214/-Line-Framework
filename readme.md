@@ -34,10 +34,10 @@ Active development.
 
 Current roadmap:
 
-[x] Window system
-[x] Graphics abstraction
-[ ] UI rewrite
-[ ] Audio rewrite
+- [x] Window system
+- [x] Graphics abstraction
+- [ ] UI rewrite
+- [ ] Audio rewrite
 
 ## Build
 
