@@ -5,6 +5,7 @@ using Line.Framework.IO;
 using SDL3;
 using Veldrid;
 using Veldrid.SPIRV;
+using BlendStateDescription = Veldrid.BlendStateDescription;
 using BufferUsage = Veldrid.BufferUsage;
 using FaceCullMode = Veldrid.FaceCullMode;
 using FrontFace = Veldrid.FrontFace;
@@ -75,7 +76,8 @@ void main()
 
     public override void Render(IEnumerable<Vertex> vertices)
     {
-        if (!Host.Exists) return;
+        if (!Host.Exists)
+            return;
         var screenSize = Host.Size;
         if (_shaders == null)
             CreateShader(gd);
@@ -298,7 +300,15 @@ void main()
         public Texture Texture { get; set; }
         public ResourceSet ResourceSet { get; set; }
         public float Opacity { get; set; }
-        public static VertexTask New(Vector2 p, Types.RgbaFloat c, Vector2 u, Texture t, ResourceSet rs, float o)
+
+        public static VertexTask New(
+            Vector2 p,
+            Types.RgbaFloat c,
+            Vector2 u,
+            Texture t,
+            ResourceSet rs,
+            float o
+        )
         {
             var result = new VertexTask();
             result.Position = p;
@@ -309,6 +319,7 @@ void main()
             result.Opacity = o;
             return result;
         }
+
         public void Reset()
         {
             Position = default;
@@ -338,15 +349,13 @@ void main()
         {
             Position = vertex.Position,
             Color = vertex.Color,
-            UV = vertex.UV.scale
+            UV =
+                vertex.UV.scale
                 + vertex.UV.offset
-                    / new Vector2(
-                        vertex.Texture?.Width ?? 1,
-                        vertex.Texture?.Height ?? 1
-                    ),
+                    / new Vector2(vertex.Texture?.Width ?? 1, vertex.Texture?.Height ?? 1),
             Texture = vertex.Texture,
             ResourceSet = vertex.ResourceSet,
-            Opacity = vertex.Opacity
+            Opacity = vertex.Opacity,
         };
     }
 }
