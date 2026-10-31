@@ -7,12 +7,14 @@ public sealed class VeldridDevice : IGraphicsDevice
 {
     private readonly GraphicsDevice graphicsDevice;
     public string Name => graphicsDevice.DeviceName;
+
     public VeldridDevice(GraphicBackend backend)
     {
         GraphicsDeviceOptions options = new()
         {
             PreferStandardClipSpaceYDirection = true,
             SyncToVerticalBlank = false,
+            ResourceBindingModel = ResourceBindingModel.Default,
         };
         switch (backend)
         {

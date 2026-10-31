@@ -24,6 +24,7 @@ public sealed class VeldridTexture : ITexture
     public TextureUsage Usage { get; }
 
     public string Name => texture.Name;
+
     internal VeldridTexture(global::Veldrid.Texture source)
     {
         texture = source;
@@ -32,8 +33,136 @@ public sealed class VeldridTexture : ITexture
         SampleCount = VeldridConverter.ConvertSampleCount(source.SampleCount);
         Usage = VeldridConverter.ConvertTextureUsage(source.Usage);
     }
+
     public void Dispose()
     {
         texture?.Dispose();
+    }
+}
+
+public partial class VeldridResourceFactory
+{
+    public ITexture CreateTexture(TextureCreateInfo createInfo)
+    {
+        var texture = dev.ResourceFactory.CreateTexture(
+            VeldridConverter.ConvertTextureDescription(createInfo)
+        );
+        try
+        {
+            return new VeldridTexture(texture);
+        }
+        catch
+        {
+            texture?.Dispose();
+            throw;
+        }
+    }
+}
+
+public partial class VeldridConverter
+{
+    public static global::Veldrid.TextureDescription ConvertTextureDescription(
+        TextureCreateInfo createInfo
+    )
+    {
+        return new()
+        {
+            ArrayLayers = createInfo.ArrayLayers,
+            Depth = createInfo.Depth,
+            Format = ConvertPixelFormat(createInfo.Format),
+            Height = createInfo.Height,
+            MipLevels = createInfo.MipLevels,
+            SampleCount = ConvertSampleCount(createInfo.SampleCount),
+            Type = ConvertTextureType(createInfo.Type),
+            Usage = ConvertTextureUsage(createInfo.Usage),
+            Width = createInfo.Width,
+        };
+    }
+
+    public static TextureCreateInfo ConvertTextureDescription(
+        global::Veldrid.TextureDescription des
+    )
+    {
+        return new()
+        {
+            ArrayLayers = des.ArrayLayers,
+            Depth = des.Depth,
+            Format = ConvertPixelFormat(des.Format),
+            Height = des.Height,
+            MipLevels = des.MipLevels,
+            SampleCount = ConvertSampleCount(des.SampleCount),
+            Type = ConvertTextureType(des.Type),
+            Usage = ConvertTextureUsage(des.Usage),
+            Width = des.Width,
+        };
+    }
+
+    public static global::Veldrid.TextureType ConvertTextureType(TextureType type)
+    {
+        return type switch
+        {
+            TextureType.Texture1D => global::Veldrid.TextureType.Texture1D,
+
+            TextureType.Texture2D => global::Veldrid.TextureType.Texture2D,
+
+            TextureType.Texture3D => global::Veldrid.TextureType.Texture3D,
+
+            _ => throw new NotSupportedException($"Unsupported texture type: {type}"),
+        };
+    }
+
+    public static TextureType ConvertTextureType(global::Veldrid.TextureType type)
+    {
+        return type switch
+        {
+            global::Veldrid.TextureType.Texture1D => TextureType.Texture1D,
+
+            global::Veldrid.TextureType.Texture2D => TextureType.Texture2D,
+
+            global::Veldrid.TextureType.Texture3D => TextureType.Texture3D,
+
+            _ => throw new NotSupportedException($"Unsupported Veldrid texture type: {type}"),
+        };
+    }
+
+    public static global::Veldrid.TextureUsage ConvertTextureUsage(TextureUsage usage)
+    {
+        global::Veldrid.TextureUsage result = 0;
+
+        if ((usage & TextureUsage.Sampled) != 0)
+            result |= global::Veldrid.TextureUsage.Sampled;
+
+        if ((usage & TextureUsage.ColorTarget) != 0)
+            result |= global::Veldrid.TextureUsage.RenderTarget;
+
+        if ((usage & TextureUsage.DepthStencilTarget) != 0)
+            result |= global::Veldrid.TextureUsage.DepthStencil;
+
+        if ((usage & TextureUsage.StorageRead) != 0 || (usage & TextureUsage.StorageWrite) != 0)
+            result |= global::Veldrid.TextureUsage.Storage;
+
+        return result;
+    }
+
+    public static TextureUsage ConvertTextureUsage(global::Veldrid.TextureUsage usage)
+    {
+        TextureUsage result = 0;
+
+        if ((usage & global::Veldrid.TextureUsage.Sampled) != 0)
+            result |= TextureUsage.Sampled;
+
+        if ((usage & global::Veldrid.TextureUsage.RenderTarget) != 0)
+            result |= TextureUsage.ColorTarget;
+
+        if ((usage & global::Veldrid.TextureUsage.DepthStencil) != 0)
+            result |= TextureUsage.DepthStencilTarget;
+
+        if ((usage & global::Veldrid.TextureUsage.Storage) != 0)
+        {
+            result |= TextureUsage.StorageRead;
+            result |= TextureUsage.StorageWrite;
+        }
+
+        return result;
     }
 }

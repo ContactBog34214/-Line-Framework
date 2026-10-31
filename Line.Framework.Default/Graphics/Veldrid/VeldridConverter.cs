@@ -1,56 +1,10 @@
 using Line.Framework.Graphics;
+using Line.Framework.Types;
 
 namespace Line.Framework.Default.Graphics.Veldrid;
 
-public static class VeldridConverter
+public static partial class VeldridConverter
 {
-    public static global::Veldrid.BufferUsage ConvertBufferUsage(BufferUsage usage)
-    {
-        global::Veldrid.BufferUsage result = 0;
-
-        if ((usage & BufferUsage.Vertex) != 0)
-            result |= global::Veldrid.BufferUsage.VertexBuffer;
-
-        if ((usage & BufferUsage.Index) != 0)
-            result |= global::Veldrid.BufferUsage.IndexBuffer;
-
-        if ((usage & BufferUsage.Indirect) != 0)
-            result |= global::Veldrid.BufferUsage.IndirectBuffer;
-
-        if ((usage & BufferUsage.StorageWrite) != 0)
-            result |= global::Veldrid.BufferUsage.StructuredBufferReadWrite;
-        else if ((usage & BufferUsage.StorageRead) != 0)
-            result |= global::Veldrid.BufferUsage.StructuredBufferReadOnly;
-
-        return result;
-    }
-
-    public static BufferUsage ConvertBufferUsage(global::Veldrid.BufferUsage usage)
-    {
-        BufferUsage result = 0;
-
-        if ((usage & global::Veldrid.BufferUsage.VertexBuffer) != 0)
-            result |= BufferUsage.Vertex;
-
-        if ((usage & global::Veldrid.BufferUsage.IndexBuffer) != 0)
-            result |= BufferUsage.Index;
-
-        if ((usage & global::Veldrid.BufferUsage.IndirectBuffer) != 0)
-            result |= BufferUsage.Indirect;
-
-        if ((usage & global::Veldrid.BufferUsage.StructuredBufferReadWrite) != 0)
-        {
-            result |= BufferUsage.StorageRead;
-            result |= BufferUsage.StorageWrite;
-        }
-        else if ((usage & global::Veldrid.BufferUsage.StructuredBufferReadOnly) != 0)
-        {
-            result |= BufferUsage.StorageRead;
-        }
-
-        return result;
-    }
-
     public static global::Veldrid.PixelFormat ConvertPixelFormat(PixelFormat format)
     {
         return format switch
@@ -167,299 +121,6 @@ public static class VeldridConverter
         };
     }
 
-    public static global::Veldrid.TextureSampleCount ConvertSampleCount(SampleCount count)
-    {
-        return count switch
-        {
-            SampleCount.Count1 => global::Veldrid.TextureSampleCount.Count1,
-
-            SampleCount.Count2 => global::Veldrid.TextureSampleCount.Count2,
-
-            SampleCount.Count4 => global::Veldrid.TextureSampleCount.Count4,
-
-            SampleCount.Count8 => global::Veldrid.TextureSampleCount.Count8,
-
-            SampleCount.Count16 => global::Veldrid.TextureSampleCount.Count16,
-
-            SampleCount.Count32 => global::Veldrid.TextureSampleCount.Count32,
-
-            _ => throw new NotSupportedException($"Unsupported sample count: {count}"),
-        };
-    }
-
-    public static SampleCount ConvertSampleCount(global::Veldrid.TextureSampleCount count)
-    {
-        return count switch
-        {
-            global::Veldrid.TextureSampleCount.Count1 => SampleCount.Count1,
-
-            global::Veldrid.TextureSampleCount.Count2 => SampleCount.Count2,
-
-            global::Veldrid.TextureSampleCount.Count4 => SampleCount.Count4,
-
-            global::Veldrid.TextureSampleCount.Count8 => SampleCount.Count8,
-
-            global::Veldrid.TextureSampleCount.Count16 => SampleCount.Count16,
-
-            global::Veldrid.TextureSampleCount.Count32 => SampleCount.Count32,
-
-            _ => throw new NotSupportedException($"Unsupported Veldrid sample count: {count}"),
-        };
-    }
-
-    public static global::Veldrid.TextureType ConvertTextureType(TextureType type)
-    {
-        return type switch
-        {
-            TextureType.Texture1D => global::Veldrid.TextureType.Texture1D,
-
-            TextureType.Texture2D => global::Veldrid.TextureType.Texture2D,
-
-            TextureType.Texture3D => global::Veldrid.TextureType.Texture3D,
-
-            _ => throw new NotSupportedException($"Unsupported texture type: {type}"),
-        };
-    }
-
-    public static TextureType ConvertTextureType(global::Veldrid.TextureType type)
-    {
-        return type switch
-        {
-            global::Veldrid.TextureType.Texture1D => TextureType.Texture1D,
-
-            global::Veldrid.TextureType.Texture2D => TextureType.Texture2D,
-
-            global::Veldrid.TextureType.Texture3D => TextureType.Texture3D,
-
-            _ => throw new NotSupportedException($"Unsupported Veldrid texture type: {type}"),
-        };
-    }
-
-    public static global::Veldrid.TextureUsage ConvertTextureUsage(TextureUsage usage)
-    {
-        global::Veldrid.TextureUsage result = 0;
-
-        if ((usage & TextureUsage.Sampled) != 0)
-            result |= global::Veldrid.TextureUsage.Sampled;
-
-        if ((usage & TextureUsage.ColorTarget) != 0)
-            result |= global::Veldrid.TextureUsage.RenderTarget;
-
-        if ((usage & TextureUsage.DepthStencilTarget) != 0)
-            result |= global::Veldrid.TextureUsage.DepthStencil;
-
-        if ((usage & TextureUsage.StorageRead) != 0 || (usage & TextureUsage.StorageWrite) != 0)
-            result |= global::Veldrid.TextureUsage.Storage;
-
-        return result;
-    }
-
-    public static TextureUsage ConvertTextureUsage(global::Veldrid.TextureUsage usage)
-    {
-        TextureUsage result = 0;
-
-        if ((usage & global::Veldrid.TextureUsage.Sampled) != 0)
-            result |= TextureUsage.Sampled;
-
-        if ((usage & global::Veldrid.TextureUsage.RenderTarget) != 0)
-            result |= TextureUsage.ColorTarget;
-
-        if ((usage & global::Veldrid.TextureUsage.DepthStencil) != 0)
-            result |= TextureUsage.DepthStencilTarget;
-
-        if ((usage & global::Veldrid.TextureUsage.Storage) != 0)
-        {
-            result |= TextureUsage.StorageRead;
-            result |= TextureUsage.StorageWrite;
-        }
-
-        return result;
-    }
-
-    public static global::Veldrid.ShaderStages ConvertShaderStage(ShaderStage stage)
-    {
-        return stage switch
-        {
-            ShaderStage.Vertex => global::Veldrid.ShaderStages.Vertex,
-
-            ShaderStage.Fragment => global::Veldrid.ShaderStages.Fragment,
-
-            _ => throw new NotSupportedException($"Unsupported shader stage: {stage}"),
-        };
-    }
-
-    public static ShaderStage ConvertShaderStage(global::Veldrid.ShaderStages stage)
-    {
-        return stage switch
-        {
-            global::Veldrid.ShaderStages.Vertex => ShaderStage.Vertex,
-
-            global::Veldrid.ShaderStages.Fragment => ShaderStage.Fragment,
-
-            _ => throw new NotSupportedException($"Unsupported Veldrid shader stage: {stage}"),
-        };
-    }
-
-    public static global::Veldrid.SamplerAddressMode ConvertSamplerAddressMode(
-        SamplerAddressMode mode
-    )
-    {
-        return mode switch
-        {
-            SamplerAddressMode.Wrap => global::Veldrid.SamplerAddressMode.Wrap,
-
-            SamplerAddressMode.Mirror => global::Veldrid.SamplerAddressMode.Mirror,
-
-            SamplerAddressMode.Clamp => global::Veldrid.SamplerAddressMode.Clamp,
-
-            SamplerAddressMode.Border => global::Veldrid.SamplerAddressMode.Border,
-
-            _ => throw new NotSupportedException($"Unsupported sampler address mode: {mode}"),
-        };
-    }
-
-    public static SamplerAddressMode ConvertSamplerAddressMode(
-        global::Veldrid.SamplerAddressMode mode
-    )
-    {
-        return mode switch
-        {
-            global::Veldrid.SamplerAddressMode.Wrap => SamplerAddressMode.Wrap,
-
-            global::Veldrid.SamplerAddressMode.Mirror => SamplerAddressMode.Mirror,
-
-            global::Veldrid.SamplerAddressMode.Clamp => SamplerAddressMode.Clamp,
-
-            global::Veldrid.SamplerAddressMode.Border => SamplerAddressMode.Border,
-
-            _ => throw new NotSupportedException(
-                $"Unsupported Veldrid sampler address mode: {mode}"
-            ),
-        };
-    }
-
-    public static global::Veldrid.SamplerFilter ConvertSamplerFilter(
-        SampleFilter minFilter,
-        SampleFilter magFilter,
-        MipmapMode mipmapMode
-    )
-    {
-        return (minFilter, magFilter, mipmapMode) switch
-        {
-            (SampleFilter.Nearest, SampleFilter.Nearest, MipmapMode.Nearest) => global::Veldrid
-                .SamplerFilter
-                .MinPoint_MagPoint_MipPoint,
-
-            (SampleFilter.Nearest, SampleFilter.Nearest, MipmapMode.Linear) => global::Veldrid
-                .SamplerFilter
-                .MinPoint_MagPoint_MipLinear,
-
-            (SampleFilter.Nearest, SampleFilter.Linear, MipmapMode.Nearest) => global::Veldrid
-                .SamplerFilter
-                .MinPoint_MagLinear_MipPoint,
-
-            (SampleFilter.Nearest, SampleFilter.Linear, MipmapMode.Linear) => global::Veldrid
-                .SamplerFilter
-                .MinPoint_MagLinear_MipLinear,
-
-            (SampleFilter.Linear, SampleFilter.Nearest, MipmapMode.Nearest) => global::Veldrid
-                .SamplerFilter
-                .MinLinear_MagPoint_MipPoint,
-
-            (SampleFilter.Linear, SampleFilter.Nearest, MipmapMode.Linear) => global::Veldrid
-                .SamplerFilter
-                .MinLinear_MagPoint_MipLinear,
-
-            (SampleFilter.Linear, SampleFilter.Linear, MipmapMode.Nearest) => global::Veldrid
-                .SamplerFilter
-                .MinLinear_MagLinear_MipPoint,
-
-            (SampleFilter.Linear, SampleFilter.Linear, MipmapMode.Linear) => global::Veldrid
-                .SamplerFilter
-                .MinLinear_MagLinear_MipLinear,
-
-            _ => throw new NotSupportedException(),
-        };
-    }
-
-    public static (
-        SampleFilter MinFilter,
-        SampleFilter MagFilter,
-        MipmapMode MipmapMode
-    ) ConvertSamplerFilter(global::Veldrid.SamplerFilter filter)
-    {
-        return filter switch
-        {
-            global::Veldrid.SamplerFilter.MinPoint_MagPoint_MipPoint => (
-                SampleFilter.Nearest,
-                SampleFilter.Nearest,
-                MipmapMode.Nearest
-            ),
-
-            global::Veldrid.SamplerFilter.MinPoint_MagPoint_MipLinear => (
-                SampleFilter.Nearest,
-                SampleFilter.Nearest,
-                MipmapMode.Linear
-            ),
-
-            global::Veldrid.SamplerFilter.MinPoint_MagLinear_MipPoint => (
-                SampleFilter.Nearest,
-                SampleFilter.Linear,
-                MipmapMode.Nearest
-            ),
-
-            global::Veldrid.SamplerFilter.MinPoint_MagLinear_MipLinear => (
-                SampleFilter.Nearest,
-                SampleFilter.Linear,
-                MipmapMode.Linear
-            ),
-
-            global::Veldrid.SamplerFilter.MinLinear_MagPoint_MipPoint => (
-                SampleFilter.Linear,
-                SampleFilter.Nearest,
-                MipmapMode.Nearest
-            ),
-
-            global::Veldrid.SamplerFilter.MinLinear_MagPoint_MipLinear => (
-                SampleFilter.Linear,
-                SampleFilter.Nearest,
-                MipmapMode.Linear
-            ),
-
-            global::Veldrid.SamplerFilter.MinLinear_MagLinear_MipPoint => (
-                SampleFilter.Linear,
-                SampleFilter.Linear,
-                MipmapMode.Nearest
-            ),
-
-            global::Veldrid.SamplerFilter.MinLinear_MagLinear_MipLinear => (
-                SampleFilter.Linear,
-                SampleFilter.Linear,
-                MipmapMode.Linear
-            ),
-
-            global::Veldrid.SamplerFilter.Anisotropic => (
-                SampleFilter.Linear,
-                SampleFilter.Linear,
-                MipmapMode.Linear
-            ),
-
-            _ => throw new NotSupportedException(),
-        };
-    }
-
-    public static global::Veldrid.FramebufferAttachmentDescription ConvertFramebufferAttachmentDescription(
-        FramebufferAttachmentDescription description
-    )
-    {
-        return new()
-        {
-            ArrayLayer = description.Target.ArrayLayers,
-            MipLevel = description.Target.MipLevels,
-            Target = ((VeldridTexture)description.Target.TargetTexture).texture,
-        };
-    }
-
     public static global::Veldrid.BlendFactor ConvertBlendFactor(BlendFactor factor)
     {
         return factor switch
@@ -519,7 +180,7 @@ public static class VeldridConverter
         return result;
     }
 
-    public static global::Veldrid.BlendFunction ConvertBlendFunction(this BlendOperation operation)
+    public static global::Veldrid.BlendFunction ConvertBlendFunction(BlendOperation operation)
     {
         return operation switch
         {
@@ -529,6 +190,261 @@ public static class VeldridConverter
             BlendOperation.ReverseSubtract => global::Veldrid.BlendFunction.ReverseSubtract,
             BlendOperation.Subtract => global::Veldrid.BlendFunction.Subtract,
             _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, null),
+        };
+    }
+
+    public static BlendOperation ConvertBlendFunction(global::Veldrid.BlendFunction func)
+    {
+        return func switch
+        {
+            global::Veldrid.BlendFunction.Add => BlendOperation.Add,
+            global::Veldrid.BlendFunction.Maximum => BlendOperation.Max,
+            global::Veldrid.BlendFunction.Minimum => BlendOperation.Min,
+            global::Veldrid.BlendFunction.ReverseSubtract => BlendOperation.ReverseSubtract,
+            global::Veldrid.BlendFunction.Subtract => BlendOperation.Subtract,
+            _ => throw new ArgumentOutOfRangeException(nameof(func), func, null),
+        };
+    }
+
+    public static global::Veldrid.RgbaFloat ConvertRgbaFloat(RgbaFloat color) =>
+        new(color.R, color.G, color.B, color.A);
+
+    public static RgbaFloat ConvertRgbaFloat(global::Veldrid.RgbaFloat color) =>
+        new(color.R, color.G, color.B, color.A);
+
+    public static global::Veldrid.BlendAttachmentDescription ConvertBlendAttachmentDescription(
+        BlendAttachmentDescription des
+    )
+    {
+        return new()
+        {
+            BlendEnabled = des.BlendEnabled,
+            AlphaFunction = ConvertBlendFunction(des.AlphaFunction),
+            ColorFunction = ConvertBlendFunction(des.ColorFunction),
+            ColorWriteMask = des.ColorWriteMask.HasValue
+                ? ConvertColorWriteMask(des.ColorWriteMask.Value)
+                : null,
+            SourceAlphaFactor = ConvertBlendFactor(des.SourceAlphaFactor),
+            SourceColorFactor = ConvertBlendFactor(des.SourceColorFactor),
+            DestinationAlphaFactor = ConvertBlendFactor(des.DestinationAlphaFactor),
+            DestinationColorFactor = ConvertBlendFactor(des.DestinationColorFactor),
+        };
+    }
+
+    public static global::Veldrid.BlendStateDescription ConvertBlendStateDescription(
+        BlendStateDescription des
+    )
+    {
+        return new()
+        {
+            BlendFactor = ConvertRgbaFloat(des.BlendFactor),
+            AttachmentStates = [.. des.AttachmentStates.Select(ConvertBlendAttachmentDescription)],
+            AlphaToCoverageEnabled = des.AlphaToCoverageEnabled,
+        };
+    }
+
+    public static FaceCullMode ConvertFaceCullMode(global::Veldrid.FaceCullMode m)
+    {
+        return m switch
+        {
+            global::Veldrid.FaceCullMode.None => FaceCullMode.None,
+            global::Veldrid.FaceCullMode.Front => FaceCullMode.Front,
+            global::Veldrid.FaceCullMode.Back => FaceCullMode.Back,
+            _ => throw new ArgumentOutOfRangeException(nameof(m), m, null),
+        };
+    }
+
+    public static global::Veldrid.FaceCullMode ConvertFaceCullMode(FaceCullMode m)
+    {
+        return m switch
+        {
+            FaceCullMode.None => global::Veldrid.FaceCullMode.None,
+            FaceCullMode.Front => global::Veldrid.FaceCullMode.Front,
+            FaceCullMode.Back => global::Veldrid.FaceCullMode.Back,
+            _ => throw new ArgumentOutOfRangeException(nameof(m), m, null),
+        };
+    }
+
+    public static global::Veldrid.PolygonFillMode ConvertPolygonFillMode(PolygonFillMode mode)
+    {
+        return mode switch
+        {
+            PolygonFillMode.Solid => global::Veldrid.PolygonFillMode.Solid,
+            PolygonFillMode.Wireframe => global::Veldrid.PolygonFillMode.Wireframe,
+            _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, null),
+        };
+    }
+
+    public static PolygonFillMode ConvertPolygonFillMode(global::Veldrid.PolygonFillMode mode)
+    {
+        return mode switch
+        {
+            global::Veldrid.PolygonFillMode.Solid => PolygonFillMode.Solid,
+            global::Veldrid.PolygonFillMode.Wireframe => PolygonFillMode.Wireframe,
+            _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, null),
+        };
+    }
+
+    public static global::Veldrid.FrontFace ConvertFrontFace(FrontFace face)
+    {
+        return face switch
+        {
+            FrontFace.Clockwise => global::Veldrid.FrontFace.Clockwise,
+            FrontFace.CounterClockwise => global::Veldrid.FrontFace.CounterClockwise,
+            _ => throw new ArgumentOutOfRangeException(nameof(face), face, null),
+        };
+    }
+
+    public static FrontFace ConvertFrontFace(global::Veldrid.FrontFace face)
+    {
+        return face switch
+        {
+            global::Veldrid.FrontFace.Clockwise => FrontFace.Clockwise,
+            global::Veldrid.FrontFace.CounterClockwise => FrontFace.CounterClockwise,
+            _ => throw new ArgumentOutOfRangeException(nameof(face), face, null),
+        };
+    }
+
+    public static global::Veldrid.VertexLayoutDescription ConvertVertexLayoutDescription(
+        VertexLayoutDescription des
+    )
+    {
+        return new()
+        {
+            Stride = des.Stride,
+            InstanceStepRate = des.InputRate == VertexInputRate.Instance ? 1u : 0u,
+            Elements = [.. des.Attributes.Select(ConvertVertexElementDescription)],
+        };
+    }
+
+    public static VertexLayoutDescription ConvertVertexLayoutDescription(
+        global::Veldrid.VertexLayoutDescription des
+    )
+    {
+        return new()
+        {
+            Stride = des.Stride,
+            InputRate =
+                des.InstanceStepRate == 0 ? VertexInputRate.Vertex : VertexInputRate.Instance,
+            Attributes = [.. des.Elements.Select(ConvertVertexElementDescription)],
+        };
+    }
+
+    public static global::Veldrid.VertexElementDescription ConvertVertexElementDescription(
+        VertexAttributeDescription des
+    )
+    {
+        return new()
+        {
+            Offset = des.Offset,
+            Name = $"OFFSET{des.Offset}",
+            Format = ConvertVertexFormat(des.Format),
+            Semantic = global::Veldrid.VertexElementSemantic.TextureCoordinate,
+        };
+    }
+
+    public static VertexAttributeDescription ConvertVertexElementDescription(
+        global::Veldrid.VertexElementDescription des
+    )
+    {
+        return new()
+        {
+            Offset = des.Offset,
+            Format = ConvertVertexFormat(des.Format),
+            SizeInBytes = global::Veldrid.FormatSizeHelpers.GetSizeInBytes(des.Format),
+        };
+    }
+
+    public static global::Veldrid.VertexElementFormat ConvertVertexFormat(VertexFormat format)
+    {
+        return format switch
+        {
+            // 32-bit Float
+            VertexFormat.Float1 => global::Veldrid.VertexElementFormat.Float1,
+            VertexFormat.Float2 => global::Veldrid.VertexElementFormat.Float2,
+            VertexFormat.Float3 => global::Veldrid.VertexElementFormat.Float3,
+            VertexFormat.Float4 => global::Veldrid.VertexElementFormat.Float4,
+            // 32-bit Signed Int
+            VertexFormat.Int1 => global::Veldrid.VertexElementFormat.Int1,
+            VertexFormat.Int2 => global::Veldrid.VertexElementFormat.Int2,
+            VertexFormat.Int3 => global::Veldrid.VertexElementFormat.Int3,
+            VertexFormat.Int4 => global::Veldrid.VertexElementFormat.Int4,
+            // 32-bit Unsigned Int
+            VertexFormat.UInt1 => global::Veldrid.VertexElementFormat.UInt1,
+            VertexFormat.UInt2 => global::Veldrid.VertexElementFormat.UInt2,
+            VertexFormat.UInt3 => global::Veldrid.VertexElementFormat.UInt3,
+            VertexFormat.UInt4 => global::Veldrid.VertexElementFormat.UInt4,
+            // 16-bit Signed
+            VertexFormat.Short2 => global::Veldrid.VertexElementFormat.Short2,
+            VertexFormat.Short4 => global::Veldrid.VertexElementFormat.Short4,
+            VertexFormat.Short2Norm => global::Veldrid.VertexElementFormat.Short2_Norm,
+            VertexFormat.Short4Norm => global::Veldrid.VertexElementFormat.Short4_Norm,
+            // 16-bit Unsigned
+            VertexFormat.UShort2 => global::Veldrid.VertexElementFormat.UShort2,
+            VertexFormat.UShort4 => global::Veldrid.VertexElementFormat.UShort4,
+            VertexFormat.UShort2Norm => global::Veldrid.VertexElementFormat.UShort2_Norm,
+            VertexFormat.UShort4Norm => global::Veldrid.VertexElementFormat.UShort4_Norm,
+            // 16-bit Float
+            VertexFormat.Half2 => global::Veldrid.VertexElementFormat.Half2,
+            VertexFormat.Half4 => global::Veldrid.VertexElementFormat.Half4,
+            // 8-bit Signed —— 注意：映射到 SByte*
+            VertexFormat.Byte2 => global::Veldrid.VertexElementFormat.SByte2,
+            VertexFormat.Byte4 => global::Veldrid.VertexElementFormat.SByte4,
+            VertexFormat.Byte2Norm => global::Veldrid.VertexElementFormat.SByte2_Norm,
+            VertexFormat.Byte4Norm => global::Veldrid.VertexElementFormat.SByte4_Norm,
+            // 8-bit Unsigned —— 注意：映射到不带 S 的 Byte*
+            VertexFormat.UByte2 => global::Veldrid.VertexElementFormat.Byte2,
+            VertexFormat.UByte4 => global::Veldrid.VertexElementFormat.Byte4,
+            VertexFormat.UByte2Norm => global::Veldrid.VertexElementFormat.Byte2_Norm,
+            VertexFormat.UByte4Norm => global::Veldrid.VertexElementFormat.Byte4_Norm,
+            _ => throw new ArgumentOutOfRangeException(nameof(format), format, null),
+        };
+    }
+
+    public static VertexFormat ConvertVertexFormat(global::Veldrid.VertexElementFormat format)
+    {
+        return format switch
+        {
+            // 32-bit Float
+            global::Veldrid.VertexElementFormat.Float1 => VertexFormat.Float1,
+            global::Veldrid.VertexElementFormat.Float2 => VertexFormat.Float2,
+            global::Veldrid.VertexElementFormat.Float3 => VertexFormat.Float3,
+            global::Veldrid.VertexElementFormat.Float4 => VertexFormat.Float4,
+            // 32-bit Signed Int
+            global::Veldrid.VertexElementFormat.Int1 => VertexFormat.Int1,
+            global::Veldrid.VertexElementFormat.Int2 => VertexFormat.Int2,
+            global::Veldrid.VertexElementFormat.Int3 => VertexFormat.Int3,
+            global::Veldrid.VertexElementFormat.Int4 => VertexFormat.Int4,
+            // 32-bit Unsigned Int
+            global::Veldrid.VertexElementFormat.UInt1 => VertexFormat.UInt1,
+            global::Veldrid.VertexElementFormat.UInt2 => VertexFormat.UInt2,
+            global::Veldrid.VertexElementFormat.UInt3 => VertexFormat.UInt3,
+            global::Veldrid.VertexElementFormat.UInt4 => VertexFormat.UInt4,
+            // 16-bit Signed
+            global::Veldrid.VertexElementFormat.Short2 => VertexFormat.Short2,
+            global::Veldrid.VertexElementFormat.Short4 => VertexFormat.Short4,
+            global::Veldrid.VertexElementFormat.Short2_Norm => VertexFormat.Short2Norm,
+            global::Veldrid.VertexElementFormat.Short4_Norm => VertexFormat.Short4Norm,
+            // 16-bit Unsigned
+            global::Veldrid.VertexElementFormat.UShort2 => VertexFormat.UShort2,
+            global::Veldrid.VertexElementFormat.UShort4 => VertexFormat.UShort4,
+            global::Veldrid.VertexElementFormat.UShort2_Norm => VertexFormat.UShort2Norm,
+            global::Veldrid.VertexElementFormat.UShort4_Norm => VertexFormat.UShort4Norm,
+            // 16-bit Float
+            global::Veldrid.VertexElementFormat.Half2 => VertexFormat.Half2,
+            global::Veldrid.VertexElementFormat.Half4 => VertexFormat.Half4,
+            global::Veldrid.VertexElementFormat.Half1 => throw new NotSupportedException(null),
+            // 8-bit Signed —— Veldrid 的 SByte* 对应本框架的 Byte*
+            global::Veldrid.VertexElementFormat.SByte2 => VertexFormat.Byte2,
+            global::Veldrid.VertexElementFormat.SByte4 => VertexFormat.Byte4,
+            global::Veldrid.VertexElementFormat.SByte2_Norm => VertexFormat.Byte2Norm,
+            global::Veldrid.VertexElementFormat.SByte4_Norm => VertexFormat.Byte4Norm,
+            // 8-bit Unsigned —— Veldrid 的 Byte* 对应本框架的 UByte*
+            global::Veldrid.VertexElementFormat.Byte2 => VertexFormat.UByte2,
+            global::Veldrid.VertexElementFormat.Byte4 => VertexFormat.UByte4,
+            global::Veldrid.VertexElementFormat.Byte2_Norm => VertexFormat.UByte2Norm,
+            global::Veldrid.VertexElementFormat.Byte4_Norm => VertexFormat.UByte4Norm,
+            _ => throw new ArgumentOutOfRangeException(nameof(format), format, null),
         };
     }
 }

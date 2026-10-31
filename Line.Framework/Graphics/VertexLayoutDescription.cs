@@ -4,4 +4,5 @@ public struct VertexLayoutDescription
 {
     public VertexAttributeDescription[] Attributes { get; set; }
     public uint Stride { get; set; }
+    public VertexInputRate InputRate { get; set; }
 }

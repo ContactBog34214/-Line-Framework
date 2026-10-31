@@ -10,11 +10,12 @@ public struct PipelineCreateInfo
     public interface IExtraCreateInfo;
 }
 
-public struct Graphics : PipelineCreateInfo.IExtraCreateInfo
+public struct GraphicsDescription : PipelineCreateInfo.IExtraCreateInfo
 {
     public ShaderSetDescription ShaderSet { get; set; }
-    public VertexLayoutDescription[] VertexLayouts { get; set; }
     public PrimitiveTopology PrimitiveTopology { get; set; }
     public RasterizerStateDescription RasterizerState { get; set; }
     public BlendStateDescription BlendState { get; set; }
+    public OutputFormatDescription Outputs { get; set; }
+    public DepthStencilStateDescription DepthStencilState { get; set; }
 }
