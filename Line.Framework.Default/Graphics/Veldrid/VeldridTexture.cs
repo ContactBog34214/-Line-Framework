@@ -65,15 +65,31 @@ public partial class VeldridConverter
         TextureCreateInfo createInfo
     )
     {
+        if (createInfo.Width == 0)
+            throw new ArgumentException(
+                "Texture width must be non-zero. TextureCreateInfo is a plain struct, "
+                    + "so forgetting to set Width leaves it at 0.",
+                nameof(createInfo)
+            );
+
+        // TextureCreateInfo 是纯 struct，未赋值的字段都是 0，
+        // 而 Veldrid 要求 Width / Height / Depth / ArrayLayers / MipLevels 全部 >= 1
+        // （否则抛 "Width, Height, and Depth must be non-zero"）。
+        // 这里把「0 = 未指定」统一归一化为 1，调用方只需关心真正想改的字段。
+        //
+        // TextureType 同理：枚举从 Texture1D = 1 起、没有 0 值，
+        // 未赋值时按最常见情形取 Texture2D。
+        var type = createInfo.Type == 0 ? TextureType.Texture2D : createInfo.Type;
+
         return new()
         {
-            ArrayLayers = createInfo.ArrayLayers,
-            Depth = createInfo.Depth,
+            ArrayLayers = createInfo.ArrayLayers == 0 ? 1u : createInfo.ArrayLayers,
+            Depth = createInfo.Depth == 0 ? 1u : createInfo.Depth,
             Format = ConvertPixelFormat(createInfo.Format),
-            Height = createInfo.Height,
-            MipLevels = createInfo.MipLevels,
+            Height = createInfo.Height == 0 ? 1u : createInfo.Height,
+            MipLevels = createInfo.MipLevels == 0 ? 1u : createInfo.MipLevels,
             SampleCount = ConvertSampleCount(createInfo.SampleCount),
-            Type = ConvertTextureType(createInfo.Type),
+            Type = ConvertTextureType(type),
             Usage = ConvertTextureUsage(createInfo.Usage),
             Width = createInfo.Width,
         };

@@ -21,13 +21,20 @@ public static class SimpleGameMain
 {
     static WindowType Host;
     static Localization Localization;
-    static Stopwatch sw = new();
+    static readonly Stopwatch sw = new();
     static readonly float SpinnerBoxSpeed = 3.5f;
     static readonly float SpinnerBoxSize = 400;
-    static Font font;
-    static List<string> Fonts = ["GenJyuuGothic", "Noto"];
+    private static Font font;
+    static readonly List<string> Fonts = ["GenJyuuGothic", "Noto"];
     static UIWidget Background;
-    static UISandbox sbSession;
+    private static UISandbox sbSession;
+
+    public static Font Font
+    {
+        get => font;
+        set => font = value;
+    }
+
     public static async Task Main(string[] args)
     {
         sw.Start();
@@ -59,32 +66,34 @@ public static class SimpleGameMain
                 Title = "-Line-Framework example",
                 UpdatePerSecond = 10000,
             };
-        else Host = new Window(Backend: GraphicBackend.OpenGL)
-        {
-            Title = "-Line-Framework example",
-            UpdatePerSecond = 10000,
-        };
+        else
+            Host = new Window(Backend: GraphicBackend.OpenGL)
+            {
+                Title = "-Line-Framework example",
+                UpdatePerSecond = 10000,
+            };
         Host.SetIcon(assembly.GetManifestResourceStream("SimpleGame.assets.-L-F.png"));
-        if (args.Contains("--OutputEvent")) Host.EnableEventOutput = true;
+        if (args.Contains("--OutputEvent"))
+            Host.EnableEventOutput = true;
 
         await Host.Resource.Create(
             "Font",
             "Mono",
             assembly.GetManifestResourceStream("SimpleGame.assets.CascadiaMono.ttf")
         );
-        font = await Host.Resource.GetResource<Font>("Mono");
+        Font = await Host.Resource.GetResource<Font>("Mono");
         await Host.Resource.Create(
             "Font",
             "GenJyuuGothic",
             assembly.GetManifestResourceStream("SimpleGame.assets.GenJyuuGothic-Normal-2.ttf")
         );
-        font = await Host.Resource.GetResource<Font>("GenJyuuGothic");
+        Font = await Host.Resource.GetResource<Font>("GenJyuuGothic");
         await Host.Resource.Create(
             "Font",
             "Noto",
             assembly.GetManifestResourceStream("SimpleGame.assets.NotoSansSC.ttf")
         );
-        font = await Host.Resource.GetResource<Font>("Noto");
+        Font = await Host.Resource.GetResource<Font>("Noto");
 
         Log.Debug("Loaded Font");
 
@@ -99,7 +108,6 @@ public static class SimpleGameMain
             assembly.GetManifestResourceStream("SimpleGame.assets.cursor.png")
         );
         Log.Debug("Loaded Font");
-
 
         sbSession = new UISandbox
         {
@@ -168,7 +176,7 @@ public static class SimpleGameMain
             Text = Localization.Get("SimpleGame.Title", ["Example"]),
             Index = 1,
             FontSize = 100,
-            AutoBreakLine = false
+            AutoBreakLine = false,
         };
         title.Size = new Coord2(title.GetTextSize(title.Text) / new Vector2(1, 1), new());
 
@@ -202,7 +210,6 @@ public static class SimpleGameMain
         Host.EnableMouseRelative = true;
         Host.MouseSpeedScale = 1;
         cs.Visible = Host.EnableMouseRelative;
-
 
         var input = new UIInput(Host.Resource)
         {
@@ -368,6 +375,7 @@ public static class SimpleGameMain
         };
         Host.OnUpdate += updateChart.Update;
     }
+
     static void VisualTouch()
     {
         var TouchC = new UIBox()

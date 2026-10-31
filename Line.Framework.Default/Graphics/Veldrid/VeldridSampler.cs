@@ -227,6 +227,12 @@ public partial class VeldridConverter
 
     public static global::Veldrid.TextureSampleCount ConvertSampleCount(SampleCount count)
     {
+        // SampleCount 枚举从 Count1 = 1 起、没有 0 值，而所有 CreateInfo / Description
+        // 都是纯 struct，未赋值的 SampleCount 恰好是 0。
+        // 把 0 归一化为 Count1（非多重采样），调用方就不必每次都显式写这一项。
+        if (count == 0)
+            count = SampleCount.Count1;
+
         return count switch
         {
             SampleCount.Count1 => global::Veldrid.TextureSampleCount.Count1,

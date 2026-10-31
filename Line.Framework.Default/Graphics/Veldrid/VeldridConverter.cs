@@ -235,6 +235,17 @@ public static partial class VeldridConverter
         BlendStateDescription des
     )
     {
+        // default(BlendStateDescription).AttachmentStates 是 null，
+        // 此时直接 Select 会在转换阶段抛 NRE，且报错位置指向转换器而非调用方。
+        // 同时 Veldrid 要求 AttachmentStates 的数量与颜色附件数量一致。
+        if (des.AttachmentStates is not { Length: > 0 })
+            throw new ArgumentException(
+                "BlendStateDescription.AttachmentStates is empty. "
+                    + "Use one of the presets (SingleAlphaBlend / SingleDisabled / ...) "
+                    + "or supply one attachment state per color target.",
+                nameof(des)
+            );
+
         return new()
         {
             BlendFactor = ConvertRgbaFloat(des.BlendFactor),
@@ -305,15 +316,95 @@ public static partial class VeldridConverter
         };
     }
 
+    /// <summary>该顶点格式占用的字节数。</summary>
+    public static uint GetVertexFormatSize(VertexFormat format)
+    {
+        return format switch
+        {
+            VertexFormat.Float1 or VertexFormat.Int1 or VertexFormat.UInt1 => 4u,
+
+            VertexFormat.Float2 or VertexFormat.Int2 or VertexFormat.UInt2 => 8u,
+            VertexFormat.Float3 or VertexFormat.Int3 or VertexFormat.UInt3 => 12u,
+            VertexFormat.Float4 or VertexFormat.Int4 or VertexFormat.UInt4 => 16u,
+
+            VertexFormat.Half2
+            or VertexFormat.Short2 or VertexFormat.UShort2
+            or VertexFormat.Short2Norm or VertexFormat.UShort2Norm => 4u,
+            VertexFormat.Half4
+            or VertexFormat.Short4 or VertexFormat.UShort4
+            or VertexFormat.Short4Norm or VertexFormat.UShort4Norm => 8u,
+
+            VertexFormat.Byte2 or VertexFormat.UByte2
+            or VertexFormat.Byte2Norm or VertexFormat.UByte2Norm => 2u,
+            VertexFormat.Byte4 or VertexFormat.UByte4
+            or VertexFormat.Byte4Norm or VertexFormat.UByte4Norm => 4u,
+
+            _ => throw new ArgumentOutOfRangeException(nameof(format), format, null),
+        };
+    }
+
+    private static uint AlignTo4(uint value) => (value + 3u) & ~3u;
+
+    /// <summary>
+    /// 顶点布局 → Veldrid 布局。
+    /// <para>
+    /// 两处「0 即未指定」的处理：
+    /// <list type="bullet">
+    /// <item><c>Offset == 0</c>：按 Attributes 顺序自动累加（每段起点对齐到 4 字节）。</item>
+    /// <item><c>Stride == 0</c>：自动推导为所有元素的 <c>offset + size</c> 最大值。</item>
+    /// </list>
+    /// Veldrid 要求 <c>Stride &gt;= 顶点实际大小</c>，传 0 会抛
+    /// "The vertex layout's stride (0) is less than the full size of the vertex"。
+    /// </para>
+    /// </summary>
     public static global::Veldrid.VertexLayoutDescription ConvertVertexLayoutDescription(
         VertexLayoutDescription des
     )
     {
+        if (des.Attributes is not { Length: > 0 })
+            throw new ArgumentException(
+                "VertexLayoutDescription.Attributes is empty. "
+                    + "A vertex layout must describe at least one attribute.",
+                nameof(des)
+            );
+
+        var elements = new global::Veldrid.VertexElementDescription[des.Attributes.Length];
+        uint cursor = 0;
+
+        for (int i = 0; i < des.Attributes.Length; i++)
+        {
+            var a = des.Attributes[i];
+
+            // Offset 为 0 视为「按顺序自动排布」，避免调用方漏填时
+            // 所有属性都从地址 0 读取（画面错乱且不报错）。
+            uint offset = a.Offset != 0 ? a.Offset : AlignTo4(cursor);
+
+            uint size = GetVertexFormatSize(a.Format);
+
+            elements[i] = new global::Veldrid.VertexElementDescription(
+                $"ATTRIB{i}",
+                global::Veldrid.VertexElementSemantic.TextureCoordinate,
+                ConvertVertexFormat(a.Format))
+            {
+                Offset = offset,
+            };
+
+            cursor = offset + size;
+        }
+
+        uint stride = des.Stride != 0 ? des.Stride : cursor;
+        if (stride < cursor)
+            throw new ArgumentException(
+                $"VertexLayoutDescription.Stride ({stride}) is smaller than the space "
+                    + $"actually used by its attributes ({cursor}).",
+                nameof(des)
+            );
+
         return new()
         {
-            Stride = des.Stride,
+            Stride = stride,
             InstanceStepRate = des.InputRate == VertexInputRate.Instance ? 1u : 0u,
-            Elements = [.. des.Attributes.Select(ConvertVertexElementDescription)],
+            Elements = elements,
         };
     }
 
@@ -347,11 +438,14 @@ public static partial class VeldridConverter
         global::Veldrid.VertexElementDescription des
     )
     {
+        var format = ConvertVertexFormat(des.Format);
         return new()
         {
             Offset = des.Offset,
-            Format = ConvertVertexFormat(des.Format),
-            SizeInBytes = global::Veldrid.FormatSizeHelpers.GetSizeInBytes(des.Format),
+            Format = format,
+            // 用本框架自己的尺寸表，而不是 Veldrid.FormatSizeHelpers：
+            // 后者不属于 Veldrid 的公开 API 承诺，且两处若不一致会静默错位。
+            SizeInBytes = GetVertexFormatSize(format),
         };
     }
 

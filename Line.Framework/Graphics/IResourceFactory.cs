@@ -9,4 +9,5 @@ public interface IResourceFactory
     IFrameBuffer CreateFrameBuffer(FramebufferCreateInfo createInfo);
     IPipeline CreatePipeline(PipelineCreateInfo createInfo);
     ITextureView CreateTextureView(TextureViewCreateInfo createInfo);
+    IResourceLayout CreateResourceLayout(ResourceLayoutCreateInfo createInfo);
 }

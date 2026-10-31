@@ -16,6 +16,12 @@ namespace Line.Framework.Default.Graphics.Veldrid
             Pipeline = pl;
             Type = pl.IsComputePipeline ? PipelineType.Compute : PipelineType.Graphics;
             ResourceLayouts = pci.ResourceLayouts;
+
+            // 之前漏了这一行，导致 IPipeline.Outputs 永远是 default：
+            // 调用方拿到的颜色附件数组是 null，用它去比对/创建 framebuffer 时会空引用。
+            Outputs = pci.Mode is GraphicsDescription gd
+                ? gd.Outputs
+                : default(OutputFormatDescription);
         }
 
         public void Dispose()
@@ -26,22 +32,50 @@ namespace Line.Framework.Default.Graphics.Veldrid
 
     public partial class VeldridConverter
     {
+        /// <param name="fallbackOutputs">
+        /// 当 <see cref="GraphicsDescription.Outputs"/> 未指定颜色附件时使用的回落值
+        /// （通常传主交换链的 <c>Framebuffer.OutputDescription</c>）。
+        /// </param>
         public static GraphicsPipelineDescription ConvertPipelineDescription(
-            PipelineCreateInfo createInfo
+            PipelineCreateInfo createInfo,
+            global::Veldrid.OutputDescription fallbackOutputs = default
         )
         {
-            if (createInfo.Mode is GraphicsDescription gd)
+            if (createInfo.Mode is not GraphicsDescription gd)
+                throw new NotSupportedException(
+                    $"Pipeline mode {createInfo.Mode?.GetType().Name ?? "null"} is not supported "
+                        + "for graphics pipelines."
+                );
+
+            if (createInfo.ResourceLayouts is null)
+                throw new ArgumentException(
+                    "PipelineCreateInfo.ResourceLayouts is null. "
+                        + "Assign an empty array if the pipeline uses no resources.",
+                    nameof(createInfo)
+                );
+
+            return new()
             {
-                return new()
-                {
-                    BlendState = ConvertBlendStateDescription(gd.BlendState),
-                    DepthStencilState = ConvertDepthStencilStateDescription(gd.DepthStencilState),
-                    RasterizerState = ConvertRasterizerStateDescription(gd.RasterizerState),
-                    PrimitiveTopology = ConvertPrimitiveTopology(gd.PrimitiveTopology),
-                    ShaderSet = ConvertShaderSetDescription(gd.ShaderSet),
-                };
-            }
-            return default;
+                BlendState = ConvertBlendStateDescription(gd.BlendState),
+                DepthStencilState = ConvertDepthStencilStateDescription(gd.DepthStencilState),
+                RasterizerState = ConvertRasterizerStateDescription(gd.RasterizerState),
+                PrimitiveTopology = ConvertPrimitiveTopology(gd.PrimitiveTopology),
+                ShaderSet = ConvertShaderSetDescription(gd.ShaderSet),
+                // 漏掉这一项会让 Veldrid 在 VkPipeline 构造函数里抛 NullReferenceException
+                // （GraphicsPipelineDescription.Outputs.ColorAttachments 默认是 null）
+                Outputs = ConvertOutputDescription(gd.Outputs, fallbackOutputs),
+                ResourceLayouts =
+                [
+                    .. createInfo.ResourceLayouts.Select(c =>
+                        c is VeldridResourceLayout rl
+                            ? rl.ResourceLayout
+                            : throw new ArgumentException(
+                                $"Resource layout {c?.GetType().Name ?? "null"} is not a VeldridResourceLayout.",
+                                nameof(createInfo)
+                            )
+                    ),
+                ],
+            };
         }
 
         //DepthStencilStateDescription
@@ -237,6 +271,58 @@ namespace Line.Framework.Default.Graphics.Veldrid
             };
         }
 
+        //OutputDescription
+        /// <summary>
+        /// 输出附件描述。
+        /// <para>
+        /// 若 <paramref name="des"/> 未指定颜色附件，则回落到 <paramref name="fallback"/>
+        /// （通常为交换链输出）；两者都没有时抛异常 —— 因为
+        /// <see cref="global::Veldrid.GraphicsPipelineDescription.Outputs"/> 的
+        /// <c>ColorAttachments</c> 为 null 会让 Veldrid 在创建管线时抛 NullReferenceException。
+        /// </para>
+        /// </summary>
+        public static global::Veldrid.OutputDescription ConvertOutputDescription(
+            OutputFormatDescription des,
+            global::Veldrid.OutputDescription fallback = default
+        )
+        {
+            if (des.ColorAttachments is not { Length: > 0 })
+            {
+                if (fallback.ColorAttachments is { Length: > 0 })
+                    return fallback;
+
+                throw new ArgumentException(
+                    "OutputFormatDescription declares no color attachment, "
+                        + "and no fallback output was supplied.",
+                    nameof(des)
+                );
+            }
+
+            return new()
+            {
+                ColorAttachments =
+                [
+                    .. des.ColorAttachments.Select(
+                        c => new global::Veldrid.OutputAttachmentDescription(
+                            ConvertPixelFormat(c.Format)
+                        )
+                    ),
+                ],
+                DepthAttachment = des.DepthAttachment.HasValue
+                    ? new global::Veldrid.OutputAttachmentDescription(
+                        ConvertPixelFormat(des.DepthAttachment.Value.Format)
+                    )
+                    : null,
+                // SampleCount 枚举从 Count1 = 1 起，没有 0 值；
+                // 而 default(OutputFormatDescription).SampleCount 恰好是 0。
+                // 不在这里兜底的话，只填了 ColorAttachments 的调用方会收到
+                // "Unsupported sample count: 0" 这种指向不明的错误。
+                SampleCount = ConvertSampleCount(
+                    des.SampleCount == 0 ? SampleCount.Count1 : des.SampleCount
+                ),
+            };
+        }
+
         //PrimitiveTopology
         public static global::Veldrid.PrimitiveTopology ConvertPrimitiveTopology(
             Framework.Graphics.PrimitiveTopology topology
@@ -298,18 +384,23 @@ namespace Line.Framework.Default.Graphics.Veldrid
     {
         public IPipeline CreatePipeline(PipelineCreateInfo createInfo)
         {
-            global::Veldrid.Pipeline Result = null;
-            if (createInfo.Mode is GraphicsDescription)
-            {
-                Result = dev.ResourceFactory.CreateGraphicsPipeline(
-                    VeldridConverter.ConvertPipelineDescription(createInfo)
+            if (createInfo.Mode is not GraphicsDescription)
+                throw new NotSupportedException(
+                    $"Mode {createInfo.Mode?.GetType().Name ?? "null"} is not supported"
                 );
-            }
-            if (Result != null)
-                return new VeldridPipeline(Result, createInfo);
-            throw new NotSupportedException(
-                $"Mode {createInfo.Mode.GetType().Name} is not supported"
-            );
+
+            // dev.MainSwapchain 只有在设备带交换链创建时才非 null。
+            // 无窗口 / headless 设备（例如单元测试里的 VeldridDevice(backend)）它是 null，
+            // 此时没有可回落的输出格式，必须由调用方在 GraphicsDescription.Outputs 里显式给出。
+            var fallback = dev.MainSwapchain?.Framebuffer?.OutputDescription ?? default;
+
+            var description = VeldridConverter.ConvertPipelineDescription(createInfo, fallback);
+
+            var result = dev.ResourceFactory.CreateGraphicsPipeline(description);
+            if (result == null)
+                throw new InvalidOperationException("Veldrid returned a null graphics pipeline.");
+
+            return new VeldridPipeline(result, createInfo);
         }
     }
 }

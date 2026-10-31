@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Text;
+using Line.Framework.Default.Graphics.Veldrid;
 using Line.Framework.Graphics;
 using Line.Framework.IO;
 using SDL3;
@@ -12,6 +13,7 @@ using FrontFace = Veldrid.FrontFace;
 using PolygonFillMode = Veldrid.PolygonFillMode;
 using PrimitiveTopology = Veldrid.PrimitiveTopology;
 using RasterizerStateDescription = Veldrid.RasterizerStateDescription;
+using ResourceKind = Veldrid.ResourceKind;
 using ShaderSetDescription = Veldrid.ShaderSetDescription;
 using TextureUsage = Veldrid.TextureUsage;
 using VertexLayoutDescription = Veldrid.VertexLayoutDescription;
@@ -264,7 +266,7 @@ void main()
             PrimitiveTopology = PrimitiveTopology.TriangleList,
             ResourceLayouts = [_textureLayout],
             ShaderSet = new ShaderSetDescription([vertexLayout], _shaders),
-            Outputs = window.Dev.SwapchainFramebuffer.OutputDescription,
+            Outputs = window.Dev.MainSwapchain.Framebuffer.OutputDescription,
             BlendState = BlendStateDescription.SingleAlphaBlend,
         };
 
@@ -312,7 +314,7 @@ void main()
         {
             var result = new VertexTask();
             result.Position = p;
-            result.Color = c;
+            result.Color = VeldridConverter.ConvertRgbaFloat(c);
             result.UV = u;
             result.Texture = t;
             result.ResourceSet = rs;
@@ -348,7 +350,7 @@ void main()
         return new()
         {
             Position = vertex.Position,
-            Color = vertex.Color,
+            Color = VeldridConverter.ConvertRgbaFloat(vertex.Color),
             UV =
                 vertex.UV.scale
                 + vertex.UV.offset
