@@ -23,4 +23,6 @@ public interface IResourceFactory
     /// </para>
     /// </summary>
     IResourceSet CreateResourceSet(ResourceSetCreateInfo createInfo);
+
+    ICommandList CreateCommandList(string Name = null);
 }

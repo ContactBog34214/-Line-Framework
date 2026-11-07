@@ -5,7 +5,7 @@ namespace Line.Framework.Default.Graphics.Veldrid;
 
 public sealed class VeldridFrameBuffer : IFrameBuffer
 {
-    private readonly Framebuffer framebuffer;
+    internal readonly Framebuffer framebuffer;
     public string Name => framebuffer.Name;
 
     public uint Width => framebuffer.Width;
@@ -36,21 +36,24 @@ public sealed class VeldridFrameBuffer : IFrameBuffer
         // 但那层依赖很脆，直接读 createInfo 不需要 .Value 也不会抛。
         var depth = createInfo.DepthStencilTarget;
         DepthTarget = depth.HasValue
-            ? new Framework.Graphics.FramebufferAttachmentDescription { Target = depth.Value.Target }
+            ? new Framework.Graphics.FramebufferAttachmentDescription
+            {
+                Target = depth.Value.Target,
+            }
             : null;
 
         // 交换链的 framebuffer 没有 createInfo（由驱动轮转），
         // 此时拿不到 ITextureView，ColorTargets 只能是空列表。
         var colors = createInfo.ColorTargets;
-        ColorTargets =
-            colors is { Length: > 0 }
-                ? [
-                    .. colors.Select(c => new Framework.Graphics.FramebufferAttachmentDescription
-                    {
-                        Target = c.Target,
-                    }),
-                ]
-                : Array.Empty<Framework.Graphics.FramebufferAttachmentDescription>();
+        ColorTargets = colors is { Length: > 0 }
+            ?
+            [
+                .. colors.Select(c => new Framework.Graphics.FramebufferAttachmentDescription
+                {
+                    Target = c.Target,
+                }),
+            ]
+            : Array.Empty<Framework.Graphics.FramebufferAttachmentDescription>();
     }
 }
 

@@ -4,6 +4,7 @@ namespace Line.Framework.Default.Graphics.Veldrid;
 
 public sealed class VeldridTexture : ITexture
 {
+    private readonly global::Veldrid.GraphicsDevice dev;
     internal readonly global::Veldrid.Texture texture;
     public uint Width => texture.Width;
 
@@ -25,8 +26,9 @@ public sealed class VeldridTexture : ITexture
 
     public string Name => texture.Name;
 
-    internal VeldridTexture(global::Veldrid.Texture source)
+    internal VeldridTexture(global::Veldrid.Texture source, global::Veldrid.GraphicsDevice gd)
     {
+        dev = gd;
         texture = source;
         Type = VeldridConverter.ConvertTextureType(source.Type);
         Format = VeldridConverter.ConvertPixelFormat(source.Format);
@@ -37,6 +39,72 @@ public sealed class VeldridTexture : ITexture
     public void Dispose()
     {
         texture?.Dispose();
+    }
+
+    public void Update(
+        ReadOnlySpan<byte> source,
+        int x = 0,
+        int y = 0,
+        int z = 0,
+        int? width = null,
+        int? height = null,
+        int? depth = null,
+        uint mipLevel = 0,
+        uint arrayLayer = 0
+    )
+    {
+        if (!width.HasValue)
+            width = (int)Width - x;
+        if (!height.HasValue)
+            height = (int)Height - y;
+        if (!depth.HasValue)
+            depth = (int)Depth - z;
+        (int w, int h, int d) textureSize = new(width.Value, height.Value, depth.Value);
+        (int x, int y, int z) pos = new(x, y, z);
+        (int x, int y, int z) r = new(
+            pos.x + textureSize.w,
+            pos.y + textureSize.h,
+            pos.z + textureSize.d
+        );
+        if (x < 0 || y < 0 || z < 0)
+            throw new ArgumentOutOfRangeException(
+                "Position",
+                $"{(x < 0 ? x : "OK")},{(y < 0 ? y : "OK")},{(z < 0 ? z : "OK")}"
+            );
+        if (r.x > Width || r.y > Height || r.z > Depth)
+            throw new ArgumentOutOfRangeException(
+                "TextureSize",
+                $"{(r.x > Width ? r.x : "OK")},{(r.y > Height ? r.y : "OK")},{(r.z > Depth ? r.z : "OK")}"
+            );
+        if (textureSize.w <= 0 || textureSize.h <= 0 || textureSize.d <= 0)
+            throw new ArgumentOutOfRangeException(
+                "TextureSize",
+                $"{(textureSize.w <= 0 ? textureSize.w : "OK")},{(textureSize.h <= 0 ? textureSize.h : "OK")},{(textureSize.d <= 0 ? textureSize.d : "OK")}"
+            );
+
+        ulong size = Format.GetByteSize(
+            (uint)textureSize.w,
+            (uint)textureSize.h,
+            (uint)textureSize.d
+        );
+        if (size != (ulong)source.Length)
+            throw new ArgumentException(
+                $"Data length {source.Length} does not match {textureSize.w}x{textureSize.h}"
+                    + $" @ {Format.GetBytesPerPixel()}B/texel = {size} bytes.",
+                nameof(source)
+            );
+        dev.UpdateTexture(
+            texture,
+            source,
+            (uint)x,
+            (uint)y,
+            (uint)z,
+            (uint)textureSize.w,
+            (uint)textureSize.h,
+            (uint)textureSize.d,
+            mipLevel,
+            arrayLayer
+        );
     }
 }
 
@@ -49,7 +117,7 @@ public partial class VeldridResourceFactory
         );
         try
         {
-            return new VeldridTexture(texture);
+            return new VeldridTexture(texture, dev);
         }
         catch
         {

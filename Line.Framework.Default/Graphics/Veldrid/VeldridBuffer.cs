@@ -6,22 +6,35 @@ namespace Line.Framework.Default.Graphics.Veldrid;
 
 public sealed class VeldridBuffer : IDeviceBuffer
 {
+    private readonly global::Veldrid.GraphicsDevice dev;
     internal readonly DeviceBuffer buffer;
-    public uint SizeInBytes => buffer.SizeInBytes;
+    public ulong SizeInBytes => buffer.SizeInBytes;
 
     public BufferUsage Usage { get; }
 
     public string Name => buffer.Name;
 
-    internal VeldridBuffer(DeviceBuffer bf, BufferUsage usage)
+    internal VeldridBuffer(DeviceBuffer bf, BufferUsage usage, global::Veldrid.GraphicsDevice gd)
     {
         buffer = bf;
         Usage = usage;
+        dev = gd;
     }
 
     public void Dispose()
     {
         buffer?.Dispose();
+    }
+
+    public void Update(ulong offset, ReadOnlySpan<byte> source)
+    {
+        ulong end = offset + (ulong)source.Length;
+        if (end > SizeInBytes)
+            throw new ArgumentOutOfRangeException(
+                nameof(offset),
+                $"Update range [{offset}, {end}) exceeds buffer size ({SizeInBytes})."
+            );
+        dev.UpdateBuffer(buffer, (uint)offset, source);
     }
 }
 
@@ -44,6 +57,9 @@ public partial class VeldridConverter
             result |= global::Veldrid.BufferUsage.StructuredBufferReadWrite;
         else if ((usage & BufferUsage.StorageRead) != 0)
             result |= global::Veldrid.BufferUsage.StructuredBufferReadOnly;
+
+        if ((usage & BufferUsage.Dynamic) != 0)
+            result |= global::Veldrid.BufferUsage.Dynamic;
 
         return result;
     }
@@ -71,6 +87,9 @@ public partial class VeldridConverter
             result |= BufferUsage.StorageRead;
         }
 
+        if ((usage & global::Veldrid.BufferUsage.Dynamic) != 0)
+            result |= BufferUsage.Dynamic;
+
         return result;
     }
 }
@@ -79,17 +98,19 @@ public partial class VeldridResourceFactory
 {
     public IDeviceBuffer CreateBuffer(BufferCreateInfo createInfo)
     {
+        if (createInfo.SizeInBytes > uint.MaxValue)
+            throw new ArgumentOutOfRangeException(nameof(createInfo));
         var buffer = dev.ResourceFactory.CreateBuffer(
             new()
             {
-                SizeInBytes = createInfo.SizeInBytes,
+                SizeInBytes = (uint)createInfo.SizeInBytes,
                 StructureByteStride = createInfo.StructureByteStride,
                 Usage = VeldridConverter.ConvertBufferUsage(createInfo.Usage),
             }
         );
         try
         {
-            return new VeldridBuffer(buffer, createInfo.Usage);
+            return new VeldridBuffer(buffer, createInfo.Usage, dev);
         }
         catch
         {
