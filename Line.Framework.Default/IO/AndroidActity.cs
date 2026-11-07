@@ -4,6 +4,7 @@ using Line.Framework.IO;
 using SDL3;
 using Veldrid;
 using Veldrid.OpenGL;
+using SwapchainSource = Veldrid.SwapchainSource;
 
 namespace Line.Framework.Default.IO;
 
@@ -14,10 +15,8 @@ public class AndroidActity : WindowType
     public override ICompositor Compositor { get; set; }
     public override float FramePerSecond { get; set; } = 144;
     public override float UpdatePerSecond { get; set; } = 1000;
-    public AndroidActity(
-        GraphicBackend? Backend = null,
-        string Title = "Title"
-    )
+
+    public AndroidActity(GraphicBackend? Backend = null, string Title = "Title")
     {
         if (Backend == null || !IsBackendSupported(Backend ?? GraphicBackend.Direct3D))
         {
@@ -36,7 +35,8 @@ public class AndroidActity : WindowType
 
         SDL.GLSetSwapInterval(0);
 
-        SDL.WindowFlags flags = SDL.WindowFlags.Resizable | SDL.WindowFlags.InputFocus | SDL.WindowFlags.MouseFocus;
+        SDL.WindowFlags flags =
+            SDL.WindowFlags.Resizable | SDL.WindowFlags.InputFocus | SDL.WindowFlags.MouseFocus;
 
         if (Backend == GraphicBackend.OpenGL)
             flags |= SDL.WindowFlags.OpenGL;

@@ -2,6 +2,7 @@
 using Line.Framework;
 using Line.Framework.Default.Graphics.Veldrid;
 using Line.Framework.Graphics;
+using SDL3;
 
 namespace LineFramework.GraphicsTest;
 
@@ -122,6 +123,60 @@ void main()
         };
 
         var pl = dev.ResourceFactory.CreatePipeline(new() { Mode = gd, ResourceLayouts = [rl] });
+
+        if (
+            OperatingSystem.IsLinux()
+            && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"))
+        )
+            SDL.SetHint(SDL.Hints.VideoDriver, "wayland");
+
+        SDL.Init(SDL.InitFlags.Video);
+
+        IntPtr window = SDL.CreateWindow("GraphicsTest", 1280, 720, SDL.WindowFlags.Vulkan);
+        var driver = SDL.GetCurrentVideoDriver();
+        SwapchainSource source = default;
+
+        uint props = SDL.GetWindowProperties(window);
+        if (driver == "wayland")
+        {
+            source = new()
+            {
+                Kind = NativeWindowKind.Wayland,
+                Surface = SDL.GetPointerProperty(
+                    props,
+                    SDL.Props.WindowWaylandSurfacePointer,
+                    IntPtr.Zero
+                ),
+                Connection = SDL.GetPointerProperty(
+                    props,
+                    SDL.Props.WindowWaylandDisplayPointer,
+                    IntPtr.Zero
+                ),
+            };
+        }
+
+        var chain = dev.ResourceFactory.CreateSwapchain(
+            new()
+            {
+                Source = source,
+                Width = 1280,
+                Height = 720,
+                SyncToVerticalBlank = false,
+            }
+        );
+
+        using (var cl = dev.ResourceFactory.CreateCommandList())
+        {
+            using (cl.Record())
+            {
+                cl.SetFrameBuffer(chain.FrameBuffer);
+                cl.SetPipeline(pl);
+                cl.ClearColorTarget(0, new(255, 0, 0, 255));
+            }
+            dev.SubmitCommands(cl);
+        }
+        dev.WaitForIdle();
+        chain.Swap();
 
         Console.WriteLine(dev.Name);
         Console.WriteLine(pl.Outputs);

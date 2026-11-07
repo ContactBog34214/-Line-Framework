@@ -6,7 +6,12 @@ namespace Line.Framework.Default.Graphics.Veldrid;
 public sealed class VeldridFrameBuffer : IFrameBuffer
 {
     internal readonly Framebuffer framebuffer;
-    public string Name => framebuffer.Name;
+
+    /// <summary>
+    /// 调试标签。交换链的 framebuffer 通常没有名字（Veldrid 不设置），
+    /// 这里兜底成空串，保持 <see cref="Line.Framework.Types.IName"/> 的非空约定。
+    /// </summary>
+    public string Name => framebuffer.Name ?? string.Empty;
 
     public uint Width => framebuffer.Width;
 

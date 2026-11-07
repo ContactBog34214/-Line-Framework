@@ -3,6 +3,7 @@ using Line.Framework.IO;
 using SDL3;
 using Veldrid;
 using Veldrid.OpenGL;
+using SwapchainSource = Veldrid.SwapchainSource;
 
 namespace Line.Framework.Default.Graphics;
 
@@ -16,7 +17,8 @@ public class Window : WindowType
         int Height = 480,
         GraphicBackend? Backend = null,
         string Title = "Title"
-    ) : base()
+    )
+        : base()
     {
         //检查参数
         if (Width <= 0)
@@ -39,10 +41,11 @@ public class Window : WindowType
         else if (Width > Height)
             SDL.SetHint(SDL.Hints.Orientations, "Landscape");
 
-        if (OperatingSystem.IsLinux() &&
-            !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")))
+        if (
+            OperatingSystem.IsLinux()
+            && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"))
+        )
             SDL.SetHint(SDL.Hints.VideoDriver, "wayland");
-
 
         SDL.Init(SDL.InitFlags.Video | SDL.InitFlags.Events);
         Log.Debug($"Video driver: {SDL.GetCurrentVideoDriver()}");
@@ -56,7 +59,8 @@ public class Window : WindowType
 
         SDL.GLSetSwapInterval(0);
 
-        SDL.WindowFlags flags = SDL.WindowFlags.Resizable | SDL.WindowFlags.InputFocus | SDL.WindowFlags.MouseFocus;
+        SDL.WindowFlags flags =
+            SDL.WindowFlags.Resizable | SDL.WindowFlags.InputFocus | SDL.WindowFlags.MouseFocus;
 
         if (Backend == GraphicBackend.OpenGL)
             flags |= SDL.WindowFlags.OpenGL;
@@ -250,6 +254,7 @@ public class Window : WindowType
 
         OnWindowResized();
     }
+
     protected override Task RenderTask { get; }
     protected override Task UpdateTask { get; }
 }

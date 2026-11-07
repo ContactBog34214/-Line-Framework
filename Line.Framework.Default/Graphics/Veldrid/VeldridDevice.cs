@@ -79,12 +79,16 @@ public static class PixelFormatExtensions
         return format switch
         {
             // 8-bit 单通道
-            Framework.Graphics.PixelFormat.R8UNorm or Framework.Graphics.PixelFormat.R8SNorm
-            or Framework.Graphics.PixelFormat.R8UInt or Framework.Graphics.PixelFormat.R8SInt => 1,
+            Framework.Graphics.PixelFormat.R8UNorm
+            or Framework.Graphics.PixelFormat.R8SNorm
+            or Framework.Graphics.PixelFormat.R8UInt
+            or Framework.Graphics.PixelFormat.R8SInt => 1,
 
             // 8-bit 双通道
-            Framework.Graphics.PixelFormat.R8G8UNorm or Framework.Graphics.PixelFormat.R8G8SNorm
-            or Framework.Graphics.PixelFormat.R8G8UInt or Framework.Graphics.PixelFormat.R8G8SInt => 2,
+            Framework.Graphics.PixelFormat.R8G8UNorm
+            or Framework.Graphics.PixelFormat.R8G8SNorm
+            or Framework.Graphics.PixelFormat.R8G8UInt
+            or Framework.Graphics.PixelFormat.R8G8SInt => 2,
 
             // 8-bit 四通道 —— UI 最常用的 B8G8R8A8UNorm 也在这里
             Framework.Graphics.PixelFormat.R8G8B8A8UNorm
@@ -139,10 +143,7 @@ public static class PixelFormatExtensions
     /// <summary>
     /// 整张纹理的紧密排列字节总数（按 mip 0 尺寸计算）。
     /// </summary>
-    public static ulong GetByteSize(
-        this Framework.Graphics.PixelFormat format,
-        ITexture texture
-    )
+    public static ulong GetByteSize(this Framework.Graphics.PixelFormat format, ITexture texture)
     {
         if (texture is null)
             throw new ArgumentNullException(nameof(texture));

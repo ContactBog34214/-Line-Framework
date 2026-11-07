@@ -25,4 +25,5 @@ public interface IResourceFactory
     IResourceSet CreateResourceSet(ResourceSetCreateInfo createInfo);
 
     ICommandList CreateCommandList(string Name = null);
+    ISwapchain CreateSwapchain(SwapchainCreateInfo createInfo);
 }
