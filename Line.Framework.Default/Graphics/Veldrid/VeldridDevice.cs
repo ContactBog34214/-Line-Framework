@@ -37,6 +37,8 @@ public sealed class VeldridDevice : IGraphicsDevice
 
     public void Dispose()
     {
+        // 先释放工厂持有的常驻资源（默认采样器等），再释放设备
+        (ResourceFactory as VeldridResourceFactory)?.DisposeOwned();
         graphicsDevice?.Dispose();
     }
 

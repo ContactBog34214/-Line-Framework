@@ -1,8 +1,9 @@
+using Line.Framework.Types;
+
 namespace Line.Framework.Graphics;
 
-public interface IShader : IDisposable
+public interface IShader : IDisposable, IName
 {
-    string Name { get; }
     string EntryPoint { get; }
     ShaderStage Stage { get; }
 }
