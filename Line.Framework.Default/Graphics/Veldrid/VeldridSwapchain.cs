@@ -203,6 +203,8 @@ public partial class VeldridResourceFactory
 {
     public ISwapchain CreateSwapchain(SwapchainCreateInfo createInfo)
     {
+        // 设备创建时已经带上了第一个交换链（见 VeldridDevice 的说明），
+        // 这里只处理后续新增的交换链，与主交换链没有任何区别。
         var sc = dev.ResourceFactory.CreateSwapchain(
             VeldridConverter.ConvertSwapchainDescription(createInfo)
         );
