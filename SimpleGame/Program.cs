@@ -51,27 +51,16 @@ public static class SimpleGameMain
         foreach (var name in names)
             Log.Debug($"Asset:{name}");
 
-        bool AndroidMode = false;
         foreach (var item in args)
         {
             var splited = item.Split("=");
-            if (splited[0] == "--AndroidActity")
-            {
-                AndroidMode = true;
-            }
+            if (splited[0] == "--AndroidActity") { }
         }
-        if (AndroidMode)
-            Host = new AndroidActity()
-            {
-                Title = "-Line-Framework example",
-                UpdatePerSecond = 10000,
-            };
-        else
-            Host = new Window(Backend: GraphicBackend.OpenGL)
-            {
-                Title = "-Line-Framework example",
-                UpdatePerSecond = 10000,
-            };
+        Host = new Window(Backend: GraphicBackend.Vulkan)
+        {
+            Title = "-Line-Framework example",
+            UpdatePerSecond = 10000,
+        };
         Host.SetIcon(assembly.GetManifestResourceStream("SimpleGame.assets.-L-F.png"));
         if (args.Contains("--OutputEvent"))
             Host.EnableEventOutput = true;
@@ -138,6 +127,7 @@ public static class SimpleGameMain
             Parent = Background,
             TouchMode = TouchModes.All,
             Index = 0,
+            Opacity = 0.5f,
         };
         var Image = new UIImage(Host.Resource)
         {
@@ -204,6 +194,7 @@ public static class SimpleGameMain
 
         await FPSPrinter();
         Performance();
+        //((Compositor)Host.Compositor).EnableClip = false;
 
         //PerTest(100, Host.Root);
 

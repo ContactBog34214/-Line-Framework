@@ -1,5 +1,6 @@
-using Veldrid;
-using Veldrid.ImageSharp;
+using Line.Framework.Graphics;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 
 namespace Line.Framework.Resource.Graphic;
 
@@ -7,16 +8,11 @@ public class RResourceSet : IResource
 {
     public bool IsLoaded
     {
-        get
-        {
-            if (resourceSet != null)
-                return !resourceSet.IsDisposed;
-            return false;
-        }
+        get { return resourceSet != null; }
     }
-    ResourceSet resourceSet;
+    IResourceSet resourceSet;
     TResourceSet parent;
-    Texture t;
+    ITexture t;
 
     public object GetHandle()
     {
@@ -25,11 +21,10 @@ public class RResourceSet : IResource
 
     public async Task Load()
     {
-        if (ImgStream == null) return;
+        if (ImgStream == null)
+            return;
         if (resourceSet != null)
             return;
-        ImgStream.Position = 0;
-        var image = new ImageSharpTexture(ImgStream, EnableMipmap);
         if (t != null)
             try
             {
@@ -39,11 +34,37 @@ public class RResourceSet : IResource
             {
                 Log.Warning($"Cannot Dispose Texture:{ex}");
             }
-        t = image.CreateDeviceTexture(parent.Dev, parent.Dev.ResourceFactory);
+
+        //CreateTexture
+        Image img = null;
+        try
+        {
+            ImgStream.Position = 0;
+            img = await Image.LoadAsync<Rgba32>(ImgStream);
+            t = parent.Dev.ResourceFactory.CreateTexture(
+                new()
+                {
+                    Width = (uint)img.Width,
+                    Height = (uint)img.Height,
+                    Usage = TextureUsage.Sampled,
+                    Format = PixelFormat.R32G32B32A32Float,
+                    ArrayLayers = (uint)img.Frames.Count,
+                }
+            );
+            foreach (var f in img.Frames) { }
+        }
+        catch
+        {
+            t?.Dispose();
+        }
+        finally
+        {
+            img?.Dispose();
+        }
         if (t == null)
             return;
         resourceSet = parent.Dev.ResourceFactory.CreateResourceSet(
-            new ResourceSetDescription(parent.Layout, t)
+            new() { Layout = parent.Layout, Texture = t }
         );
     }
 
@@ -59,36 +80,42 @@ public class RResourceSet : IResource
     {
         ImgStream?.Dispose();
         Release().GetAwaiter().GetResult();
-        if (!(t?.IsDisposed ?? true)) t.Dispose();
+        t?.Dispose();
+        t = null;
     }
 
     public RResourceSet(Stream stream, TResourceSet tr)
     {
         parent = tr;
-        if (stream.CanSeek) stream.Position = 0;
+        if (stream.CanSeek)
+            stream.Position = 0;
         ImgStream = new MemoryStream();
         stream.CopyTo(ImgStream);
     }
+
     private readonly Stream ImgStream;
     public bool EnableMipmap
     {
-        get; set
+        get;
+        set
         {
-            if (value == field) return;
+            if (value == field)
+                return;
             field = value;
             var tmp = IsLoaded;
             Release().GetAwaiter().GetResult();
-            if (tmp) Load().GetAwaiter().GetResult();
+            if (tmp)
+                Load().GetAwaiter().GetResult();
         }
     } = true;
 }
 
 public class TResourceSet : ResourceType
 {
-    internal GraphicsDevice Dev { get; init; }
-    internal ResourceLayout Layout { get; init; }
+    internal IGraphicsDevice Dev { get; init; }
+    internal IResourceLayout Layout { get; init; }
 
-    public TResourceSet(GraphicsDevice dev, ResourceLayout layout)
+    public TResourceSet(IGraphicsDevice dev, IResourceLayout layout)
     {
         Dev = dev;
         Layout = layout;
@@ -102,9 +129,10 @@ public class TResourceSet : ResourceType
 
 public class ResourceSetArg
 {
-    public Texture Texture { get; init; }
-    public ResourceSet ResourceSet { get; init; }
-    internal ResourceSetArg(Texture t, ResourceSet rs)
+    public ITexture Texture { get; init; }
+    public IResourceSet ResourceSet { get; init; }
+
+    internal ResourceSetArg(ITexture t, IResourceSet rs)
     {
         Texture = t;
         ResourceSet = rs;

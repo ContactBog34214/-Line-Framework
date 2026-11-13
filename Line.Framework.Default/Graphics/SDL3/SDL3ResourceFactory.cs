@@ -16,7 +16,6 @@ public sealed class SDL3ResourceFactory : IResourceFactory
 
     private IntPtr Dev => device.dev;
 
-
     /// <summary>设备默认采样器：线性过滤 + Clamp 寻址，按需创建一次。</summary>
     internal ISampler DefaultSampler =>
         defaultSampler ??= CreateSampler(
@@ -110,7 +109,7 @@ public sealed class SDL3ResourceFactory : IResourceFactory
     /// </para>
     /// </summary>
     public IShader CreateShader(ShaderCreateInfo createInfo) =>
-        CreateShader(createInfo, resourceHint: null);
+        CreateShader(createInfo, resourceHint: createInfo.ResourceLayout);
 
     /// <summary>
     /// 创建单个着色器，并从布局里统计资源数量。
@@ -351,7 +350,7 @@ public sealed class SDL3ResourceFactory : IResourceFactory
         var vs = CreateShader(vertex, resourceHint: null, flipY: flipY);
         try
         {
-            var fs = CreateShader(fragment);
+            var fs = CreateShader(fragment, resourceHint: fragment.ResourceLayout);
             return (vs, fs);
         }
         catch

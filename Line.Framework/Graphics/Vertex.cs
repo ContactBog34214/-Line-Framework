@@ -1,6 +1,5 @@
 using System.Numerics;
 using Line.Framework.Types;
-using Veldrid;
 
 namespace Line.Framework.Graphics;
 
@@ -27,12 +26,12 @@ public class Vertex : IRecyclable
     /// <summary>
     /// 材质
     /// </summary>
-    public Texture Texture { get; set; }
+    public ITexture Texture { get; set; }
 
     /// <summary>
     /// 资产设定
     /// </summary>
-    public ResourceSet ResourceSet { get; set; }
+    public IResourceSet ResourceSet { get; set; }
 
     /// <summary>
     /// 透明度
@@ -44,7 +43,7 @@ public class Vertex : IRecyclable
     /// </summary>
     public List<Vector2[]> Clips { get; set; } = new();
 
-    public Vertex(Vector2 p, Types.RgbaFloat c, Coord2 u, Texture t, ResourceSet rs, float o)
+    public Vertex(Vector2 p, Types.RgbaFloat c, Coord2 u, ITexture t, IResourceSet rs, float o)
     {
         Position = p;
         Color = c;
@@ -53,8 +52,18 @@ public class Vertex : IRecyclable
         ResourceSet = rs;
         Opacity = o;
     }
+
     public Vertex() { }
-    public static Vertex New(Vector2 p, Types.RgbaFloat c, Coord2 u, Texture t, ResourceSet rs, float o, IEnumerable<Vector2[]> clip = default)
+
+    public static Vertex New(
+        Vector2 p,
+        Types.RgbaFloat c,
+        Coord2 u,
+        ITexture t,
+        IResourceSet rs,
+        float o,
+        IEnumerable<Vector2[]> clip = default
+    )
     {
         var result = Recyclable<Vertex>.New();
         result.Position = p;
@@ -67,6 +76,7 @@ public class Vertex : IRecyclable
             result.Clips.AddRange(clip);
         return result;
     }
+
     public void Reset()
     {
         Clips.Clear();

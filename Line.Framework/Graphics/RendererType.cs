@@ -1,5 +1,4 @@
 using Line.Framework.IO;
-using Veldrid;
 
 namespace Line.Framework.Graphics;
 
@@ -11,7 +10,7 @@ public abstract class RendererType : IDisposable
     /// <summary>
     /// 材质布局
     /// </summary>
-    public virtual ResourceLayout TextureLayout { get; }
+    public virtual IResourceLayout TextureLayout { get; }
     public abstract void Dispose();
 
     /// <summary>
@@ -19,7 +18,7 @@ public abstract class RendererType : IDisposable
     /// </summary>
     /// <param name="vertices"></param>
     /// <param name="由合成器输出的顶点数组"></param>
-    public abstract void Render(IEnumerable<Vertex> vertices);
+    public abstract void Render(IEnumerable<Vertex> vertices, IFrameBuffer frameBuffer);
     protected virtual WindowType Host { get; }
 
     protected RendererType(WindowType window)

@@ -55,6 +55,15 @@ public sealed class SDL3Swapchain : ISwapchain
                     + $"(window flags = 0x{(ulong)SDL.GetWindowFlags(window):X})"
             );
 
+        GPUPresentMode mode = GPUPresentMode.Immediate;
+        if (!WindowSupportsGPUPresentMode(device.dev, window, GPUPresentMode.Immediate))
+        {
+            mode = GPUPresentMode.Mailbox;
+            if (!WindowSupportsGPUPresentMode(device.dev, window, GPUPresentMode.Mailbox))
+                mode = GPUPresentMode.VSync;
+        }
+        SetGPUSwapchainParameters(device.dev, window, GPUSwapchainComposition.SDR, mode);
+
         // 交换链格式由窗口决定，创建立即可以查询 —— 这就是管线的 Outputs 该用的格式。
         var swapFormat = SDL.GetGPUSwapchainTextureFormat(device.dev, window);
         var outputFormat = new OutputFormatDescription

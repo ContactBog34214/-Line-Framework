@@ -1,22 +1,12 @@
 using System.Numerics;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using Line.Framework.Default.Graphics.Veldrid;
 using Line.Framework.Graphics;
 using Line.Framework.IO;
-using SDL3;
-using Veldrid;
+using Line.Framework.Types;
 using Veldrid.SPIRV;
-using BlendStateDescription = Veldrid.BlendStateDescription;
-using BufferUsage = Veldrid.BufferUsage;
-using FaceCullMode = Veldrid.FaceCullMode;
-using FrontFace = Veldrid.FrontFace;
-using PolygonFillMode = Veldrid.PolygonFillMode;
-using PrimitiveTopology = Veldrid.PrimitiveTopology;
-using RasterizerStateDescription = Veldrid.RasterizerStateDescription;
-using ResourceKind = Veldrid.ResourceKind;
-using ShaderSetDescription = Veldrid.ShaderSetDescription;
-using TextureUsage = Veldrid.TextureUsage;
-using VertexLayoutDescription = Veldrid.VertexLayoutDescription;
 
 namespace Line.Framework.Default.Graphics;
 
@@ -47,36 +37,39 @@ layout(location = 1) in vec2 fsin_UV;
 
 layout(location = 0) out vec4 fsout_Color;
 
-layout(binding = 0) uniform sampler2D _texture;
+layout(set = 0, binding = 0) uniform sampler2D _texture;
 
 void main()
 {
     fsout_Color = texture(_texture, fsin_UV) * fsin_Color;
+    //fsout_Color = fsin_Color;
 }";
 
-    ShaderDescription vertexShaderDesc = new ShaderDescription(
-        ShaderStages.Vertex, // 顶点着色器阶段
-        Encoding.UTF8.GetBytes(VertexCode), // GLSL 源代码（转为字节数组）
-        "main" // 入口函数名
-    );
+    ShaderCreateInfo vertexShaderDesc = new()
+    {
+        Stage = ShaderStage.Vertex,
+        Bytes = Encoding.UTF8.GetBytes(VertexCode),
+        EntryPoint = "main", // 入口函数名
+    };
 
-    ShaderDescription fragmentShaderDesc = new ShaderDescription(
-        ShaderStages.Fragment,
-        Encoding.UTF8.GetBytes(FragmentCode),
-        "main"
-    );
+    ShaderCreateInfo fragmentShaderDesc = new()
+    {
+        Stage = ShaderStage.Fragment,
+        Bytes = Encoding.UTF8.GetBytes(FragmentCode),
+        EntryPoint = "main",
+    };
 
     // 使用局部每帧 CommandList，避免并发复用导致 Veldrid 内部状态/类型混乱
-    protected GraphicsDevice gd;
-    protected Shader[] _shaders;
-    protected CommandList cl;
-    protected Pipeline _pipeline;
-    protected ResourceLayout _textureLayout;
-    protected ResourceSet _textureResourceSet;
-    DeviceBuffer _vertexBuffer;
-    public override ResourceLayout TextureLayout => _textureLayout;
+    protected IGraphicsDevice gd;
+    protected IShader[] _shaders;
+    protected ICommandList cl;
+    protected IPipeline _pipeline;
+    protected IResourceLayout _textureLayout;
+    protected IResourceSet _textureResourceSet;
+    IDeviceBuffer _vertexBuffer;
+    public override IResourceLayout TextureLayout => _textureLayout;
 
-    public override void Render(IEnumerable<Vertex> vertices)
+    public override void Render(IEnumerable<Vertex> vertices, IFrameBuffer frameBuffer)
     {
         if (!Host.Exists)
             return;
@@ -85,14 +78,14 @@ void main()
             CreateShader(gd);
         if (_pipeline == null)
         {
-            ReCreatePipeline(Host);
+            ReCreatePipeline(Host, frameBuffer);
         }
 
         var values = vertices;
         List<VertexPositionColor> vert = [];
         var tot = 0;
         List<VertexTask[]> Tasks = [];
-        ResourceSet LastRs = null;
+        IResourceSet LastRs = null;
         List<VertexTask> t = [];
 
         foreach (var i in values)
@@ -148,15 +141,21 @@ void main()
         if (t.Count != 0)
             Tasks.Add([.. t]);
         //顶点缓冲区大小检查
-        uint totalSize = (uint)(tot * VertexPositionColor.SizeInBytes);
+        uint totalSize = (uint)(tot * Unsafe.SizeOf<VertexPositionColor>());
+        if (totalSize <= 0)
+            return;
         if (_vertexBuffer == null || totalSize > _vertexBuffer.SizeInBytes)
         {
             _vertexBuffer?.Dispose();
             _vertexBuffer = gd.ResourceFactory.CreateBuffer(
-                new BufferDescription(totalSize, BufferUsage.VertexBuffer | BufferUsage.Dynamic)
+                new BufferCreateInfo()
+                {
+                    SizeInBytes = totalSize,
+                    Usage = BufferUsage.Vertex | BufferUsage.Dynamic,
+                }
             );
         }
-        gd.UpdateBuffer(_vertexBuffer, 0, vert.ToArray());
+        _vertexBuffer.Update(0, MemoryMarshal.AsBytes(CollectionsMarshal.AsSpan(vert)));
 
         if (tot == 0)
             return;
@@ -164,29 +163,28 @@ void main()
         if (_pipeline == null)
             return;
 
-        if (cl == null)
-            cl = gd.ResourceFactory.CreateCommandList();
+        cl ??= gd.ResourceFactory.CreateCommandList();
         try
         {
-            cl.Begin();
-            cl.SetFramebuffer(gd.SwapchainFramebuffer);
-            cl.ClearColorTarget(0, new(0, 0, 0, 0));
-            cl.SetPipeline(_pipeline);
-
-            cl.SetVertexBuffer(0, _vertexBuffer);
-
-            // 逐个控件绘制（每个 Draw 绑定自己的资源集）
-            uint index = 0;
-            foreach (var i in Tasks)
+            using (cl.Record())
             {
-                uint num = (uint)i.Length;
-                var rs = i[0].ResourceSet ?? _textureResourceSet;
-                cl.SetGraphicsResourceSet(0, rs);
-                cl.Draw(num, 1, index, 0);
-                index += num;
-            }
+                cl.SetFrameBuffer(frameBuffer);
+                cl.ClearColorTarget(0, new(0, 0, 0, 0));
+                cl.SetPipeline(_pipeline);
 
-            cl.End();
+                cl.SetVertexBuffer(0, _vertexBuffer);
+
+                // 逐个控件绘制（每个 Draw 绑定自己的资源集）
+                uint index = 0;
+                foreach (var i in Tasks)
+                {
+                    uint num = (uint)i.Length;
+                    var rs = i[0].ResourceSet ?? _textureResourceSet;
+                    cl.SetGraphicsResourceSet(0, rs);
+                    cl.Draw(num, 1, index, 0);
+                    index += num;
+                }
+            }
             gd.SubmitCommands(cl);
         }
         catch (Exception ex)
@@ -195,93 +193,101 @@ void main()
         }
     }
 
-    public Renderer(WindowType window)
+    public Renderer(WindowType window, SwapchainCreateInfo createInfo)
         : base(window)
     {
         gd = window.Dev;
-        CreateShader(gd);
         _textureLayout = gd.ResourceFactory.CreateResourceLayout(
-            new ResourceLayoutDescription(
-                new ResourceLayoutElementDescription(
-                    "_texture",
-                    ResourceKind.TextureReadOnly,
-                    ShaderStages.Fragment
-                )
-            )
+            new()
+            {
+                Elements =
+                [
+                    new() { Kind = ResourceKind.TextureSampler, Stages = ShaderStage.Fragment },
+                ],
+            }
         );
-        ReCreatePipeline(window);
+        CreateShader(gd);
+        //ReCreatePipeline(window);
     }
 
-    protected Texture whiteTexture;
+    protected ITexture whiteTexture;
 
-    protected void ReCreatePipeline(WindowType window)
+    protected void ReCreatePipeline(WindowType window, IFrameBuffer frameBuffer)
     {
         _textureResourceSet?.Dispose();
         var gd = window.Dev;
         whiteTexture = gd.ResourceFactory.CreateTexture(
-            TextureDescription.Texture2D(
-                1,
-                1,
-                1,
-                1,
-                global::Veldrid.PixelFormat.R8_G8_B8_A8_UNorm,
-                TextureUsage.Sampled
-            )
+            new()
+            {
+                Width = 1,
+                Height = 1,
+                ArrayLayers = 1,
+                MipLevels = 1,
+                Format = PixelFormat.R8G8B8A8UNorm,
+                Usage = TextureUsage.Sampled,
+            }
         );
         // 填充白色像素数据
         byte[] whitePixel = [255, 255, 255, 255];
-        gd.UpdateTexture(whiteTexture, whitePixel, 0, 0, 0, 1, 1, 1, 0, 0);
+        whiteTexture.Update(whitePixel, 0, 0, 0, 1, 1, 1, 0, 0);
 
         // 3. 创建资源集 (ResourceSet)
         _textureResourceSet = gd.ResourceFactory.CreateResourceSet(
-            new ResourceSetDescription(_textureLayout, whiteTexture)
+            new() { Layout = _textureLayout, Texture = whiteTexture }
         );
         _pipeline?.Dispose();
-        var vertexLayout = new VertexLayoutDescription(
-            new VertexElementDescription(
-                "Position",
-                VertexElementSemantic.TextureCoordinate,
-                VertexElementFormat.Float2
-            ),
-            new VertexElementDescription(
-                "Color",
-                VertexElementSemantic.TextureCoordinate,
-                VertexElementFormat.Float4
-            ),
-            new VertexElementDescription(
-                "UV",
-                VertexElementSemantic.TextureCoordinate,
-                VertexElementFormat.Float2
-            )
-        );
-        GraphicsPipelineDescription pipelineDescription = new GraphicsPipelineDescription
+        VertexLayoutDescription vertexLayout = new()
         {
-            RasterizerState = new RasterizerStateDescription(
-                FaceCullMode.None,
-                PolygonFillMode.Solid,
-                FrontFace.Clockwise,
-                true,
-                false
-            ),
+            Attributes =
+            [
+                new() { Format = VertexFormat.Float2, Offset = 0 },
+                new() { Format = VertexFormat.Float4, Offset = 8 },
+                new() { Format = VertexFormat.Float2, Offset = 24 },
+            ],
+            Stride = 32,
+        };
+        GraphicsDescription pipelineDescription = new()
+        {
+            RasterizerState = new()
+            {
+                CullMode = FaceCullMode.None,
+                FillMode = PolygonFillMode.Solid,
+                FrontFace = FrontFace.Clockwise,
+                DepthClipEnabled = false,
+                ScissorTestEnabled = true,
+            },
             PrimitiveTopology = PrimitiveTopology.TriangleList,
-            ResourceLayouts = [_textureLayout],
-            ShaderSet = new ShaderSetDescription([vertexLayout], _shaders),
-            Outputs = window.Dev.MainSwapchain.Framebuffer.OutputDescription,
+            ShaderSet = new() { VertexLayouts = [vertexLayout], Shaders = _shaders },
+            Outputs = frameBuffer.OutputFormat,
             BlendState = BlendStateDescription.SingleAlphaBlend,
         };
 
-        _pipeline = window.Dev.ResourceFactory.CreateGraphicsPipeline(pipelineDescription);
+        _pipeline = window.Dev.ResourceFactory.CreatePipeline(
+            new() { Mode = pipelineDescription, ResourceLayouts = [_textureLayout] }
+        );
     }
 
-    protected void CreateShader(GraphicsDevice gd)
+    protected void CreateShader(IGraphicsDevice gd)
     {
-        _shaders = gd.ResourceFactory.CreateFromSpirv(vertexShaderDesc, fragmentShaderDesc);
+        fragmentShaderDesc.ResourceLayout = _textureLayout;
+        _shaders =
+        [
+            .. ((ShaderCreateInfo[])[vertexShaderDesc, fragmentShaderDesc]).Select(
+                gd.ResourceFactory.CreateShader
+            ),
+        ];
     }
 
+    [StructLayout(LayoutKind.Explicit, Size = 32)]
     protected struct VertexPositionColor
     {
+        [FieldOffset(0)]
         public Vector2 Position; // This is the position, in normalized device coordinates.
+
+        [FieldOffset(8)]
         public RgbaFloat Color; // This is the color of the vertex.
+
+        [FieldOffset(24)]
         public Vector2 UV;
 
         public VertexPositionColor(Vector2 position, RgbaFloat color, Vector2 uv)
@@ -299,22 +305,22 @@ void main()
         public Vector2 Position { get; set; }
         public RgbaFloat Color { get; set; }
         public Vector2 UV { get; set; }
-        public Texture Texture { get; set; }
-        public ResourceSet ResourceSet { get; set; }
+        public ITexture Texture { get; set; }
+        public IResourceSet ResourceSet { get; set; }
         public float Opacity { get; set; }
 
         public static VertexTask New(
             Vector2 p,
-            Types.RgbaFloat c,
+            RgbaFloat c,
             Vector2 u,
-            Texture t,
-            ResourceSet rs,
+            ITexture t,
+            IResourceSet rs,
             float o
         )
         {
             var result = new VertexTask();
             result.Position = p;
-            result.Color = VeldridConverter.ConvertRgbaFloat(c);
+            result.Color = c;
             result.UV = u;
             result.Texture = t;
             result.ResourceSet = rs;
@@ -350,7 +356,7 @@ void main()
         return new()
         {
             Position = vertex.Position,
-            Color = VeldridConverter.ConvertRgbaFloat(vertex.Color),
+            Color = vertex.Color,
             UV =
                 vertex.UV.scale
                 + vertex.UV.offset

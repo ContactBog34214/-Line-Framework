@@ -16,4 +16,5 @@ public struct ShaderCreateInfo
     }
     public byte[] Bytes { get; set; }
     public string EntryPoint { get; set; }
+    public IResourceLayout ResourceLayout { get; set; }
 }

@@ -9,7 +9,6 @@ using Line.Framework.Resource.Graphic;
 using Line.Framework.Types;
 using Line.Framework.UI;
 using SDL3;
-using Veldrid;
 
 namespace Line.Framework.IO;
 
@@ -20,6 +19,7 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
 #endif
     protected static ConcurrentQueue<(SDL.Event Event, object[] Extra)> PollEvents { get; } = new();
     protected nint IconSurfaceID { get; set; } = default;
+    
     /// <summary>
     /// 使用Stream设置窗口图标
     /// </summary>
@@ -136,7 +136,7 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
     /// <summary>
     /// Veldrid图形设备
     /// </summary>
-    public virtual GraphicsDevice Dev { get; init; }
+    public virtual IGraphicsDevice Dev { get; init; }
 
     /// <summary>
     /// 请求退出时执行的Action
@@ -325,26 +325,23 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
 
     public static bool IsBackendSupported(GraphicBackend backend)
     {
-        GraphicsBackend tbackend;
+        GraphicBackend tbackend;
         switch ((int)backend)
         {
             case 0:
-                tbackend = GraphicsBackend.Metal;
+                tbackend = GraphicBackend.Metal;
                 break;
             case 1:
-                tbackend = GraphicsBackend.Direct3D11;
+                tbackend = GraphicBackend.Direct3D;
                 break;
             case 2:
-                tbackend = GraphicsBackend.Vulkan;
-                break;
-            case 3:
-                tbackend = GraphicsBackend.OpenGL;
+                tbackend = GraphicBackend.Vulkan;
                 break;
             default:
-                tbackend = GraphicsBackend.Vulkan;
+                tbackend = GraphicBackend.Vulkan;
                 break;
         }
-        return GraphicsDevice.IsBackendSupported(tbackend);
+        return true;
     }
 
     /// <summary>
@@ -417,6 +414,8 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
             }
         }
     }
+    protected ISwapchain MainSwapchain=default;
+
     protected virtual async Task Render(CancellationToken token)
     {
         Stopwatch sw = new();
@@ -433,15 +432,17 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
                     Dev?.WaitForIdle();
                     _newWidth = (uint)Size.X;
                     _newHeight = (uint)Size.Y;
-                    Dev?.MainSwapchain.Resize(_newWidth, _newHeight);
+                    MainSwapchain?.Resize((int)_newWidth, (int)_newHeight);
                     _resizePending = false;
+                    /*
                     if ((Dev?.SyncToVerticalBlank ?? false) != VSync)
                         Dev?.SyncToVerticalBlank = VSync;
+                    */
                 }
                 await RendererContext();
                 if (token.IsCancellationRequested)
                     return;
-                Dev?.SwapBuffers();
+                MainSwapchain.Swap();
             }
             catch (Exception ex)
             {
@@ -605,7 +606,7 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
                 return;
             var cp = await Compositor?.Composite(Root);
             if (cp != null)
-                Renderer?.Render(cp);
+                Renderer?.Render(cp,MainSwapchain?.FrameBuffer);
             foreach (var i in cp)
             {
                 Recyclable<Vertex>.Free(i);

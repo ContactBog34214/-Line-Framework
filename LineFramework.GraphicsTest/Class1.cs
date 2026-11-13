@@ -20,7 +20,8 @@ public static class GT
     /// 传顶点/片元着色器会在创建阶段失败。
     /// </para>
     /// </summary>
-    private static readonly bool UseVeldridBackend = false;
+    private static readonly bool UseVeldridBackend = true;
+    private static readonly int alpha = 255;
 
     /// <summary>默认 Vulkan。</summary>
     private const GraphicBackend Backend = GraphicBackend.Vulkan;
@@ -79,16 +80,20 @@ void main()
         {
             // 留空表示让 SDL 自选（X11 / Wayland 都行），
             // 想强制指定可改成 "x11" 或 "wayland"。
+            if (
+                OperatingSystem.IsLinux()
+                && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"))
+            )
+                SDL.SetHint(SDL.Hints.VideoDriver, "wayland");
             if (!SDL.Init(SDL.InitFlags.Video))
                 throw new InvalidOperationException($"SDL_Init failed: {SDL.GetError()}");
         }
 
-        var window = SDL.CreateWindow(
-            "Rotating Cube",
-            InitialWidth,
-            InitialHeight,
-            SDL.WindowFlags.Resizable
-        );
+        SDL.WindowFlags windowFlag = SDL.WindowFlags.Resizable;
+        if (alpha != 255 && UseVeldridBackend == true)
+            windowFlag |= SDL.WindowFlags.Transparent;
+
+        var window = SDL.CreateWindow("Rotating Cube", InitialWidth, InitialHeight, windowFlag);
         if (window == IntPtr.Zero)
             throw new InvalidOperationException($"SDL_CreateWindow failed: {SDL.GetError()}");
 
@@ -496,7 +501,7 @@ void main()
             using (cl.Record())
             {
                 cl.SetFrameBuffer(chain.FrameBuffer);
-                cl.ClearColorTarget(0, new(0.06f, 0.06f, 0.08f, 1f));
+                cl.ClearColorTarget(0, new(0.06f, 0.06f, 0.08f, alpha / 255f));
                 cl.SetPipeline(pipeline);
                 cl.SetVertexBuffer(0, vb);
                 cl.Draw(VertexCount, 1, 0, 0);
