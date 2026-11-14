@@ -1,0 +1,36 @@
+namespace Line.Framework.Graphics
+{
+    public enum VertexFormat
+    {
+        Float1,
+        Float2,
+        Float3,
+        Float4,
+        Int1,
+        Int2,
+        Int3,
+        Int4,
+        UInt1,
+        UInt2,
+        UInt3,
+        UInt4,
+        Short2,
+        Short4,
+        Short2Norm,
+        Short4Norm,
+        UShort2,
+        UShort4,
+        UShort2Norm,
+        UShort4Norm,
+        Half2,
+        Half4,
+        Byte2,
+        Byte4,
+        Byte2Norm,
+        Byte4Norm,
+        UByte2,
+        UByte4,
+        UByte2Norm,
+        UByte4Norm,
+    }
+}

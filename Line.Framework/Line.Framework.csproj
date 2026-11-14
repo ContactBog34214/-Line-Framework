@@ -8,6 +8,7 @@
     <Nullable>disable</Nullable>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>Line.Framework</PackageId>
+    <AssemblyName>Line.Framework</AssemblyName>
     <Version>2026.117.0</Version>
     <Authors>SmellyFish</Authors>
     <Description>A Game Framework</Description>
@@ -27,10 +28,7 @@
     <PackageReference Include="SDL3-CS.MacOS" Version="3.4.16" />
     <PackageReference Include="SDL3-CS.Windows" Version="3.4.16" />
     <PackageReference Include="TagLibSharp" Version="2.3.0" />
-    <PackageReference Include="Veldrid" Version="4.9.0" />
-    <PackageReference Include="Veldrid.ImageSharp" Version="4.9.0" />
     <PackageReference Include="Veldrid.SPIRV" Version="1.0.15" />
-    <PackageReference Include="Veldrid.StartupUtilities" Version="4.9.0" />
   </ItemGroup>
 
   <ItemGroup>

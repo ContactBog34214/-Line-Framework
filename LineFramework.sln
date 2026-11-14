@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleGame.Android", "Simpl
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleGame.Desktop", "SimpleGame.Desktop\SimpleGame.Desktop.csproj", "{80AF57D2-0F0B-4F60-A55B-7EDDED5DE7E4}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LineFramework.GraphicsTest", "LineFramework.GraphicsTest\LineFramework.GraphicsTest.csproj", "{3D0E4BAD-0C1A-9973-F54A-1A9C56478677}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -83,6 +85,18 @@ Global
 		{80AF57D2-0F0B-4F60-A55B-7EDDED5DE7E4}.Release|x64.Build.0 = Release|Any CPU
 		{80AF57D2-0F0B-4F60-A55B-7EDDED5DE7E4}.Release|x86.ActiveCfg = Release|Any CPU
 		{80AF57D2-0F0B-4F60-A55B-7EDDED5DE7E4}.Release|x86.Build.0 = Release|Any CPU
+		{3D0E4BAD-0C1A-9973-F54A-1A9C56478677}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3D0E4BAD-0C1A-9973-F54A-1A9C56478677}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3D0E4BAD-0C1A-9973-F54A-1A9C56478677}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{3D0E4BAD-0C1A-9973-F54A-1A9C56478677}.Debug|x64.Build.0 = Debug|Any CPU
+		{3D0E4BAD-0C1A-9973-F54A-1A9C56478677}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{3D0E4BAD-0C1A-9973-F54A-1A9C56478677}.Debug|x86.Build.0 = Debug|Any CPU
+		{3D0E4BAD-0C1A-9973-F54A-1A9C56478677}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3D0E4BAD-0C1A-9973-F54A-1A9C56478677}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3D0E4BAD-0C1A-9973-F54A-1A9C56478677}.Release|x64.ActiveCfg = Release|Any CPU
+		{3D0E4BAD-0C1A-9973-F54A-1A9C56478677}.Release|x64.Build.0 = Release|Any CPU
+		{3D0E4BAD-0C1A-9973-F54A-1A9C56478677}.Release|x86.ActiveCfg = Release|Any CPU
+		{3D0E4BAD-0C1A-9973-F54A-1A9C56478677}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

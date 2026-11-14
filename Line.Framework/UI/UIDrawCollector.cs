@@ -1,8 +1,7 @@
 using System.Numerics;
 using Line.Framework.Graphics;
-using Veldrid;
+using Line.Framework.Types;
 using Rectangle = System.Drawing.RectangleF;
-using RgbaFloat = Line.Framework.Types.RgbaFloat;
 
 namespace Line.Framework.UI;
 
@@ -75,8 +74,8 @@ public class UIDrawCollector
     /// <param name="源UI控件"></param>
     public virtual void DrawTexture(
         Rectangle rect,
-        ResourceSet textureResourceSet,
-        Texture texture,
+        IResourceSet textureResourceSet,
+        ITexture texture,
         RgbaFloat color,
         UIWidget source
     )
@@ -134,7 +133,7 @@ public class UIDrawCollector
             t.RemoveAt(t.Count - 1);
             if (two)
                 t.RemoveAt(t.Count - 1);
-            v = [..t];
+            v = [.. t];
         }
         lock (vertLock)
         {

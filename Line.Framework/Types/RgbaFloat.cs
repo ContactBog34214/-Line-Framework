@@ -1,44 +1,34 @@
 using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace Line.Framework.Types;
 
+[StructLayout(LayoutKind.Explicit, Size = 16)]
 public struct RgbaFloat
 {
     /// <summary>
     /// Red
     /// </summary>
-    public float R
-    {
-        get;
-        set { field = Math.Clamp(value, 0f, 1f); }
-    } = 0;
+    [FieldOffset(0)]
+    public float R = 0;
 
     /// <summary>
     /// Green
     /// </summary>
-    public float G
-    {
-        get;
-        set { field = Math.Clamp(value, 0f, 1f); }
-    } = 0;
+    [FieldOffset(4)]
+    public float G = 0;
 
     /// <summary>
     /// Blue
     /// </summary>
-    public float B
-    {
-        get;
-        set { field = Math.Clamp(value, 0f, 1f); }
-    } = 0;
+    [FieldOffset(8)]
+    public float B = 0;
 
     /// <summary>
     /// Alpha
     /// </summary>
-    public float A
-    {
-        get;
-        set { field = Math.Clamp(value, 0f, 1f); }
-    } = 0;
+    [FieldOffset(12)]
+    public float A = 0;
 
     public RgbaFloat(float r, float g, float b, float a)
     {
@@ -58,12 +48,6 @@ public struct RgbaFloat
 
     public static implicit operator Vector4(RgbaFloat rgba) =>
         new Vector4(rgba.R, rgba.G, rgba.B, rgba.A);
-
-    public static implicit operator Veldrid.RgbaFloat(RgbaFloat rgba) =>
-        new Veldrid.RgbaFloat(rgba.R, rgba.G, rgba.B, rgba.A);
-
-    public static implicit operator RgbaFloat(Veldrid.RgbaFloat rgba) =>
-        new RgbaFloat(rgba.R, rgba.G, rgba.B, rgba.A);
 
     public static implicit operator RgbaFloat(Vector4 vec) =>
         new RgbaFloat(vec.X, vec.Y, vec.Z, vec.W);

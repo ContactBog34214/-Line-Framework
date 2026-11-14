@@ -1,9 +1,13 @@
-﻿using System.Diagnostics;
+﻿using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Numerics;
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using Line.Framework;
 using Line.Framework.Default.Graphics;
+using Line.Framework.Default.Graphics.Veldrid;
 using Line.Framework.Default.IO;
 using Line.Framework.Default.UIWidgets;
 using Line.Framework.Graphics;
@@ -12,7 +16,7 @@ using Line.Framework.Resource.Graphic;
 using Line.Framework.Sandbox;
 using Line.Framework.Types;
 using Line.Framework.UI;
-using SDL3;
+using StbImageSharp;
 #pragma warning disable CS8618
 
 namespace SimpleGame;
@@ -21,13 +25,20 @@ public static class SimpleGameMain
 {
     static WindowType Host;
     static Localization Localization;
-    static Stopwatch sw = new();
+    static readonly Stopwatch sw = new();
     static readonly float SpinnerBoxSpeed = 3.5f;
     static readonly float SpinnerBoxSize = 400;
-    static Font font;
-    static List<string> Fonts = ["GenJyuuGothic", "Noto"];
+    private static Font font;
+    static readonly List<string> Fonts = ["GenJyuuGothic", "Noto"];
     static UIWidget Background;
-    static UISandbox sbSession;
+    private static UISandbox sbSession;
+
+    public static Font Font
+    {
+        get => font;
+        set => font = value;
+    }
+
     public static async Task Main(string[] args)
     {
         sw.Start();
@@ -44,62 +55,52 @@ public static class SimpleGameMain
         foreach (var name in names)
             Log.Debug($"Asset:{name}");
 
-        bool AndroidMode = false;
         foreach (var item in args)
         {
             var splited = item.Split("=");
-            if (splited[0] == "--AndroidActity")
-            {
-                AndroidMode = true;
-            }
+            if (splited[0] == "--AndroidActity") { }
         }
-        if (AndroidMode)
-            Host = new AndroidActity()
-            {
-                Title = "-Line-Framework example",
-                UpdatePerSecond = 10000,
-            };
-        else Host = new Window(Backend: GraphicBackend.OpenGL)
+        Host = new Window(Backend: GraphicBackend.Vulkan)
         {
             Title = "-Line-Framework example",
-            UpdatePerSecond = 10000,
+            UpdatePerSecond = 1000,
         };
         Host.SetIcon(assembly.GetManifestResourceStream("SimpleGame.assets.-L-F.png"));
-        if (args.Contains("--OutputEvent")) Host.EnableEventOutput = true;
+        if (args.Contains("--OutputEvent"))
+            Host.EnableEventOutput = true;
 
         await Host.Resource.Create(
             "Font",
             "Mono",
             assembly.GetManifestResourceStream("SimpleGame.assets.CascadiaMono.ttf")
         );
-        font = await Host.Resource.GetResource<Font>("Mono");
+        Font = await Host.Resource.GetResource<Font>("Mono");
         await Host.Resource.Create(
             "Font",
             "GenJyuuGothic",
             assembly.GetManifestResourceStream("SimpleGame.assets.GenJyuuGothic-Normal-2.ttf")
         );
-        font = await Host.Resource.GetResource<Font>("GenJyuuGothic");
+        Font = await Host.Resource.GetResource<Font>("GenJyuuGothic");
         await Host.Resource.Create(
             "Font",
             "Noto",
             assembly.GetManifestResourceStream("SimpleGame.assets.NotoSansSC.ttf")
         );
-        font = await Host.Resource.GetResource<Font>("Noto");
+        Font = await Host.Resource.GetResource<Font>("Noto");
 
         Log.Debug("Loaded Font");
 
         Host.Resource?.Create(
             "Image",
             "Icon",
-            assembly.GetManifestResourceStream("SimpleGame.assets.-L-F.png")
+            ConvertImageStream(assembly.GetManifestResourceStream("SimpleGame.assets.-L-F.png"))
         );
         Host.Resource?.Create(
             "Image",
             "Cursor",
-            assembly.GetManifestResourceStream("SimpleGame.assets.cursor.png")
+            ConvertImageStream(assembly.GetManifestResourceStream("SimpleGame.assets.cursor.png"))
         );
         Log.Debug("Loaded Font");
-
 
         sbSession = new UISandbox
         {
@@ -130,6 +131,7 @@ public static class SimpleGameMain
             Parent = Background,
             TouchMode = TouchModes.All,
             Index = 0,
+            Opacity = 0.5f,
         };
         var Image = new UIImage(Host.Resource)
         {
@@ -168,7 +170,7 @@ public static class SimpleGameMain
             Text = Localization.Get("SimpleGame.Title", ["Example"]),
             Index = 1,
             FontSize = 100,
-            AutoBreakLine = false
+            AutoBreakLine = false,
         };
         title.Size = new Coord2(title.GetTextSize(title.Text) / new Vector2(1, 1), new());
 
@@ -182,7 +184,7 @@ public static class SimpleGameMain
             spinnerBox.Rotation = r;
             Image.Rotation = r;
         };
-        Host.FramePerSecond = 5000;
+        Host.FramePerSecond = 90;
         Host.FocusGained += () =>
         {
             Host.VSync = false;
@@ -196,13 +198,13 @@ public static class SimpleGameMain
 
         await FPSPrinter();
         Performance();
+        //((Compositor)Host.Compositor).EnableClip = false;
 
         //PerTest(100, Host.Root);
 
         Host.EnableMouseRelative = true;
         Host.MouseSpeedScale = 1;
         cs.Visible = Host.EnableMouseRelative;
-
 
         var input = new UIInput(Host.Resource)
         {
@@ -226,6 +228,9 @@ public static class SimpleGameMain
         {
             await Host.DisposeAsync();
         };
+
+        VeldridDevice device = new(GraphicBackend.Vulkan);
+
         while (Host.Exists)
         {
             await Task.Delay(5);
@@ -365,6 +370,7 @@ public static class SimpleGameMain
         };
         Host.OnUpdate += updateChart.Update;
     }
+
     static void VisualTouch()
     {
         var TouchC = new UIBox()
@@ -406,5 +412,30 @@ public static class SimpleGameMain
                 b.Dispose();
             }
         };
+    }
+
+    public static Stream ConvertImageStream(Stream img)
+    {
+        var imgR = ImageResult.FromStream(img, ColorComponents.RedGreenBlueAlpha);
+        TextureResourceStreamInfo info = new()
+        {
+            Format = (ushort)PixelFormat.R8G8B8A8UNorm,
+            Width = (uint)imgR.Width,
+            Height = (uint)imgR.Height,
+            ArrayLayers = 1,
+        };
+        MemoryStream stream = new();
+        Span<byte> buf = stackalloc byte[2];
+        BinaryPrimitives.WriteUInt16LittleEndian(
+            buf,
+            (ushort)Unsafe.SizeOf<TextureResourceStreamInfo>()
+        );
+        stream.Write(buf);
+
+        buf = stackalloc byte[Unsafe.SizeOf<TextureResourceStreamInfo>()];
+        MemoryMarshal.Write(buf, in info);
+        stream.Write(buf);
+        stream.Write(imgR.Data);
+        return stream;
     }
 }

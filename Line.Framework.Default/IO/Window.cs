@@ -1,10 +1,11 @@
+using Line.Framework.Default.Graphics;
+using Line.Framework.Default.Graphics.SDL3;
+using Line.Framework.Default.Graphics.Veldrid;
 using Line.Framework.Graphics;
 using Line.Framework.IO;
 using SDL3;
-using Veldrid;
-using Veldrid.OpenGL;
 
-namespace Line.Framework.Default.Graphics;
+namespace Line.Framework.Default.IO;
 
 public class Window : WindowType
 {
@@ -16,7 +17,8 @@ public class Window : WindowType
         int Height = 480,
         GraphicBackend? Backend = null,
         string Title = "Title"
-    ) : base()
+    )
+        : base()
     {
         //检查参数
         if (Width <= 0)
@@ -39,10 +41,11 @@ public class Window : WindowType
         else if (Width > Height)
             SDL.SetHint(SDL.Hints.Orientations, "Landscape");
 
-        if (OperatingSystem.IsLinux() &&
-            !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")))
+        if (
+            OperatingSystem.IsLinux()
+            && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"))
+        )
             SDL.SetHint(SDL.Hints.VideoDriver, "wayland");
-
 
         SDL.Init(SDL.InitFlags.Video | SDL.InitFlags.Events);
         Log.Debug($"Video driver: {SDL.GetCurrentVideoDriver()}");
@@ -56,18 +59,21 @@ public class Window : WindowType
 
         SDL.GLSetSwapInterval(0);
 
-        SDL.WindowFlags flags = SDL.WindowFlags.Resizable | SDL.WindowFlags.InputFocus | SDL.WindowFlags.MouseFocus;
+        SDL.WindowFlags flags =
+            SDL.WindowFlags.Resizable | SDL.WindowFlags.InputFocus | SDL.WindowFlags.MouseFocus;
 
+        /*
         if (Backend == GraphicBackend.OpenGL)
             flags |= SDL.WindowFlags.OpenGL;
         if (Backend == GraphicBackend.Vulkan)
             flags |= SDL.WindowFlags.Vulkan;
         if (Backend == GraphicBackend.Metal)
             flags |= SDL.WindowFlags.Metal;
+        */
 
         WindowHandle = SDL.CreateWindow(Title, Width, Height, flags);
         SDL.ShowWindow(WindowHandle);
-        SwapchainSource source = null;
+        SwapchainSource source = default;
         var driver = SDL.GetCurrentVideoDriver();
 
         try
@@ -85,7 +91,12 @@ public class Window : WindowType
                     SDL.Props.WindowWaylandSurfacePointer,
                     IntPtr.Zero
                 );
-                source = SwapchainSource.CreateWayland(display, surface);
+                source = new()
+                {
+                    Surface = surface,
+                    Connection = display,
+                    Kind = NativeWindowKind.Wayland,
+                };
             }
             else if (driver == "x11")
             {
@@ -96,7 +107,12 @@ public class Window : WindowType
                 );
                 var x11Window = (IntPtr)
                     SDL.GetNumberProperty(props, SDL.Props.WindowX11WindowNumber, 0);
-                source = SwapchainSource.CreateXlib(display, x11Window);
+                source = new()
+                {
+                    Surface = x11Window,
+                    Connection = display,
+                    Kind = NativeWindowKind.Xlib,
+                };
             }
             else if (driver == "windows")
             {
@@ -110,7 +126,12 @@ public class Window : WindowType
                     SDL.Props.WindowWin32InstancePointer,
                     IntPtr.Zero
                 );
-                source = SwapchainSource.CreateWin32(hwnd, hinstance);
+                source = new()
+                {
+                    Surface = hwnd,
+                    Connection = hinstance,
+                    Kind = NativeWindowKind.Win32,
+                };
             }
             else if (driver == "Android")
             {
@@ -120,7 +141,12 @@ public class Window : WindowType
                     IntPtr.Zero
                 );
                 var jniEnv = SDL.GetAndroidJNIEnv();
-                source = SwapchainSource.CreateAndroidSurface(surfaceHandle, jniEnv);
+                source = new()
+                {
+                    Surface = surfaceHandle,
+                    Connection = jniEnv,
+                    Kind = NativeWindowKind.AndroidSurface,
+                };
             }
             else if (driver == "cocoa")
             {
@@ -129,7 +155,7 @@ public class Window : WindowType
                     SDL.Props.WindowCocoaWindowPointer,
                     IntPtr.Zero
                 );
-                source = SwapchainSource.CreateNSWindow(nsWindow);
+                source = new() { Surface = nsWindow, Kind = NativeWindowKind.Cocoa };
             }
             else
             {
@@ -144,76 +170,36 @@ public class Window : WindowType
         Width = (int)Size.X;
         Height = (int)Size.Y;
 
-        var swapchainDesc = new SwapchainDescription(
-            source,
-            (uint)Width,
-            (uint)Height,
-            null, // 深度格式，可选
-            false // 垂直同步
-        );
+        var swapchainDesc = new SwapchainCreateInfo()
+        {
+            Source = source,
+            Width = (uint)Width,
+            Height = (uint)Height,
+        };
 
         WindowID = SDL.GetWindowID(WindowHandle);
-        GraphicsDeviceOptions Options = new GraphicsDeviceOptions
-        {
-            //自动otto
-            Debug = false,
-            PreferStandardClipSpaceYDirection = true,
-            SyncToVerticalBlank = false,
-        };
+        bool UsingVeldrid = false;
         try
         {
-            switch (Backend)
+            if (UsingVeldrid)
             {
-                case GraphicBackend.Metal:
-                    if (GraphicsDevice.IsBackendSupported(GraphicsBackend.Metal))
-                        Dev = GraphicsDevice.CreateMetal(Options, swapchainDesc);
-                    break;
-                case GraphicBackend.Direct3D:
-                    if (GraphicsDevice.IsBackendSupported(GraphicsBackend.Direct3D11))
-                        Dev = GraphicsDevice.CreateD3D11(Options, swapchainDesc);
-                    break;
-                case GraphicBackend.Vulkan:
-                    if (GraphicsDevice.IsBackendSupported(GraphicsBackend.Vulkan))
-                        Dev = GraphicsDevice.CreateVulkan(Options, swapchainDesc);
-                    break;
-                case GraphicBackend.OpenGL:
-                    if (GraphicsDevice.IsBackendSupported(GraphicsBackend.OpenGL))
-                    {
-                        nint GLContext = SDL.GLCreateContext(WindowHandle);
-                        var info = new OpenGLPlatformInfo(
-                            openGLContextHandle: GLContext,
-                            getProcAddress: (name) => SDL.GLGetProcAddress(name),
-                            makeCurrent: (ctx) => SDL.GLMakeCurrent(WindowHandle, ctx), // 必须返回 bool
-                            getCurrentContext: SDL.GLGetCurrentContext,
-                            clearCurrentContext: () => SDL.GLMakeCurrent(WindowHandle, IntPtr.Zero),
-                            deleteContext: (ctx) => SDL.GLDestroyContext(ctx),
-                            swapBuffers: () => SDL.GLSwapWindow(WindowHandle),
-                            setSyncToVerticalBlank: (enabled) =>
-                                SDL.GLSetSwapInterval(enabled ? 1 : 0)
-                        );
-                        SDL.GLSetSwapInterval(0);
-
-                        Dev = GraphicsDevice.CreateOpenGL(
-                            Options,
-                            info,
-                            (uint)Size.X,
-                            (uint)Size.Y
-                        );
-                    }
-                    break;
-                default:
-                    if (GraphicsDevice.IsBackendSupported(GraphicsBackend.Vulkan))
-                        Dev = GraphicsDevice.CreateVulkan(Options, swapchainDesc);
-                    break;
+                Dev = new VeldridDevice(
+                    Backend ?? GraphicBackend.Vulkan,
+                    swapchainDesc,
+                    out MainSwapchain
+                );
+            }
+            else
+            {
+                swapchainDesc.Source = new() { Surface = WindowHandle };
+                Dev = new SDL3Device(Backend ?? GraphicBackend.Vulkan);
+                MainSwapchain = Dev.ResourceFactory.CreateSwapchain(swapchainDesc);
             }
         }
         catch (Exception ex)
         {
             Log.Error($"{ex.Message}");
-            if (GraphicsDevice.IsBackendSupported(GraphicsBackend.Vulkan))
-                Dev = GraphicsDevice.CreateVulkan(Options, swapchainDesc);
-            else
-                DisposeAsync().GetAwaiter().GetResult();
+            DisposeAsync().GetAwaiter().GetResult();
             return;
         }
 
@@ -227,8 +213,8 @@ public class Window : WindowType
             return;
         }
 
-        Log.Debug($"GraphicsDevice:{Dev.BackendType} {Dev.ApiVersion}");
-        Log.Debug($"GPU:{Dev.DeviceName}");
+        //Log.Debug($"GraphicsDevice:{Dev} {Dev.ApiVersion}");
+        Log.Debug($"GPU:{Dev.Name}");
 
         Collector = new();
         Root = new(this, 0, 0);
@@ -237,7 +223,7 @@ public class Window : WindowType
         Input = new(this);
 
         if (Renderer == null)
-            Renderer = new Renderer(this);
+            Renderer = new Renderer(this, swapchainDesc);
         if (Compositor == null)
             Compositor = new Compositor();
 
@@ -250,6 +236,7 @@ public class Window : WindowType
 
         OnWindowResized();
     }
+
     protected override Task RenderTask { get; }
     protected override Task UpdateTask { get; }
 }

@@ -1,5 +1,6 @@
-using Veldrid;
-using Veldrid.ImageSharp;
+using System.Buffers.Binary;
+using System.Runtime.InteropServices;
+using Line.Framework.Graphics;
 
 namespace Line.Framework.Resource.Graphic;
 
@@ -7,16 +8,11 @@ public class RResourceSet : IResource
 {
     public bool IsLoaded
     {
-        get
-        {
-            if (resourceSet != null)
-                return !resourceSet.IsDisposed;
-            return false;
-        }
+        get { return resourceSet != null; }
     }
-    ResourceSet resourceSet;
+    IResourceSet resourceSet;
     TResourceSet parent;
-    Texture t;
+    ITexture t;
 
     public object GetHandle()
     {
@@ -25,11 +21,10 @@ public class RResourceSet : IResource
 
     public async Task Load()
     {
-        if (ImgStream == null) return;
+        if (ImgStream == null)
+            return;
         if (resourceSet != null)
             return;
-        ImgStream.Position = 0;
-        var image = new ImageSharpTexture(ImgStream, EnableMipmap);
         if (t != null)
             try
             {
@@ -39,11 +34,60 @@ public class RResourceSet : IResource
             {
                 Log.Warning($"Cannot Dispose Texture:{ex}");
             }
-        t = image.CreateDeviceTexture(parent.Dev, parent.Dev.ResourceFactory);
+
+        //CreateTexture
+        try
+        {
+            ushort metaDataLength = 0;
+            ImgStream.Position = 0;
+            byte[] ml = new byte[2];
+            await ImgStream.ReadExactlyAsync(ml, 0, 2);
+            metaDataLength = BinaryPrimitives.ReadUInt16LittleEndian(ml);
+
+            byte[] dataBytes = new byte[metaDataLength];
+            ImgStream.Position = 2;
+            await ImgStream.ReadExactlyAsync(dataBytes);
+
+            if (!MemoryMarshal.TryRead(dataBytes, out TextureResourceStreamInfo metaData))
+                throw new InvalidDataException(
+                    $"meta truncated: {metaDataLength} < ${Marshal.SizeOf<TextureResourceStreamInfo>()}"
+                );
+            ImgStream.Position = 2 + metaDataLength;
+
+            t?.Dispose();
+            t = parent.Dev.ResourceFactory.CreateTexture(
+                new()
+                {
+                    ArrayLayers = metaData.ArrayLayers,
+                    Format = (PixelFormat)metaData.Format,
+                    Width = metaData.Width,
+                    Height = metaData.Height,
+                    Usage = TextureUsage.Sampled,
+                }
+            );
+
+            long totLength = ImgStream.Length - ImgStream.Position;
+
+            long bytesPerLayer = totLength / metaData.ArrayLayers;
+
+            for (uint arrayLayer = 0; arrayLayer < metaData.ArrayLayers; arrayLayer++)
+            {
+                byte[] layerBytes = new byte[bytesPerLayer];
+                await ImgStream.ReadExactlyAsync(layerBytes);
+
+                t.Update(layerBytes, arrayLayer: arrayLayer);
+            }
+        }
+        catch
+        {
+            t?.Dispose();
+            t = null;
+            throw;
+        }
         if (t == null)
             return;
         resourceSet = parent.Dev.ResourceFactory.CreateResourceSet(
-            new ResourceSetDescription(parent.Layout, t)
+            new() { Layout = parent.Layout, Texture = t }
         );
     }
 
@@ -59,36 +103,42 @@ public class RResourceSet : IResource
     {
         ImgStream?.Dispose();
         Release().GetAwaiter().GetResult();
-        if (!(t?.IsDisposed ?? true)) t.Dispose();
+        t?.Dispose();
+        t = null;
     }
 
     public RResourceSet(Stream stream, TResourceSet tr)
     {
         parent = tr;
-        if (stream.CanSeek) stream.Position = 0;
+        if (stream.CanSeek)
+            stream.Position = 0;
         ImgStream = new MemoryStream();
         stream.CopyTo(ImgStream);
     }
+
     private readonly Stream ImgStream;
     public bool EnableMipmap
     {
-        get; set
+        get;
+        set
         {
-            if (value == field) return;
+            if (value == field)
+                return;
             field = value;
             var tmp = IsLoaded;
             Release().GetAwaiter().GetResult();
-            if (tmp) Load().GetAwaiter().GetResult();
+            if (tmp)
+                Load().GetAwaiter().GetResult();
         }
     } = true;
 }
 
 public class TResourceSet : ResourceType
 {
-    internal GraphicsDevice Dev { get; init; }
-    internal ResourceLayout Layout { get; init; }
+    internal IGraphicsDevice Dev { get; init; }
+    internal IResourceLayout Layout { get; init; }
 
-    public TResourceSet(GraphicsDevice dev, ResourceLayout layout)
+    public TResourceSet(IGraphicsDevice dev, IResourceLayout layout)
     {
         Dev = dev;
         Layout = layout;
@@ -102,11 +152,36 @@ public class TResourceSet : ResourceType
 
 public class ResourceSetArg
 {
-    public Texture Texture { get; init; }
-    public ResourceSet ResourceSet { get; init; }
-    internal ResourceSetArg(Texture t, ResourceSet rs)
+    public ITexture Texture { get; init; }
+    public IResourceSet ResourceSet { get; init; }
+
+    internal ResourceSetArg(ITexture t, IResourceSet rs)
     {
         Texture = t;
         ResourceSet = rs;
+    }
+}
+
+[StructLayout(LayoutKind.Explicit, Size = 16)]
+public struct TextureResourceStreamInfo
+{
+    [FieldOffset(0)]
+    public uint Width = 0;
+
+    [FieldOffset(4)]
+    public uint Height = 0;
+
+    [FieldOffset(8)]
+    public ushort Format = (ushort)PixelFormat.R8G8B8A8UNorm;
+
+    [FieldOffset(12)]
+    public uint ArrayLayers = 1;
+
+    public TextureResourceStreamInfo(uint width, uint height, PixelFormat format, uint arrayLayers)
+    {
+        Width = width;
+        Height = height;
+        Format = (ushort)format;
+        ArrayLayers = arrayLayers;
     }
 }

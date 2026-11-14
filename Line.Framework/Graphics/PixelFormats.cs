@@ -1,0 +1,30 @@
+namespace Line.Framework.Graphics;
+
+public enum PixelFormat : ushort
+{
+    R8UNorm = 0,
+    R8G8UNorm = 1,
+    R8G8B8A8UNorm = 2,
+    B8G8R8A8UNorm = 3,
+    R16UNorm = 4,
+    R16G16UNorm = 5,
+    R16G16B16A16UNorm = 6,
+    R8SNorm = 7,
+    R8G8SNorm = 8,
+    R8G8B8A8SNorm = 9,
+    R16SNorm = 10,
+    R16G16SNorm = 11,
+    R16G16B16A16SNorm = 12,
+    R16Float = 13,
+    R16G16Float = 14,
+    R16G16B16A16Float = 15,
+    R32Float = 16,
+    R32G32Float = 17,
+    R32G32B32A32Float = 18,
+    R8UInt = 19,
+    R8G8UInt = 20,
+    R8G8B8A8UInt = 21,
+    R8SInt = 22,
+    R8G8SInt = 23,
+    R8G8B8A8SInt = 24,
+}

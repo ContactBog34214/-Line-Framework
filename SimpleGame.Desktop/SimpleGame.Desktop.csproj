@@ -8,7 +8,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../SimpleGame/SimpleGame.csproj" />
+        <ProjectReference Include="../SimpleGame/SimpleGame.csproj" />
+        <ProjectReference Include="../LineFramework.GraphicsTest/LineFramework.GraphicsTest.csproj" />
   </ItemGroup>
 
 </Project>
