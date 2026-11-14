@@ -1,6 +1,6 @@
+using System.Buffers.Binary;
+using System.Runtime.InteropServices;
 using Line.Framework.Graphics;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
 
 namespace Line.Framework.Resource.Graphic;
 
@@ -36,30 +36,53 @@ public class RResourceSet : IResource
             }
 
         //CreateTexture
-        Image img = null;
         try
         {
+            ushort metaDataLength = 0;
             ImgStream.Position = 0;
-            img = await Image.LoadAsync<Rgba32>(ImgStream);
+            byte[] ml = new byte[2];
+            await ImgStream.ReadExactlyAsync(ml, 0, 2);
+            metaDataLength = BinaryPrimitives.ReadUInt16LittleEndian(ml);
+
+            byte[] dataBytes = new byte[metaDataLength];
+            ImgStream.Position = 2;
+            await ImgStream.ReadExactlyAsync(dataBytes);
+
+            if (!MemoryMarshal.TryRead(dataBytes, out TextureResourceStreamInfo metaData))
+                throw new InvalidDataException(
+                    $"meta truncated: {metaDataLength} < ${Marshal.SizeOf<TextureResourceStreamInfo>()}"
+                );
+            ImgStream.Position = 2 + metaDataLength;
+
+            t?.Dispose();
             t = parent.Dev.ResourceFactory.CreateTexture(
                 new()
                 {
-                    Width = (uint)img.Width,
-                    Height = (uint)img.Height,
+                    ArrayLayers = metaData.ArrayLayers,
+                    Format = (PixelFormat)metaData.Format,
+                    Width = metaData.Width,
+                    Height = metaData.Height,
                     Usage = TextureUsage.Sampled,
-                    Format = PixelFormat.R32G32B32A32Float,
-                    ArrayLayers = (uint)img.Frames.Count,
                 }
             );
-            foreach (var f in img.Frames) { }
+
+            long totLength = ImgStream.Length - ImgStream.Position;
+
+            long bytesPerLayer = totLength / metaData.ArrayLayers;
+
+            for (uint arrayLayer = 0; arrayLayer < metaData.ArrayLayers; arrayLayer++)
+            {
+                byte[] layerBytes = new byte[bytesPerLayer];
+                await ImgStream.ReadExactlyAsync(layerBytes);
+
+                t.Update(layerBytes, arrayLayer: arrayLayer);
+            }
         }
         catch
         {
             t?.Dispose();
-        }
-        finally
-        {
-            img?.Dispose();
+            t = null;
+            throw;
         }
         if (t == null)
             return;
@@ -136,5 +159,29 @@ public class ResourceSetArg
     {
         Texture = t;
         ResourceSet = rs;
+    }
+}
+
+[StructLayout(LayoutKind.Explicit, Size = 16)]
+public struct TextureResourceStreamInfo
+{
+    [FieldOffset(0)]
+    public uint Width = 0;
+
+    [FieldOffset(4)]
+    public uint Height = 0;
+
+    [FieldOffset(8)]
+    public ushort Format = (ushort)PixelFormat.R8G8B8A8UNorm;
+
+    [FieldOffset(12)]
+    public uint ArrayLayers = 1;
+
+    public TextureResourceStreamInfo(uint width, uint height, PixelFormat format, uint arrayLayers)
+    {
+        Width = width;
+        Height = height;
+        Format = (ushort)format;
+        ArrayLayers = arrayLayers;
     }
 }

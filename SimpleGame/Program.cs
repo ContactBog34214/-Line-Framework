@@ -1,6 +1,9 @@
-﻿using System.Diagnostics;
+﻿using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Numerics;
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using Line.Framework;
 using Line.Framework.Default.Graphics;
@@ -13,6 +16,7 @@ using Line.Framework.Resource.Graphic;
 using Line.Framework.Sandbox;
 using Line.Framework.Types;
 using Line.Framework.UI;
+using StbImageSharp;
 #pragma warning disable CS8618
 
 namespace SimpleGame;
@@ -59,7 +63,7 @@ public static class SimpleGameMain
         Host = new Window(Backend: GraphicBackend.Vulkan)
         {
             Title = "-Line-Framework example",
-            UpdatePerSecond = 10000,
+            UpdatePerSecond = 1000,
         };
         Host.SetIcon(assembly.GetManifestResourceStream("SimpleGame.assets.-L-F.png"));
         if (args.Contains("--OutputEvent"))
@@ -89,12 +93,12 @@ public static class SimpleGameMain
         Host.Resource?.Create(
             "Image",
             "Icon",
-            assembly.GetManifestResourceStream("SimpleGame.assets.-L-F.png")
+            ConvertImageStream(assembly.GetManifestResourceStream("SimpleGame.assets.-L-F.png"))
         );
         Host.Resource?.Create(
             "Image",
             "Cursor",
-            assembly.GetManifestResourceStream("SimpleGame.assets.cursor.png")
+            ConvertImageStream(assembly.GetManifestResourceStream("SimpleGame.assets.cursor.png"))
         );
         Log.Debug("Loaded Font");
 
@@ -180,7 +184,7 @@ public static class SimpleGameMain
             spinnerBox.Rotation = r;
             Image.Rotation = r;
         };
-        Host.FramePerSecond = 5000;
+        Host.FramePerSecond = 90;
         Host.FocusGained += () =>
         {
             Host.VSync = false;
@@ -408,5 +412,30 @@ public static class SimpleGameMain
                 b.Dispose();
             }
         };
+    }
+
+    public static Stream ConvertImageStream(Stream img)
+    {
+        var imgR = ImageResult.FromStream(img, ColorComponents.RedGreenBlueAlpha);
+        TextureResourceStreamInfo info = new()
+        {
+            Format = (ushort)PixelFormat.R8G8B8A8UNorm,
+            Width = (uint)imgR.Width,
+            Height = (uint)imgR.Height,
+            ArrayLayers = 1,
+        };
+        MemoryStream stream = new();
+        Span<byte> buf = stackalloc byte[2];
+        BinaryPrimitives.WriteUInt16LittleEndian(
+            buf,
+            (ushort)Unsafe.SizeOf<TextureResourceStreamInfo>()
+        );
+        stream.Write(buf);
+
+        buf = stackalloc byte[Unsafe.SizeOf<TextureResourceStreamInfo>()];
+        MemoryMarshal.Write(buf, in info);
+        stream.Write(buf);
+        stream.Write(imgR.Data);
+        return stream;
     }
 }

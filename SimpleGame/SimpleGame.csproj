@@ -11,6 +11,7 @@
     <ProjectReference Include="../Line.Framework/Line.Framework.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="StbImageSharp" Version="2.30.16" />
     <PackageReference Include="Veldrid" Version="4.9.0" />
     <PackageReference Include="Veldrid.SPIRV" Version="1.0.15" />
     <PackageReference Include="Veldrid.StartupUtilities" Version="4.9.0" />
