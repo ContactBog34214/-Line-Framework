@@ -1,3 +1,4 @@
+using Line.Framework;
 using Line.Framework.Graphics;
 using Line.Framework.Types;
 using SDL3;
@@ -31,6 +32,29 @@ public sealed class SDL3CommandList : ICommandList
     private (uint Index, RgbaFloat Color)? pendingClear;
 
     private bool recording;
+
+    /// <summary>连续拿到空交换链纹理的帧数，用于一次性告警。</summary>
+    private static int emptyAcquireCount;
+
+    /// <summary>提交 / present 失败是否已告警（避免每帧刷屏）。</summary>
+    private static bool reportedSubmitFailure;
+
+    /// <summary>
+    /// 最近一次 SetGraphicsResourceSet 登记的资源集。
+    /// <para>
+    /// 采样器绑定必须在渲染通道内进行，而调用方可能在通道开启前就绑定资源集，
+    /// 因此把它缓存下来，等通道真正开启后再应用（见 ApplyPendingSamplers）。
+    /// </para>
+    /// </summary>
+    private SDL3ResourceSet pendingSet;
+
+    private uint pendingSlot;
+
+    private static string LogicalSizeText(IntPtr window) =>
+        SDL.GetWindowSize(window, out var w, out var h) ? $"{w}x{h}" : $"?({SDL.GetError()})";
+
+    private static string PixelSizeText(IntPtr window) =>
+        SDL.GetWindowSizeInPixels(window, out var w, out var h) ? $"{w}x{h}" : $"?({SDL.GetError()})";
 
     public string Name { get; internal set; } = "SDL3CommandList";
 
@@ -96,6 +120,8 @@ public sealed class SDL3CommandList : ICommandList
         renderPass = IntPtr.Zero;
         pendingClear = null;
         target = null;
+        pendingSet = null;
+        pendingSlot = 0;
         recording = true;
     }
 
@@ -165,6 +191,10 @@ public sealed class SDL3CommandList : ICommandList
         // 断言直接 abort（退出码 134），比不设更危险。
         //
         // 需要局部裁剪时走 SetScissorRect，届时再补 viewport 逻辑。
+
+        // 通道刚开启：把之前登记但还没能应用的采样器绑定补上。
+        // 调用方在 SetFrameBuffer 之前绑定资源集时，走的就是这条路径。
+        ApplyPendingSamplers();
     }
 
     // ---------------------------------------------------------------- 状态绑定
@@ -202,11 +232,27 @@ public sealed class SDL3CommandList : ICommandList
 
         // 窗口最小化、尚未真正呈现等情况下 texture 会是 0 —— 这不是错误。
         // 此时必须放弃本帧：拿 0 去 BeginGPURenderPass 会在原生层直接段错误。
+        //
+        // 但它同时也是「窗口开着、画面不动、还不报错」最常见的元凶：
+        // 一帧都拿不到纹理 → 本帧所有绘制被静默跳过。所以这里要告警一次。
         if (texture == IntPtr.Zero)
         {
             target = null;
+            if (++emptyAcquireCount == 1)
+                Log.Warning(
+                    "[SDL3] SDL_WaitAndAcquireGPUSwapchainTexture returned a null texture; "
+                        + "frames will be dropped silently. "
+                        + $"driver={SDL.GetCurrentVideoDriver()} "
+                        + $"windowFlags=0x{(ulong)SDL.GetWindowFlags(fb.Window):X} "
+                        + $"logical={LogicalSizeText(fb.Window)} "
+                        + $"pixel={PixelSizeText(fb.Window)}"
+                );
             return;
         }
+
+        if (emptyAcquireCount > 0)
+            Log.Info($"[SDL3] swapchain texture acquired after {emptyAcquireCount} empty frame(s).");
+        emptyAcquireCount = 0;
 
         fb.AcquiredTexture = texture;
         fb.AcquiredWidth = width;
@@ -275,14 +321,65 @@ public sealed class SDL3CommandList : ICommandList
                 nameof(resourceSet)
             );
 
-        EnsurePass();
-        if (renderPass == IntPtr.Zero)
+        if (!recording || cmd == IntPtr.Zero)
+            throw new InvalidOperationException(
+                "SetGraphicsResourceSet must be called after Working = true."
+            );
+
+        // uniform 在 SDL3 里没有「绑定」这回事：
+        // SDL_PushGPU{Vertex,Fragment}UniformData 在记录期就把数据拷贝进
+        // 命令缓冲内部，之后所有绘制读的都是这份快照。
+        //   → 改了 SDL3UniformBuffer 的内容而不重新 SetGraphicsResourceSet，
+        //     本帧后续绘制仍然用旧数据。
+        //
+        // 它只需要命令缓冲有效，**不需要**渲染通道，也**不需要**交换链纹理。
+        // 因此这里在一切之前先推：调用方把 SetGraphicsResourceSet 放在
+        // SetFrameBuffer / SetPipeline 之前或之后都能工作。
+        uint vslot = slot;
+        foreach (var u in rs.VertexUniforms)
+            SDL.PushGPUVertexUniformData(cmd, vslot++, u.Bytes, (uint)u.SizeInBytes);
+
+        uint fslot = slot;
+        foreach (var u in rs.FragmentUniforms)
+            SDL.PushGPUFragmentUniformData(cmd, fslot++, u.Bytes, (uint)u.SizeInBytes);
+
+        // 采样器绑定必须发生在渲染通道内（SDL_BindGPU*Samplers 的第一个参数是
+        // render pass）。而调用方可能在通道开启之前就绑定资源集，
+        // 所以这里只登记，等通道真正开启时再应用 —— 见 ApplyPendingSamplers。
+        pendingSet = rs;
+        pendingSlot = slot;
+
+        // 若通道已经开着（调用方在 SetPipeline 之后绑定），立刻补上采样器；
+        // 否则留到 EnsurePass 成功时由它调用 ApplyPendingSamplers。
+        ApplyPendingSamplers();
+    }
+
+    /// <summary>
+    /// 把最近一次 <see cref="SetGraphicsResourceSet"/> 登记的采样器绑定应用到
+    /// 当前渲染通道。通道尚未开启时是空操作，等 <see cref="EnsurePass"/> 之后重试。
+    /// </summary>
+    private void ApplyPendingSamplers()
+    {
+        if (pendingSet is null || renderPass == IntPtr.Zero)
             return;
 
-        // SDL3 没有 descriptor set：纹理与采样器成对直接绑到通道上。
-        // 抽象层的 TextureSampler 正好一个对应一个绑定。
-        if (rs.Bindings.Length > 0)
-            SDL.BindGPUFragmentSamplers(renderPass, slot, rs.Bindings, (uint)rs.Bindings.Length);
+        var rs = pendingSet;
+        var slot = pendingSlot;
+
+        if (rs.VertexSamplers.Length > 0)
+            SDL.BindGPUVertexSamplers(
+                renderPass,
+                slot,
+                rs.VertexSamplers,
+                (uint)rs.VertexSamplers.Length
+            );
+        if (rs.FragmentSamplers.Length > 0)
+            SDL.BindGPUFragmentSamplers(
+                renderPass,
+                slot,
+                rs.FragmentSamplers,
+                (uint)rs.FragmentSamplers.Length
+            );
     }
 
     public void SetScissorRect(uint index, uint x, uint y, uint width, uint height)
@@ -324,12 +421,23 @@ public sealed class SDL3CommandList : ICommandList
 
         if (cmd != IntPtr.Zero)
         {
-            SDL.SubmitGPUCommandBuffer(cmd);
+            // SDL_SubmitGPUCommandBuffer 同时完成「提交 + 呈现」。
+            // 返回值必须检查：它失败时画面会原样停住（不再呈现新帧），
+            // 而没有异常、没有断言，是最容易误判成「渲染没生效」的一种失败。
+            if (!SDL.SubmitGPUCommandBuffer(cmd) && !reportedSubmitFailure)
+            {
+                reportedSubmitFailure = true;
+                Log.Error(
+                    $"[SDL3] SDL_SubmitGPUCommandBuffer failed: {SDL.GetError()}. "
+                        + "Frames will stop being presented."
+                );
+            }
             cmd = IntPtr.Zero;
         }
 
         target = null;
         pendingClear = null;
+        pendingSet = null;
     }
 
     public void Dispose()

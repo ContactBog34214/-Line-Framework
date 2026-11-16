@@ -57,7 +57,10 @@ public sealed class SDL3Texture : ITexture
 
         int w = width ?? (int)Width - x;
         int h = height ?? (int)Height - y;
-        int d = depth ?? 1;
+        // 与 VeldridTexture.Update 保持一致：不指定 depth 时上传「从 z 到末尾」的整个体积。
+        // 若这里只取 1，传入完整体积的数据就会被下面的长度校验拒绝，
+        // 同一份 TextureCreateInfo + Update 调用在两个后端上行为不同。
+        int d = depth ?? (int)Depth - z;
 
         if (x < 0 || y < 0 || z < 0)
             throw new ArgumentOutOfRangeException(

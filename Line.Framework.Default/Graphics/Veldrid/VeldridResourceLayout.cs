@@ -1,3 +1,4 @@
+using Line.Framework;
 using Line.Framework.Graphics;
 
 namespace Line.Framework.Default.Graphics.Veldrid;
@@ -63,7 +64,13 @@ public sealed partial class VeldridResourceFactory
             snapshot.Length * 2
         );
 
-        for (int i = 0; i < snapshot.Length; i++)
+        // 按 ResourceLayoutOrdering 的规范顺序展开，而不是按元素声明顺序。
+        //
+        // 这是「两个后端槽位一致」的关键：SDL3 强制 sampler → storage →
+        // uniform 分组，Veldrid 若照声明顺序展开就会与之错位。
+        // 顺序规则收拢在 ResourceLayoutOrdering，CreateResourceSet 用同一个，
+        // 因此「布局描述」与「实际 BoundResources」永远对齐。
+        foreach (var i in ResourceLayoutOrdering.CanonicalOrder(snapshot))
         {
             var e = snapshot[i];
 
@@ -94,6 +101,9 @@ public sealed partial class VeldridResourceFactory
             new global::Veldrid.ResourceLayoutDescription(elements.ToArray())
         );
         layout.Name = $"ResourceLayout/{snapshot.Length}";
+
+        // 槽位映射排查用，需要时打开：
+        // Log.Debug($"[Veldrid] layout slots: {ResourceLayoutOrdering.Describe(snapshot, sdl3: false)}");
 
         return new VeldridResourceLayout(layout, snapshot);
     }

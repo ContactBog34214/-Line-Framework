@@ -74,56 +74,105 @@ public sealed partial class VeldridResourceFactory
                 nameof(createInfo)
             );
 
-        // 当前只支持单个元素、且必须是 TextureSampler。
-        // 多元素布局等真有需求时再改成按 elements 逐项装配。
-        if (elements.Length != 1)
-            throw new NotSupportedException(
-                $"Layout has {elements.Length} elements; only single-element layouts are "
-                    + "supported by this overload. Extend CreateResourceSet before using it."
-            );
-
-        var kind = elements[0].Kind;
-        if (kind != ResourceKind.TextureSampler)
-            throw new NotSupportedException(
-                $"Layout element '{elements[0].Name}' is {kind}; "
-                    + "only TextureSampler is currently supported."
-            );
-
-        var texture = createInfo.Texture;
-        if (texture is null)
+        var bindings = createInfo.ResolveBindings();
+        if (bindings.Length != elements.Length)
             throw new ArgumentException(
-                $"Layout element '{elements[0].Name}' is a TextureSampler but "
-                    + "ResourceSetCreateInfo.Texture is null.",
-                nameof(createInfo)
-            );
-        if (texture is not VeldridTexture vtex)
-            throw new ArgumentException(
-                $"Texture {texture.GetType().Name} is not a VeldridTexture.",
-                nameof(createInfo)
-            );
-        if ((texture.Usage & TextureUsage.Sampled) == 0)
-            throw new ArgumentException(
-                $"Texture was created with Usage = {texture.Usage}, which does not include "
-                    + "Sampled. It cannot be bound to a TextureSampler slot — pass "
-                    + "TextureUsage.Sampled (or Sampled | ColorTarget) when creating it.",
+                $"Layout declares {elements.Length} element(s) but "
+                    + $"{bindings.Length} binding(s) were supplied. "
+                    + "Bindings are matched to elements by position.",
                 nameof(createInfo)
             );
 
-        var samplerOwner = createInfo.Sampler ?? DefaultSampler;
-        if (samplerOwner is not VeldridSampler vsampler)
-            throw new ArgumentException(
-                $"Sampler {samplerOwner.GetType().Name} is not a VeldridSampler.",
-                nameof(createInfo)
-            );
-
-        // 顺序必须与 CreateResourceLayout 的展开顺序一致：先纹理、后采样器。
+        // 展开顺序必须与 CreateResourceLayout 完全一致：
+        //   TextureSampler → [纹理, 采样器]（先纹理、后采样器）
+        //   UniformBuffer  → [缓冲]
         // 写反了不会报错，但采样器会绑到纹理槽上，画面全黑。
-        global::Veldrid.BindableResource[] bound = [vtex.texture, vsampler.sampler];
+        var bound = new List<global::Veldrid.BindableResource>(elements.Length * 2);
+
+        // 必须与 CreateResourceLayout 用完全相同的顺序规则，
+        // 否则 BoundResources 与 ResourceLayout 的槽位对不上。
+        foreach (var i in ResourceLayoutOrdering.CanonicalOrder(elements))
+        {
+            var e = elements[i];
+            var b = bindings[i];
+            var label = string.IsNullOrEmpty(e.Name) ? $"#{i}" : $"'{e.Name}'";
+
+            if (e.Stages == ShaderStage.None)
+                throw new ArgumentException(
+                    $"Layout element {label} declares no shader stage.",
+                    nameof(createInfo)
+                );
+
+            switch (e.Kind)
+            {
+                case ResourceKind.TextureSampler:
+                {
+                    if (b.Texture is not VeldridTexture texture)
+                        throw new ArgumentException(
+                            $"Layout element {label} is TextureSampler but the binding is "
+                                + $"{b.Texture?.GetType().Name ?? "not a texture"}.",
+                            nameof(createInfo)
+                        );
+                    if ((texture.Usage & TextureUsage.Sampled) == 0)
+                        throw new ArgumentException(
+                            $"Texture bound to {label} was created with Usage = "
+                                + $"{texture.Usage}, which does not include Sampled. It cannot "
+                                + "be bound to a TextureSampler slot — pass TextureUsage.Sampled "
+                                + "(or Sampled | ColorTarget) when creating it.",
+                            nameof(createInfo)
+                        );
+
+                    var samplerOwner = b.Sampler ?? DefaultSampler;
+                    if (samplerOwner is not VeldridSampler sampler)
+                        throw new ArgumentException(
+                            $"Sampler bound to {label} is "
+                                + $"{samplerOwner?.GetType().Name ?? "null"}, not a VeldridSampler.",
+                            nameof(createInfo)
+                        );
+
+                    bound.Add(texture.texture);
+                    bound.Add(sampler.sampler);
+                    break;
+                }
+
+                case ResourceKind.UniformBuffer:
+                {
+                    if (b.Buffer is not VeldridBuffer buffer)
+                        throw new ArgumentException(
+                            $"Layout element {label} is UniformBuffer but the binding is "
+                                + $"{b.Buffer?.GetType().Name ?? "not a buffer"}.",
+                            nameof(createInfo)
+                        );
+                    if ((buffer.Usage & BufferUsage.Uniform) == 0)
+                        throw new ArgumentException(
+                            $"Buffer bound to {label} was created with Usage = {buffer.Usage}, "
+                                + "which does not include Uniform. Veldrid rejects the binding "
+                                + "at pipeline/descriptor level — pass BufferUsage.Uniform.",
+                            nameof(createInfo)
+                        );
+                    if (e.SizeInBytes > 0 && buffer.SizeInBytes < e.SizeInBytes)
+                        throw new ArgumentException(
+                            $"Layout element {label} expects {e.SizeInBytes} bytes but the "
+                                + $"bound buffer is {buffer.SizeInBytes} bytes.",
+                            nameof(createInfo)
+                        );
+
+                    bound.Add(buffer.buffer);
+                    break;
+                }
+
+                default:
+                    throw new NotSupportedException(
+                        $"Layout element {label} is {e.Kind}; the Veldrid backend currently "
+                            + "supports UniformBuffer and TextureSampler only."
+                    );
+            }
+        }
 
         var set = dev.ResourceFactory.CreateResourceSet(
-            new global::Veldrid.ResourceSetDescription(layout.ResourceLayout, bound)
+            new global::Veldrid.ResourceSetDescription(layout.ResourceLayout, [.. bound])
         );
-        set.Name = $"ResourceSet/{elements[0].Name}";
+        set.Name = $"ResourceSet/{elements.Length}";
 
         return new VeldridResourceSet(set, createInfo.Layout);
     }

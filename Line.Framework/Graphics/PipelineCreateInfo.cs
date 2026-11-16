@@ -1,12 +1,30 @@
 namespace Line.Framework.Graphics;
 
+/// <summary>
+/// 创建管线的参数。
+/// <para>
+/// 采用「公共部分 + 类型化 Mode」的结构：资源布局对所有管线类型通用，
+/// 而具体的状态描述放在 <see cref="Mode"/> 里，由后端按实际类型分发。
+/// 图形管线对应 <see cref="GraphicsDescription"/>。
+/// </para>
+/// </summary>
 public struct PipelineCreateInfo
 {
+    /// <summary>
+    /// 资源布局数组，<b>下标即 <c>SetGraphicsResourceSet</c> 的槽位号</b>。
+    /// 不使用资源时传空数组（不要传 null）。
+    /// </summary>
     public IResourceLayout[] ResourceLayouts { get; set; }
 
-    //独特数据值部分
+    /// <summary>
+    /// 类型化的管线描述。图形管线必须是 <see cref="GraphicsDescription"/>，
+    /// 其他类型后端会抛 <see cref="NotSupportedException"/>。
+    /// </summary>
     public IExtraCreateInfo Mode { get; set; }
 
+    /// <summary>
+    /// 管线描述的标记接口，用于让 <see cref="Mode"/> 能承载不同类型的描述。
+    /// </summary>
     public interface IExtraCreateInfo;
 }
 

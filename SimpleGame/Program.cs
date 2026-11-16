@@ -131,7 +131,7 @@ public static class SimpleGameMain
             Parent = Background,
             TouchMode = TouchModes.All,
             Index = 0,
-            Opacity = 0.5f,
+            Opacity = 1f,
         };
         var Image = new UIImage(Host.Resource)
         {
@@ -143,6 +143,7 @@ public static class SimpleGameMain
             TextureId = "Icon",
             TouchMode = TouchModes.None,
             Index = 10,
+            Opacity = 1f,
         };
 
         var cs = new UIImage(Host.Resource)
@@ -184,7 +185,7 @@ public static class SimpleGameMain
             spinnerBox.Rotation = r;
             Image.Rotation = r;
         };
-        Host.FramePerSecond = 90;
+        Host.FramePerSecond = 960;
         Host.FocusGained += () =>
         {
             Host.VSync = false;
@@ -222,7 +223,7 @@ public static class SimpleGameMain
         };
 
         VisualTouch();
-        Host.Scale = 1f;
+        Host.Scale = 1.2f;
 
         Host.RequestQuit = async () =>
         {

@@ -181,20 +181,43 @@ public partial class VeldridConverter
         };
     }
 
+    /// <summary>
+    /// 抽象层纹理类型 → Veldrid 纹理类型。
+    /// <para>
+    /// <b>数组类型要降维映射</b>：<c>Veldrid.TextureType</c> 只有
+    /// 1D / 2D / 3D 三个取值，没有数组类型 —— 数组层数由
+    /// <see cref="TextureCreateInfo.ArrayLayers"/> 单独表达。
+    /// 因此 <c>Texture2DArray</c> 要映射成 <c>Texture2D</c> 而不是抛异常，
+    /// 否则同一份 TextureCreateInfo 在 SDL3 上能建、在 Veldrid 上建不了。
+    /// </para>
+    /// </summary>
     public static global::Veldrid.TextureType ConvertTextureType(TextureType type)
     {
         return type switch
         {
-            TextureType.Texture1D => global::Veldrid.TextureType.Texture1D,
+            // 一维（含一维数组）
+            TextureType.Texture1D or TextureType.Texture1DArray =>
+                global::Veldrid.TextureType.Texture1D,
 
-            TextureType.Texture2D => global::Veldrid.TextureType.Texture2D,
+            // 二维（含二维数组）
+            TextureType.Texture2D or TextureType.Texture2DArray =>
+                global::Veldrid.TextureType.Texture2D,
 
             TextureType.Texture3D => global::Veldrid.TextureType.Texture3D,
 
+            // 立方体在 Veldrid 4.9 的 TextureType 里没有对应值，
+            // 且球面寻址语义无法用普通 2D 表达，这里保持明确拒绝。
             _ => throw new NotSupportedException($"Unsupported texture type: {type}"),
         };
     }
 
+    /// <summary>
+    /// Veldrid 纹理类型 → 抽象层纹理类型。
+    /// <para>
+    /// 只有维度信息可还原；是否为数组要看实际的 <c>ArrayLayers</c>，
+    /// 因此这里一律返回非数组类型（<see cref="TextureType.Texture2D"/> 等）。
+    /// </para>
+    /// </summary>
     public static TextureType ConvertTextureType(global::Veldrid.TextureType type)
     {
         return type switch

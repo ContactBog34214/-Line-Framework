@@ -15,13 +15,34 @@ public static class GT
     /// <summary>
     /// 切换图形后端。false = SDL3，true = Veldrid。
     /// <para>
-    /// 注意：Veldrid 后端的 <c>IResourceFactory.CreateShader</c> 目前走的是
-    /// Veldrid.SPIRV 的单参重载，那个重载是 compute 专用，
-    /// 传顶点/片元着色器会在创建阶段失败。
+    /// 两个后端现在吃同一份 GLSL 源码：SDL3 在工厂内编 SPIR-V，
+    /// Veldrid 也先编 SPIR-V 再创建（Vulkan 后端直接用它）。
     /// </para>
     /// </summary>
     private static readonly bool UseVeldridBackend = true;
     private static readonly int alpha = 255;
+
+    /// <summary>
+    /// true = 跑 UBO 版（静态顶点缓冲 + 每帧 80 字节 uniform），
+    /// false = 跑原来的 CPU 变换版。
+    /// <para>
+    /// 两个示例共用同一套设备 / 交换链初始化，只换渲染内容，
+    /// 便于对照「UBO 到底把哪些工作移到了 GPU」。
+    /// </para>
+    /// </summary>
+    private const bool UseUniformBufferDemo = true;
+
+    /// <summary>true = 打印 Debug 级诊断（着色器资源计数、资源集首绑信息）。</summary>
+    private const bool VerboseLog = true;
+
+    /// <summary>
+    /// true = 用探针版顶点着色器：位置硬编码、颜色只反映 UBO 的内容。
+    /// <para>
+    /// 纯灰方块 = uniform 读到的全是 0；偏黄白且有脉动 = 链路正常。
+    /// 排查 uniform 投递时临时打开，正常渲染请保持 false。
+    /// </para>
+    /// </summary>
+    private const bool UniformProbeMode = false;
 
     /// <summary>默认 Vulkan。</summary>
     private const GraphicBackend Backend = GraphicBackend.Vulkan;
@@ -32,8 +53,9 @@ public static class GT
     /// <summary>
     /// 顶点着色器。只做 NDC 直通。
     /// <para>
-    /// 3D 变换、透视投影、深度排序全部在 CPU 端完成，
-    /// 因为抽象层目前没有 UBO 绑定和深度缓冲支持。
+    /// 这是 <see cref="RunLoop"/>（CPU 变换版）用的着色器：
+    /// 3D 变换、透视投影、深度排序全部在 CPU 端完成。
+    /// UBO 版用 <see cref="UniformVertexCode"/>，变换挪到了 GPU。
     /// </para>
     /// </summary>
     public const string VertexCode =
@@ -70,7 +92,9 @@ void main()
 
     public static async Task Main()
     {
-        Log.SetMinLevel(LogLevel.Warning);
+        // Debug 级别会打出每个着色器统计到的资源数量、以及资源集首绑的槽位信息。
+        // 排查「窗口开着但不渲染」时先打开它。
+        Log.SetMinLevel(VerboseLog ? LogLevel.Debug : LogLevel.Warning);
         Log.EnableConsole(true);
         Log.SetLogFile(null);
 
@@ -78,13 +102,23 @@ void main()
         // SDL_WasInit 返回「已初始化子系统的掩码」，不是 bool。
         if ((SDL.WasInit(SDL.InitFlags.Video) & SDL.InitFlags.Video) == 0)
         {
-            // 留空表示让 SDL 自选（X11 / Wayland 都行），
-            // 想强制指定可改成 "x11" 或 "wayland"。
-            if (
-                OperatingSystem.IsLinux()
-                && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"))
-            )
-                SDL.SetHint(SDL.Hints.VideoDriver, "wayland");
+            // 视频驱动必须在 SDL_Init 之前选好。
+            //
+            // SDL3 GPU 在 Wayland 下拿不到可用的交换链纹理
+            //（SDL_WaitAndAcquireGPUSwapchainTexture 返回 0），
+            // 表现为「窗口开着、画面不动、也不报错」。
+            // Veldrid 走的是自己的 wl_surface 路径，不受影响，
+            // 所以只在 SDL3 后端下强制 X11（经 XWayland）。
+            if (OperatingSystem.IsLinux())
+            {
+                if (!UseVeldridBackend)
+                    SDL.SetHint(SDL.Hints.VideoDriver, "x11");
+                else if (
+                    !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"))
+                )
+                    SDL.SetHint(SDL.Hints.VideoDriver, "wayland");
+            }
+
             if (!SDL.Init(SDL.InitFlags.Video))
                 throw new InvalidOperationException($"SDL_Init failed: {SDL.GetError()}");
         }
@@ -181,7 +215,10 @@ void main()
         using (dev)
         using (chain)
         {
-            RunLoop(dev, chain, window);
+            if (UseUniformBufferDemo)
+                RunUniformCube(dev, chain, window);
+            else
+                RunLoop(dev, chain, window);
         }
 
         SDL.DestroyWindow(window);
@@ -528,4 +565,486 @@ void main()
 
         dev.WaitForIdle();
     }
+
+    // =====================================================================
+    //  UniformBuffer 示例
+    // =====================================================================
+
+    /// <summary>
+    /// 顶点着色器：3D 变换改由 GPU 完成，矩阵来自 UBO。
+    /// <para>
+    /// <b>std140 与 C# 侧的对应关系</b>：块内 80 字节 = mat4 Mvp(0..63) + vec4 Tint(64..79)。
+    /// 声明顺序必须与 <see cref="TransformUniform"/> 的字段顺序完全一致，
+    /// 否则 Tint 会读到 Mvp 里，表现为颜色全错。
+    /// </para>
+    /// <para>
+    /// <c>set = 0, binding = 0</c> 是<b>抽象层的通用约定</b>（与 Veldrid 的
+    /// ResourceBindingModel.Default 一致）。SDL3 后端会在编译 GLSL 时
+    /// 按阶段重写成它自己的约定（顶点 set 1 / 片元 set 3），
+    /// 因此这份 shader 不需要为任何后端特化。
+    /// </para>
+    /// </summary>
+    private const string UniformVertexCode =
+        @"
+#version 450
+layout(location = 0) in vec3 Position;
+layout(location = 1) in vec4 Color;
+
+layout(location = 0) out vec4 fsin_Color;
+
+layout(set = 0, binding = 0, std140) uniform Transform
+{
+    mat4 Mvp;
+    vec4 Tint;
+} ubo;
+
+void main()
+{
+    gl_Position = ubo.Mvp * vec4(Position, 1.0);
+    fsin_Color = Color * ubo.Tint;
+}";
+
+    /// <summary>
+    /// uniform 探针版顶点着色器（阶段隔离实验用）。
+    /// <para>
+    /// 位置硬编码（保证一定有像素），**完全不读 uniform** ——
+    /// 顶点阶段只把顶点色传给片元，uniform 的读取交给
+    /// <see cref="ProbeFragmentCode"/>。
+    /// 这样顶点 / 片元两条 uniform 路径可以被分开测。
+    /// </para>
+    /// </summary>
+    private const string ProbeVertexCode =
+        @"
+#version 450
+layout(location = 0) in vec3 Position;
+layout(location = 1) in vec4 Color;
+
+layout(location = 0) out vec4 fsin_Color;
+
+void main()
+{
+    gl_Position = vec4(Position.xy * 0.4, 0.5, 1.0);
+    fsin_Color = Color;
+}";
+
+    /// <summary>
+    /// uniform 探针版片元着色器：颜色只由 UBO 决定。
+    /// <para>
+    /// 读数全为 0 → 纯灰 (0.25, 0.25, 0.25)；
+    /// 有数据 → 绿色通道按 Tint.x 脉动，红色通道按 Mvp[0][0] 常亮。
+    /// </para>
+    /// <para>
+    /// 与顶点版配合使用，用来判断「顶点 uniform 路径」和「片元 uniform 路径」
+    /// 是同时失效还是只有一边失效。
+    /// </para>
+    /// </summary>
+    private const string ProbeFragmentCode =
+        @"
+#version 450
+layout(location = 0) in vec4 fsin_Color;
+
+layout(location = 0) out vec4 fsout_Color;
+
+layout(set = 0, binding = 0, std140) uniform Transform
+{
+    mat4 Mvp;
+    vec4 Tint;
+} ubo;
+
+void main()
+{
+    float a = clamp(abs(ubo.Mvp[0][0]) * 0.25, 0.0, 1.0);
+    float b = clamp(abs(ubo.Tint.x) * 0.5, 0.0, 1.0);
+    fsout_Color = vec4(0.25 + a * 0.75, 0.25 + b * 0.75, 0.25, 1.0);
+}";
+
+    private const string UniformFragmentCode =
+        @"
+#version 450
+layout(location = 0) in vec4 fsin_Color;
+
+layout(location = 0) out vec4 fsout_Color;
+
+void main()
+{
+    fsout_Color = fsin_Color;
+}";
+
+    /// <summary>
+    /// UBO 的 C# 侧布局，必须与 shader 里的块逐字段对应。
+    /// <para>
+    /// <c>Matrix4x4</c> 在 .NET 里是行主序 + 行向量约定，
+    /// 而 GLSL 按列主序解释同一块内存 —— 两者刚好互相抵消，
+    /// 所以<b>直接上传、不要转置</b>。转置反而会得到错误的矩阵。
+    /// </para>
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
+    private struct TransformUniform
+    {
+        /// <summary>offset 0，64 字节。</summary>
+        public Matrix4x4 Mvp;
+
+        /// <summary>offset 64，16 字节。</summary>
+        public Vector4 Tint;
+
+        /// <summary>std140 大小：80 字节（16 的倍数，无需尾部补齐）。</summary>
+        public const uint SizeInBytes = 80;
+    }
+
+    /// <summary>
+    /// UBO 版立方体。
+    /// <para>
+    /// 与 <see cref="RunLoop"/> 的差别：
+    /// <list type="bullet">
+    /// <item>顶点数据完全静态，开头上传一次，之后不再动</item>
+    /// <item>每帧只更新 80 字节 UBO，CPU 不再重算 36 个投影后顶点</item>
+    /// <item>遮挡关系靠「6 个面各一次 Draw + 按深度排序」，不需要重建缓冲</item>
+    /// </list>
+    /// </para>
+    /// </summary>
+    private static void RunUniformCube(IGraphicsDevice dev, ISwapchain chain, IntPtr window)
+    {
+        const float CameraDistance = 4.5f;
+        const float FocalLength = 2.5f;
+        const float Near = 0.1f;
+        const float Far = 100f;
+        const int VertsPerFace = 6;
+
+        // ---- 资源布局 + UBO + 资源集 --------------------------------------
+        // 释放顺序由 using 的逆序保证：resourceSet 先于 ubo，ubo 先于 layout。
+        using var uboLayout = dev.ResourceFactory.CreateResourceLayout(
+            new ResourceLayoutCreateInfo
+            {
+                Elements =
+                [
+                    new()
+                    {
+                        Name = "Transform",
+                        Kind = ResourceKind.UniformBuffer,
+                        // 探针模式下片元着色器也要读同一个 UBO，
+                        // 因此该元素必须同时声明两个阶段 ——
+                        // 否则 SDL3ResourceSet 不会往片元槽位推送。
+                        Stages = UniformProbeMode
+                            ? ShaderStage.Vertex | ShaderStage.Fragment
+                            : ShaderStage.Vertex,
+                        SizeInBytes = TransformUniform.SizeInBytes,
+                    },
+                ],
+            }
+        );
+
+        using var ubo = dev.ResourceFactory.CreateBuffer(
+            new BufferCreateInfo
+            {
+                SizeInBytes = TransformUniform.SizeInBytes,
+                // Uniform 标志在 Veldrid 侧是绑定校验的硬要求；
+                // Dynamic 表示每帧重写（Veldrid 用可映射内存）。
+                // SDL3 侧这一整块会变成 CPU 影子，不走 GPU 缓冲。
+                Usage = BufferUsage.Uniform | BufferUsage.Dynamic,
+            }
+        );
+
+        using var resourceSet = dev.ResourceFactory.CreateResourceSet(
+            new ResourceSetCreateInfo
+            {
+                Layout = uboLayout,
+                Bindings = [ResourceBinding.FromBuffer(ubo)],
+            }
+        );
+
+        // ---- 着色器 -------------------------------------------------------
+        // 两个后端吃同一份 GLSL：SDL3 自己编 SPIR-V，
+        // Veldrid 的工厂内部编 SPIR-V 再交叉编译。
+        using var vs = dev.ResourceFactory.CreateShader(
+            new()
+            {
+                Stage = ShaderStage.Vertex,
+                Bytes = Encoding.UTF8.GetBytes(
+                    UniformProbeMode ? ProbeVertexCode : UniformVertexCode
+                ),
+                EntryPoint = "main",
+                // SDL3 在创建着色器时就要知道用了几个 uniform，
+                // 缺了这个布局它会把 NumUniformBuffers 记成 0。
+                ResourceLayout = uboLayout,
+            }
+        );
+
+        using var fs = dev.ResourceFactory.CreateShader(
+            new()
+            {
+                Stage = ShaderStage.Fragment,
+                Bytes = Encoding.UTF8.GetBytes(
+                    UniformProbeMode ? ProbeFragmentCode : UniformFragmentCode
+                ),
+                EntryPoint = "main",
+                // 探针模式的片元着色器也读 ubo，同样要声明资源，
+                // 否则 SDL3 会把片元的 NumUniformBuffers 记成 0。
+                ResourceLayout = UniformProbeMode ? uboLayout : null,
+            }
+        );
+
+        // ---- 静态几何 -----------------------------------------------------
+        Vector3[] cubeCorners =
+        [
+            new(-1, -1, -1),
+            new(1, -1, -1),
+            new(1, 1, -1),
+            new(-1, 1, -1),
+            new(-1, -1, 1),
+            new(1, -1, 1),
+            new(1, 1, 1),
+            new(-1, 1, 1),
+        ];
+
+        int[][] faces =
+        [
+            [4, 5, 6, 4, 6, 7], // 前 (z = +1)
+            [1, 0, 3, 1, 3, 2], // 后 (z = -1)
+            [0, 4, 7, 0, 7, 3], // 左 (x = -1)
+            [5, 1, 2, 5, 2, 6], // 右 (x = +1)
+            [3, 7, 6, 3, 6, 2], // 上 (y = +1)
+            [0, 1, 5, 0, 5, 4], // 下 (y = -1)
+        ];
+
+        (float R, float G, float B)[] faceColors =
+        [
+            (1.00f, 0.30f, 0.30f),
+            (0.30f, 0.50f, 1.00f),
+            (0.30f, 1.00f, 0.40f),
+            (1.00f, 0.85f, 0.25f),
+            (0.75f, 0.40f, 1.00f),
+            (0.25f, 0.90f, 0.95f),
+        ];
+
+        // stride = 12(vec3) + 16(vec4) = 28
+        var layout = new VertexLayoutDescription
+        {
+            Stride = 28,
+            Attributes =
+            [
+                new() { Format = VertexFormat.Float3, Offset = 0 },
+                new() { Format = VertexFormat.Float4, Offset = 12 },
+            ],
+        };
+
+        using var pipeline = dev.ResourceFactory.CreatePipeline(
+            new()
+            {
+                Mode = new GraphicsDescription
+                {
+                    RasterizerState = new()
+                    {
+                        CullMode = FaceCullMode.None,
+                        FillMode = PolygonFillMode.Solid,
+                        FrontFace = FrontFace.Clockwise,
+                        DepthClipEnabled = true,
+                        ScissorTestEnabled = false,
+                    },
+                    PrimitiveTopology = PrimitiveTopology.TriangleList,
+                    ShaderSet = new() { Shaders = [vs, fs], VertexLayouts = [layout] },
+                    BlendState = BlendStateDescription.SingleAlphaBlend,
+                    Outputs = chain.FrameBuffer.OutputFormat,
+                    DepthStencilState = DepthStencilStateDescription.Disabled,
+                    FlipY = true,
+                },
+                ResourceLayouts = [uboLayout],
+            }
+        );
+
+        // 每面 6 个顶点，静态顶点缓冲
+        float[] verts = new float[6 * VertsPerFace * 7];
+        int c = 0;
+        for (int f = 0; f < 6; f++)
+        {
+            var col = faceColors[f];
+            for (int k = 0; k < VertsPerFace; k++)
+            {
+                var p = cubeCorners[faces[f][k]];
+                verts[c++] = p.X;
+                verts[c++] = p.Y;
+                verts[c++] = p.Z;
+                verts[c++] = col.R;
+                verts[c++] = col.G;
+                verts[c++] = col.B;
+                verts[c++] = 1f;
+            }
+        }
+
+        using var vb = dev.ResourceFactory.CreateBuffer(
+            new BufferCreateInfo
+            {
+                SizeInBytes = (ulong)verts.Length * sizeof(float),
+                // 只在下面上传一次，不需要 Dynamic
+                Usage = BufferUsage.Vertex,
+            }
+        );
+        vb.Update(0, MemoryMarshal.AsBytes(verts.AsSpan()));
+
+        // ---- 每帧临时状态 -------------------------------------------------
+        var uniformScratch = new TransformUniform[1];
+        var cornerDepth = new float[8];
+        var faceDepth = new float[6];
+        Span<int> faceOrder = stackalloc int[6];
+
+        var stopwatch = Stopwatch.StartNew();
+        int lastWidth = InitialWidth,
+            lastHeight = InitialHeight;
+        bool running = true;
+
+        Console.WriteLine("[uniform] static VB + per-frame UBO (80 bytes). Close to exit.");
+
+        while (running)
+        {
+            SDL.PumpEvents();
+            while (SDL.PollEvent(out var ev))
+            {
+                var type = (SDL.EventType)ev.Type;
+                if (type is SDL.EventType.Quit or SDL.EventType.WindowCloseRequested)
+                    running = false;
+            }
+            if (!running)
+                break;
+
+            SDL.GetWindowSize(window, out int winW, out int winH);
+            int pixW = winW,
+                pixH = winH;
+            if (!SDL.GetWindowSizeInPixels(window, out pixW, out pixH))
+            {
+                pixW = winW;
+                pixH = winH;
+            }
+
+            if (pixW != lastWidth || pixH != lastHeight)
+            {
+                lastWidth = pixW;
+                lastHeight = pixH;
+                if (pixW > 0 && pixH > 0)
+                {
+                    dev.WaitForIdle();
+                    chain.Resize(pixW, pixH);
+                }
+            }
+
+            if (pixW <= 0 || pixH <= 0)
+            {
+                Thread.Sleep(16);
+                continue;
+            }
+
+            float aspect = (float)pixW / pixH;
+            float t = (float)stopwatch.Elapsed.TotalSeconds;
+
+            // ---- 矩阵（行向量约定：model * view * projection）-------------
+            var model = Matrix4x4.CreateRotationY(t * 1.1f) * Matrix4x4.CreateRotationX(t * 0.7f);
+            var view = Matrix4x4.CreateTranslation(0, 0, -CameraDistance);
+            var projection = CreatePerspective(FocalLength, aspect, Near, Far);
+            var modelView = model * view;
+
+            // ---- 画家算法：只需要 8 个角点的相机空间深度 ------------------
+            for (int i = 0; i < 8; i++)
+            {
+                // 相机看向 -Z，所以 -cam.Z 就是到相机的距离（越大越远）
+                cornerDepth[i] = -Vector3.Transform(cubeCorners[i], modelView).Z;
+            }
+
+            for (int f = 0; f < 6; f++)
+            {
+                float sum = 0;
+                for (int k = 0; k < VertsPerFace; k++)
+                    sum += cornerDepth[faces[f][k]];
+                faceDepth[f] = sum / VertsPerFace;
+                faceOrder[f] = f;
+            }
+
+            // 远的先画（插入排序，6 个元素无所谓复杂度）
+            for (int i = 1; i < 6; i++)
+            {
+                int key = faceOrder[i];
+                float keyDepth = faceDepth[key];
+                int j = i - 1;
+                while (j >= 0 && faceDepth[faceOrder[j]] < keyDepth)
+                {
+                    faceOrder[j + 1] = faceOrder[j];
+                    j--;
+                }
+                faceOrder[j + 1] = key;
+            }
+
+            // ---- 更新 UBO -------------------------------------------------
+            float pulse = 0.85f + 0.15f * MathF.Sin(t * 3f);
+            uniformScratch[0].Mvp = modelView * projection;
+            uniformScratch[0].Tint = new Vector4(pulse, pulse, pulse, alpha / 255f);
+
+            // 注意顺序：先写数据，再绑定资源集。
+            // SDL3 的 uniform 是「绑定即推送快照」，反过来本帧读到的还是上一帧。
+            ubo.Update(0, MemoryMarshal.AsBytes(uniformScratch.AsSpan()));
+
+            // ---- 录制并提交 -----------------------------------------------
+            using var cl = dev.ResourceFactory.CreateCommandList();
+            using (cl.Record())
+            {
+                // 资源集绑定放在最前面 —— 这个顺序对两个后端都成立，
+                // 因为它们各自在内部把「绑定」延后到了合法时机：
+                //
+                //   Veldrid：要求「先有活跃管线才允许 SetGraphicsResourceSet」，
+                //            因此它把管线之前的绑定登记下来，等 SetPipeline 后补绑。
+                //   SDL3   ：uniform 走 PushGPU*UniformData，必须在渲染通道之外；
+                //            sampler 又必须在通道之内。因此它立刻推送 uniform、
+                //            把 sampler 登记下来，等通道开启时补绑。
+                //
+                // 结论：调用方可以在 SetPipeline 之前或之后绑定资源集，
+                // 无需为任何后端特化顺序。
+                cl.SetGraphicsResourceSet(0, resourceSet);
+
+                cl.SetFrameBuffer(chain.FrameBuffer);
+                cl.ClearColorTarget(0, new(0.06f, 0.06f, 0.08f, alpha / 255f));
+                cl.SetPipeline(pipeline);
+                cl.SetVertexBuffer(0, vb);
+
+                for (int fi = 0; fi < 6; fi++)
+                {
+                    int face = faceOrder[fi];
+                    cl.Draw(VertsPerFace, 1, (uint)(face * VertsPerFace), 0);
+                }
+            }
+            dev.SubmitCommands(cl);
+            chain.Swap();
+
+            Thread.Sleep(16);
+        }
+
+        dev.WaitForIdle();
+    }
+
+    /// <summary>
+    /// 透视投影，深度范围 [0, 1]（Vulkan 约定，Veldrid / SDL3 都是 Vulkan 路径）。
+    /// <para>
+    /// 行向量约定：<c>w' = -z_cam</c>（右手系、相机看向 -Z），
+    /// 近平面映射到 z_ndc = 0，远平面到 1。
+    /// </para>
+    /// </summary>
+    private static Matrix4x4 CreatePerspective(
+        float focalLength,
+        float aspect,
+        float near,
+        float far
+    ) =>
+        new(
+            focalLength / aspect,
+            0,
+            0,
+            0,
+            0,
+            focalLength,
+            0,
+            0,
+            0,
+            0,
+            far / (near - far),
+            -1,
+            0,
+            0,
+            near * far / (near - far),
+            0
+        );
 }

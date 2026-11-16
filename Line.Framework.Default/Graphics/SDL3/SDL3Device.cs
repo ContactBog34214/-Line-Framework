@@ -187,16 +187,27 @@ public sealed class SDL3Device : IGraphicsDevice
         return string.Join(", ", names);
     }
 
+    /// <summary>
+    /// 阻塞直到 GPU 完成所有已提交的工作。
+    /// <para>
+    /// 直接用 <c>SDL_WaitForGPUIdle</c>（SDL 3.2.0 起提供）—— 它的语义就是
+    /// 「等 GPU 完全空闲」，正是这里需要的，不需要自己拿命令缓冲去模拟。
+    /// </para>
+    /// <para>
+    /// <b>不要用裸的 <c>SDL_SubmitGPUCommandBuffer</c> 充当等待</b>：
+    /// 「提交」只保证命令<b>开始</b>执行，它在 GPU 真正跑完之前就返回。
+    /// 那样 WaitForIdle 名不副实 —— 所有「先 WaitForIdle 再释放纹理 /
+    /// 改交换链」的路径都没有完成保证（SDL 不做自动同步，
+    /// 释放仍被引用的资源是未定义行为）。
+    /// </para>
+    /// </summary>
     public void WaitForIdle()
     {
-        // SDL3 没有显式的 WaitForIdle。
-        // 提交一个空命令缓冲并等待其完成，效果接近：
-        // 由于 SubmitGPUCommandBuffer 不带 fence 就立即返回，
-        // 真正的「等待 GPU 空闲」需要用 SubmitGPUCommandBufferAndAcquireFence
-        // + WaitForGPUFence。这里用一个同步提交近似。
-        var cmd = SDL.AcquireGPUCommandBuffer(dev);
-        if (cmd != IntPtr.Zero)
-            SDL.SubmitGPUCommandBuffer(cmd);
+        if (dev == IntPtr.Zero)
+            return;
+
+        if (!SDL.WaitForGPUIdle(dev))
+            Log.Warning($"[SDL3] WaitForIdle: SDL_WaitForGPUIdle failed: {SDL.GetError()}");
     }
 
     public void SubmitCommands(ICommandList commandList)

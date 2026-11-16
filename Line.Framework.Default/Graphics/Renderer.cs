@@ -37,7 +37,11 @@ layout(location = 1) in vec2 fsin_UV;
 
 layout(location = 0) out vec4 fsout_Color;
 
-layout(set = 2, binding = 0) uniform sampler2D _texture;
+// set = 0 是抽象层的统一约定（与 Veldrid 的 ResourceBindingModel.Default 一致）。
+// SDL3 后端会在编译 GLSL 时自动改写成它自己的编号
+//（片元采样器在 set 2），因此这里绝不要手写 set = 2 ——
+// 那样 SDL3 能跑、Veldrid 会因找不到对应 set 而采样到 0，表现为黑屏。
+layout(set = 0, binding = 0) uniform sampler2D _texture;
 
 void main()
 {

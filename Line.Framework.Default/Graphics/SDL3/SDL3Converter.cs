@@ -113,6 +113,10 @@ public static class SDL3Converter
 
         // BufferUsage.Dynamic 无对应标志：SDL3 的更新一律走 transfer buffer + copy pass，
         // 上层不需要也不应该用它来区分显存类型。
+        //
+        // BufferUsage.Uniform 同样无对应标志：SDL3 靠着色器创建时声明的
+        // NumUniformBuffers 分配槽位，VkBuffer 上只需要任意一个非空 usage
+        // （由 SDL3ResourceFactory.CreateBuffer 兜底补 STORAGE_BUFFER 位）。
         return result;
     }
 
@@ -372,7 +376,11 @@ public static class SDL3Converter
                 ? ConvertCompareOp(ci.CompareFunction.Value)
                 : GPUCompareOp.Invalid,
             MinLod = ci.MinLod,
-            MaxLod = ci.MaxLod == 0 ? 1u : ci.MaxLod,
+            // MaxLod 的 0 是有效值（仅采样 mip0），不是「未设置」。
+            // 此处曾把 0 兜底成 1，导致只上传了 mip0 的纹理去和未初始化的
+            // mip1 做线性混合 —— 表现为贴图变淡、随旋转闪、甚至整块消失。
+            // Veldrid 侧是直接透传的，这里必须保持一致。
+            MaxLod = ci.MaxLod,
         };
     }
 
@@ -446,126 +454,5 @@ public static class SDL3Converter
     public static FColor ConvertColor(RgbaFloat c) => new(c.R, c.G, c.B, c.A);
 }
 
-/// <summary>
-/// 从着色器字节里嗅探格式。SDL3 要求显式声明，而抽象层的
-/// <see cref="ShaderCreateInfo"/> 没有格式字段。
-/// </summary>
-public static class ShaderFormatSniffer
-{
-    /// <summary>可识别的着色器输入类型。</summary>
-    public enum Kind
-    {
-        /// <summary>无法识别。</summary>
-        Unknown,
-
-        /// <summary>SPIR-V 二进制。</summary>
-        SpirV,
-
-        /// <summary>DXBC 容器（D3D11 字节码）。</summary>
-        Dxbc,
-
-        /// <summary>GLSL 源码文本。</summary>
-        Glsl,
-
-        /// <summary>Metal Shading Language 源码文本。</summary>
-        Msl,
-    }
-
-    /// <summary>SPIR-V 魔数 0x07230203（小端字节序 03 02 23 07）。</summary>
-    public static bool IsSpirV(ReadOnlySpan<byte> code) =>
-        code.Length >= 4
-        && code[0] == 0x03
-        && code[1] == 0x02
-        && code[2] == 0x23
-        && code[3] == 0x07;
-
-    /// <summary>DXBC 容器头。</summary>
-    public static bool IsDxbc(ReadOnlySpan<byte> code) =>
-        code.Length >= 4
-        && code[0] == (byte)'D'
-        && code[1] == (byte)'X'
-        && code[2] == (byte)'B'
-        && code[3] == (byte)'C';
-
-    /// <summary>
-    /// 跳过 UTF-8 BOM 与前导空白。
-    /// <para>
-    /// 必须跳过 —— C# 的逐字字符串（<c>@"..."</c>）常常以换行开头，
-    /// 直接看首字节会把 <c>"\n#version 450"</c> 判成非文本。
-    /// </para>
-    /// </summary>
-    private static ReadOnlySpan<byte> SkipLeading(ReadOnlySpan<byte> code)
-    {
-        int i = 0;
-
-        // UTF-8 BOM
-        if (
-            code.Length >= 3
-            && code[0] == 0xEF
-            && code[1] == 0xBB
-            && code[2] == 0xBF
-        )
-            i = 3;
-
-        while (i < code.Length && (code[i] == (byte)' ' || code[i] == (byte)'\t'
-            || code[i] == (byte)'\r' || code[i] == (byte)'\n'))
-            i++;
-
-        return code[i..];
-    }
-
-    private static bool StartsWith(ReadOnlySpan<byte> code, string ascii)
-    {
-        if (code.Length < ascii.Length)
-            return false;
-
-        for (int i = 0; i < ascii.Length; i++)
-            if (code[i] != (byte)ascii[i])
-                return false;
-
-        return true;
-    }
-
-    /// <summary>
-    /// GLSL 源码识别：跳过 BOM/空白后以 <c>#version</c>、
-    /// <c>#extension</c> 或 <c>#ifdef</c> 等预处理指令开头。
-    /// </summary>
-    public static bool IsGlslSource(ReadOnlySpan<byte> code)
-    {
-        var s = SkipLeading(code);
-        return StartsWith(s, "#version")
-            || StartsWith(s, "#extension")
-            || StartsWith(s, "#ifdef")
-            || StartsWith(s, "#define")
-            || StartsWith(s, "#pragma")
-            || StartsWith(s, "//")
-            || StartsWith(s, "/*");
-    }
-
-    /// <summary>
-    /// 判断是否为可打印的文本（MSL 的粗略判据）。
-    /// 只检查跳过前导空白后的第一个字节。
-    /// </summary>
-    public static bool LooksLikeText(ReadOnlySpan<byte> code)
-    {
-        var s = SkipLeading(code);
-        return s.Length > 0 && s[0] >= 0x20 && s[0] < 0x7F;
-    }
-
-    /// <summary>
-    /// 按魔数/文本特征推断格式。
-    /// </summary>
-    public static Kind Detect(ReadOnlySpan<byte> code)
-    {
-        if (IsSpirV(code))
-            return Kind.SpirV;
-        if (IsDxbc(code))
-            return Kind.Dxbc;
-        if (IsGlslSource(code))
-            return Kind.Glsl;
-        if (LooksLikeText(code))
-            return Kind.Msl;
-
-        return Kind.Unknown;
-    }
-}
+// ShaderFormatSniffer 已移到 Line.Framework.Default.Graphics（两个后端共用），
+// 见 Graphics/ShaderFormatSniffer.cs。本命名空间内的调用点无需限定名即可解析到它。

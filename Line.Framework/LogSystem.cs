@@ -72,6 +72,15 @@ public static class Log
     /// <param name="日志等级"></param>
     public static void SetMinLevel(LogLevel level) => s_minLevel = level;
 
+    /// <summary>
+    /// 当前配置下该级别是否会被输出。
+    /// <para>
+    /// 用于跳过「构造昂贵的诊断字符串」这类开销 ——
+    /// 直接调 <c>Log.Debug</c> 也能过滤，但参数会先被拼出来。
+    /// </para>
+    /// </summary>
+    public static bool IsEnabled(LogLevel level) => level >= s_minLevel;
+
     // 设置是否输出到控制台
     /// <summary>
     /// 启用或禁用输出日志到控制台
