@@ -229,9 +229,32 @@ public sealed partial class VeldridResourceFactory
 {
     public IShader CreateShader(ShaderCreateInfo createInfo)
     {
-        var shader = dev.ResourceFactory.CreateFromSpirv(
-            VeldridConverter.ConvertShaderDescription(createInfo)
-        );
+        var description = VeldridConverter.ConvertShaderDescription(createInfo);
+
+        // Veldrid.SPIRV 只接受 SPIR-V 二进制。上游传 GLSL 源码时
+        // （SDL3 路径自己会编）在这里补一次编译，
+        // 让两个后端能吃完全相同的 ShaderCreateInfo。
+        if (ShaderFormatSniffer.Detect(createInfo.Bytes) == ShaderFormatSniffer.Kind.Glsl)
+        {
+            // 校验：抽象层约定所有资源都在 set 0（Veldrid 的
+            // ResourceBindingModel.Default 按 ResourceLayouts 下标分配 set，
+            // 通常只有 set 0）。若调用方手写了别后端的 set 编号（如 SDL3 的
+            // 片元采样器 set 2），这里不会报错，只会在运行时采样到 0 ——
+            // 表现为「画面全黑但没有异常」，极难定位。所以主动告警。
+            WarnOnNonZeroSet(createInfo);
+
+            description = new global::Veldrid.ShaderDescription(
+                description.Stage,
+                CompileGlslToSpirv(createInfo),
+                description.EntryPoint
+            );
+        }
+
+        // 用 Veldrid 核心的 CreateShader，而不是 Veldrid.SPIRV 的单参
+        // CreateFromSpirv —— 后者是 compute 专用路径，传顶点/片元会失败。
+        // Vulkan 后端直接接受 SPIR-V 字节；其他后端要交叉编译时另走
+        // CreateFromSpirv(vertex, fragment) 成对重载。
+        var shader = dev.ResourceFactory.CreateShader(description);
         try
         {
             return new VeldridShader(shader);
@@ -240,6 +263,84 @@ public sealed partial class VeldridResourceFactory
         {
             shader?.Dispose();
             throw;
+        }
+    }
+
+    /// <summary>
+    /// 检查 GLSL 里是否出现非 0 的 <c>set = N</c>，出现则警告一次。
+    /// <para>
+    /// 抽象层的约定是「所有资源都在 set 0」。写错不会导致编译或创建失败，
+    /// 只会让资源绑不上、采样到 0（画面全黑、无异常），因此必须主动提示。
+    /// 对应的另一侧：SDL3 后端会在编译前把它改写成自己的编号，
+    /// 所以同一份 shader 在 SDL3 上可能反而正常，更容易误导。
+    /// </para>
+    /// </summary>
+    private static void WarnOnNonZeroSet(ShaderCreateInfo createInfo)
+    {
+        if (!Line.Framework.Log.IsEnabled(Line.Framework.LogLevel.Warning))
+            return;
+
+        var span = createInfo.Bytes.AsSpan();
+        if (span.Length >= 3 && span[0] == 0xEF && span[1] == 0xBB && span[2] == 0xBF)
+            span = span[3..];
+
+        string source = System.Text.Encoding.UTF8.GetString(span);
+
+        // 必须先剥掉注释再匹配，否则注释里写的示例（例如
+        // 「绝不要手写 set = 2」）会被当成真实声明，产生误报。
+        source = System.Text.RegularExpressions.Regex.Replace(
+            source,
+            @"//[^\n]*|/\*[\s\S]*?\*/",
+            string.Empty
+        );
+
+        var m = System.Text.RegularExpressions.Regex.Match(source, @"\bset\s*=\s*([1-9]\d*)");
+
+        if (!m.Success)
+            return;
+
+        Line.Framework.Log.Warning(
+            $"[Veldrid] {createInfo.Stage} shader declares 'set = {m.Groups[1].Value}'. "
+                + "This framework expects all resources in set 0 "
+                + "(SDL3's backend rewrites the set number automatically; Veldrid does not). "
+                + "A non-zero set will not bind and will sample as zero (black screen, no error)."
+        );
+    }
+
+    /// <summary>
+    /// GLSL 源码 → SPIR-V 字节码（glslang）。
+    /// <para>
+    /// 不做 y 轴注入：Veldrid 创建设备时已设
+    /// <c>PreferStandardClipSpaceYDirection</c>，与 SDL3 的约定一致，
+    /// 两边都是 y 向上，无需翻转。
+    /// </para>
+    /// </summary>
+    private static byte[] CompileGlslToSpirv(ShaderCreateInfo createInfo)
+    {
+        // 去掉可能存在的 BOM，glslang 不接受
+        var span = createInfo.Bytes.AsSpan();
+        if (span.Length >= 3 && span[0] == 0xEF && span[1] == 0xBB && span[2] == 0xBF)
+            span = span[3..];
+
+        string source = System.Text.Encoding.UTF8.GetString(span);
+
+        var stage =
+            createInfo.Stage == ShaderStage.Vertex
+                ? global::Veldrid.ShaderStages.Vertex
+                : global::Veldrid.ShaderStages.Fragment;
+
+        try
+        {
+            return SpirvCompilation
+                .CompileGlslToSpirv(source, fileName: null, stage, GlslCompileOptions.Default)
+                .SpirvBytes;
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                $"GLSL -> SPIR-V compilation failed (stage = {createInfo.Stage}): {ex.Message}",
+                ex
+            );
         }
     }
 }

@@ -18,7 +18,7 @@ public sealed class VeldridSwapchain : ISwapchain
     // 但底层 framebuffer 实例会在 Resize / present 后变化，
     // 所以必须比对引用，而不是只缓存一次。
     private global::Veldrid.Framebuffer cachedFramebuffer;
-    private VeldridFrameBuffer cachedWrapper;
+    private VeldridRenderTarget cachedWrapper;
 
     public string Name => swapchain.Name ?? string.Empty;
 
@@ -33,7 +33,7 @@ public sealed class VeldridSwapchain : ISwapchain
     /// 返回的对象由交换链持有，<b>不要 Dispose</b>。
     /// </para>
     /// </summary>
-    public IFrameBuffer FrameBuffer
+    public IRenderTarget RenderTarget
     {
         get
         {
@@ -42,9 +42,10 @@ public sealed class VeldridSwapchain : ISwapchain
             if (!ReferenceEquals(current, cachedFramebuffer))
             {
                 cachedFramebuffer = current;
-                // createInfo 留空：交换链的 framebuffer 没有创建描述，
-                // 颜色附件列表会是空的。格式信息仍然正确（取自 framebuffer 自身）。
-                cachedWrapper = new VeldridFrameBuffer(current);
+                // 交换链的 framebuffer 由驱动轮转，拥有关系不在我们这里；
+                // 它没有可采样的颜色纹理，ColorTextures 会是空列表。
+                // 带深度时（DepthFormat 非 null）会在这里包装出深度纹理。
+                cachedWrapper = new VeldridRenderTarget(current, dev);
             }
 
             return cachedWrapper;

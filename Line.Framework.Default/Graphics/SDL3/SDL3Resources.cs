@@ -55,9 +55,18 @@ public sealed class SDL3Texture : ITexture
         if (disposed != 0)
             throw new ObjectDisposedException(nameof(SDL3Texture));
 
-        int w = width ?? (int)Width - x;
-        int h = height ?? (int)Height - y;
-        int d = depth ?? 1;
+        // 目标区域的上界必须按「该 mip 层」的尺寸算，不是基础层。
+        // 用基础层尺寸校验 mip1 的数据会判定为「长度不足」（mip1 只有 1/4 大）。
+        uint mipW = MipmapGenerator.GetMipDimension(Width, mipLevel);
+        uint mipH = MipmapGenerator.GetMipDimension(Height, mipLevel);
+        uint mipD = MipmapGenerator.GetMipDimension(Depth, mipLevel);
+
+        int w = width ?? (int)mipW - x;
+        int h = height ?? (int)mipH - y;
+        // 与 VeldridTexture.Update 保持一致：不指定 depth 时上传「从 z 到该层末尾」。
+        // 若这里只取 1，传入完整体积的数据就会被下面的长度校验拒绝，
+        // 同一份 TextureCreateInfo + Update 调用在两个后端上行为不同。
+        int d = depth ?? (int)mipD - z;
 
         if (x < 0 || y < 0 || z < 0)
             throw new ArgumentOutOfRangeException(
@@ -67,13 +76,14 @@ public sealed class SDL3Texture : ITexture
         if (w <= 0 || h <= 0 || d <= 0)
             throw new ArgumentOutOfRangeException(
                 nameof(width),
-                $"Region size ({w},{h},{d}) must be positive; texture is {Width}x{Height}x{Depth}."
+                $"Region size ({w},{h},{d}) must be positive; "
+                    + $"mip{mipLevel} is {mipW}x{mipH}x{mipD}."
             );
-        if (x + w > Width || y + h > Height || z + d > Depth)
+        if (x + w > mipW || y + h > mipH || z + d > mipD)
             throw new ArgumentOutOfRangeException(
                 nameof(width),
                 $"Region [{x},{x + w})x[{y},{y + h})x[{z},{z + d}) "
-                    + $"exceeds {Width}x{Height}x{Depth}."
+                    + $"exceeds mip{mipLevel} size {mipW}x{mipH}x{mipD}."
             );
 
         ulong expected = Format.GetByteSize((uint)w, (uint)h, (uint)d);
@@ -134,7 +144,16 @@ public sealed class SDL3Texture : ITexture
                 D = (uint)d,
             };
 
-            SDL.UploadToGPUTexture(copy, srcLoc, dstRegion, true);
+            // cycle = false：<b>必须</b>。
+            //
+            // cycle = true 会让 SDL 孤儿化目标纹理 —— 分配新内存并丢弃旧内容。
+            // 对「一次性覆写整张纹理」是对的，但 Update 的语义是「更新区域」：
+            // 上传 mip 链时每次调用都会把之前写好的层清掉，最后只剩最后一个 mip。
+            // 表现是纹理全透明、不报错（因为数据长度和格式都合法）。
+            //
+            // write-after-read 的顾虑不适用于本框架的用法：新建纹理在
+            // 上传期间没有任何 GPU 读取，运行时局部更新由调用方自己保证同步。
+            SDL.UploadToGPUTexture(copy, srcLoc, dstRegion, false);
 
             SDL.EndGPUCopyPass(copy);
             SDL.SubmitGPUCommandBuffer(cmd);

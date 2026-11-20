@@ -305,43 +305,68 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
     public event Action<double> OnUpdate;
 
     /// <summary>
-    /// 后端选择器
+    /// 按操作系统挑选默认后端。
+    /// <para>
+    /// macOS → Metal，Windows → Direct3D，其余（Linux / Android）→ Vulkan。
+    /// </para>
+    /// <para>
+    /// 这里只做「平台级」判断，不查询驱动/设备是否真的可用 ——
+    /// 静态上下文里拿不到设备，真正的能力探测必须在创建设备时进行
+    /// （SDL3 用 <c>SDL_GPUSupportsShaderFormats</c>，Veldrid 用
+    /// <c>GraphicsDevice.IsBackendSupported</c>）。
+    /// </para>
+    /// <para>
+    /// <b>软件后端不会被自动选中</b>：它还没有任何后端实现，
+    /// 只能由调用方显式指定。
+    /// </para>
     /// </summary>
-    /// <returns>可用后端</returns>
+    /// <returns>该平台上应当优先使用的后端。</returns>
     public static GraphicBackend BackendSelector()
     {
-        //默认设备（到最后都用不了那就算了吧）
-        int Choice = 0;
-        for (int i = 0; i < 4; i++)
-            if (IsBackendSupported((GraphicBackend)i))
-            {
-                Choice = i;
-                break;
-            }
+        if (OperatingSystem.IsMacOS())
+            return GraphicBackend.Metal;
 
-        //代码死犟死犟的，就这样吧～
-        return (GraphicBackend)Choice;
+        if (OperatingSystem.IsWindows())
+            return GraphicBackend.Direct3D;
+
+        return GraphicBackend.Vulkan;
     }
 
+    /// <summary>
+    /// 判断某个后端是否被当前平台支持。
+    /// <para>
+    /// <b>只反映平台约束，不代表运行时一定可用</b>：
+    /// 例如 Linux 上返回 true 的 Vulkan，在没装驱动的机器上仍然可能创建失败。
+    /// 需要精确能力时，请查 <see cref="IGraphicsDevice"/> 那层的设备级探测。
+    /// </para>
+    /// </summary>
     public static bool IsBackendSupported(GraphicBackend backend)
     {
-        GraphicBackend tbackend;
-        switch ((int)backend)
+        return backend switch
         {
-            case 0:
-                tbackend = GraphicBackend.Metal;
-                break;
-            case 1:
-                tbackend = GraphicBackend.Direct3D;
-                break;
-            case 2:
-                tbackend = GraphicBackend.Vulkan;
-                break;
-            default:
-                tbackend = GraphicBackend.Vulkan;
-                break;
-        }
-        return true;
+            // Metal 仅 macOS 有
+            GraphicBackend.Metal => OperatingSystem.IsMacOS(),
+
+            // Direct3D 仅 Windows 有
+            GraphicBackend.Direct3D => OperatingSystem.IsWindows(),
+
+            // Vulkan：Windows / Linux / Android
+            GraphicBackend.Vulkan =>
+                OperatingSystem.IsWindows()
+                || OperatingSystem.IsLinux()
+                || OperatingSystem.IsAndroid(),
+
+            // OpenGL 覆盖面最广，但本框架的 GL 路径尚未完善
+            GraphicBackend.OpenGL =>
+                OperatingSystem.IsWindows()
+                || OperatingSystem.IsLinux()
+                || OperatingSystem.IsAndroid(),
+
+            // 软件渲染后端还没有实现，任何平台都不算可用
+            GraphicBackend.Software => false,
+
+            _ => false,
+        };
     }
 
     /// <summary>
@@ -606,7 +631,7 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
                 return;
             var cp = await Compositor?.Composite(Root);
             if (cp != null)
-                Renderer?.Render(cp,MainSwapchain?.FrameBuffer);
+                Renderer?.Render(cp, MainSwapchain?.RenderTarget);
             foreach (var i in cp)
             {
                 Recyclable<Vertex>.Free(i);

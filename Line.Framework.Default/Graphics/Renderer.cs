@@ -2,11 +2,10 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
-using Line.Framework.Default.Graphics.Veldrid;
 using Line.Framework.Graphics;
 using Line.Framework.IO;
+using Line.Framework.Resource.Graphic;
 using Line.Framework.Types;
-using Veldrid.SPIRV;
 
 namespace Line.Framework.Default.Graphics;
 
@@ -37,12 +36,13 @@ layout(location = 1) in vec2 fsin_UV;
 
 layout(location = 0) out vec4 fsout_Color;
 
-layout(set = 2, binding = 0) uniform sampler2D _texture;
+// set = 0 是抽象层的统一约定（与 Veldrid 的 ResourceBindingModel.Default 一致）。
+// SDL3 后端会在编译 GLSL 时自动改写成它自己的编号，因此这里不要手写非零 set。
+layout(set = 0, binding = 0) uniform sampler2D _texture;
 
 void main()
 {
     fsout_Color = texture(_texture, fsin_UV) * fsin_Color;
-    //fsout_Color = fsin_Color;
 }";
 
     ShaderCreateInfo vertexShaderDesc = new()
@@ -51,7 +51,6 @@ void main()
         Bytes = Encoding.UTF8.GetBytes(VertexCode),
         EntryPoint = "main", // 入口函数名
     };
-
     ShaderCreateInfo fragmentShaderDesc = new()
     {
         Stage = ShaderStage.Fragment,
@@ -69,16 +68,17 @@ void main()
     IDeviceBuffer _vertexBuffer;
     public override IResourceLayout TextureLayout => _textureLayout;
 
-    public override void Render(IEnumerable<Vertex> vertices, IFrameBuffer frameBuffer)
+    public override void Render(IEnumerable<Vertex> vertices, IRenderTarget renderTarget)
     {
         if (!Host.Exists)
             return;
+
         var screenSize = Host.Size;
         if (_shaders == null)
             CreateShader(gd);
         if (_pipeline == null)
         {
-            ReCreatePipeline(Host, frameBuffer);
+            ReCreatePipeline(Host, renderTarget);
         }
 
         var values = vertices;
@@ -130,6 +130,10 @@ void main()
             vert.Add(
                 new()
                 {
+                    // 缩放必须在这里做，不能交给视口 —— 原因见 Render 里
+                    // 「为什么这里不用 SetViewport 做缩放」那段注释：
+                    // 这行除法同时把 ndc 从 [-1, 2s-1] 压回 [-1, 1]，
+                    // 而视口改变不了裁剪范围。
                     Position =
                         (idx.Position + new Vector2(1 - Host.Scale, Host.Scale - 1)) / Host.Scale,
                     Color = c,
@@ -168,9 +172,30 @@ void main()
         {
             using (cl.Record())
             {
-                cl.SetFrameBuffer(frameBuffer);
+                cl.SetRenderTarget(renderTarget);
                 cl.ClearColorTarget(0, new(0, 0, 0, 0));
                 cl.SetPipeline(_pipeline);
+
+                // ---- 为什么这里不用 SetViewport 做缩放 ----
+                //
+                // 曾经试图把 UI 缩放从逐顶点变换改为视口：
+                //     旧: ndc' = (ndc + (1 - s, s - 1)) / s
+                //     新: 视口 (0, 0, W/s, H/s) + 顶点直传
+                //
+                // 数学上两者确实逐像素等价 —— 但只在 ndc ∈ [-1, 1] 时成立，
+                // 而这个前提在这里<b>不成立</b>：
+                //   UIScreen 的尺寸是 (W*s, H*s)，而下面换算 NDC 用的
+                //   screenSize 是 Host.Size（逻辑尺寸 W, H），所以
+                //   ndc 的实际范围是 [-1, 2s-1]（s=2 时是 [-1, 3]）。
+                //
+                // 那一行除法做了两件事：缩放 1/s，以及把 [-1, 2s-1]
+                // 压回 [-1, 1]。视口改变不了裁剪范围 —— 超出 [-1,1] 的顶点
+                // 在 clip 阶段就被裁掉了，等不到视口映射。实测 s=2 时
+                // 只剩左上 1/4 区域有画面，且三角形被裁成直角三角。
+                //
+                // 要用视口实现缩放，前提是先让 ndc 落在 [-1,1] 内，
+                // 也就是让 screenSize 与 UIScreen 的尺寸语义一致 ——
+                // 那属于 UI 坐标系重构，不在这一步的范围内。
 
                 cl.SetVertexBuffer(0, _vertexBuffer);
 
@@ -212,7 +237,7 @@ void main()
 
     protected ITexture whiteTexture;
 
-    protected void ReCreatePipeline(WindowType window, IFrameBuffer frameBuffer)
+    protected void ReCreatePipeline(WindowType window, IRenderTarget renderTarget)
     {
         _textureResourceSet?.Dispose();
         var gd = window.Dev;
@@ -258,7 +283,7 @@ void main()
             },
             PrimitiveTopology = PrimitiveTopology.TriangleList,
             ShaderSet = new() { VertexLayouts = [vertexLayout], Shaders = _shaders },
-            Outputs = frameBuffer.OutputFormat,
+            Outputs = renderTarget.OutputFormat,
             BlendState = BlendStateDescription.SingleAlphaBlend,
         };
 

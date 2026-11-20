@@ -7,7 +7,6 @@ using System.Runtime.InteropServices;
 using System.Text;
 using Line.Framework;
 using Line.Framework.Default.Graphics;
-using Line.Framework.Default.Graphics.Veldrid;
 using Line.Framework.Default.IO;
 using Line.Framework.Default.UIWidgets;
 using Line.Framework.Graphics;
@@ -131,7 +130,7 @@ public static class SimpleGameMain
             Parent = Background,
             TouchMode = TouchModes.All,
             Index = 0,
-            Opacity = 0.5f,
+            Opacity = 1f,
         };
         var Image = new UIImage(Host.Resource)
         {
@@ -143,6 +142,7 @@ public static class SimpleGameMain
             TextureId = "Icon",
             TouchMode = TouchModes.None,
             Index = 10,
+            Opacity = 1f,
         };
 
         var cs = new UIImage(Host.Resource)
@@ -184,7 +184,7 @@ public static class SimpleGameMain
             spinnerBox.Rotation = r;
             Image.Rotation = r;
         };
-        Host.FramePerSecond = 90;
+        Host.FramePerSecond = 960;
         Host.FocusGained += () =>
         {
             Host.VSync = false;
@@ -222,14 +222,36 @@ public static class SimpleGameMain
         };
 
         VisualTouch();
-        Host.Scale = 1f;
+        Host.Scale = 1.5f;
 
         Host.RequestQuit = async () =>
         {
             await Host.DisposeAsync();
         };
 
-        VeldridDevice device = new(GraphicBackend.Vulkan);
+        bool enableMipmap = true;
+
+        // 这里不再需要 async：切换 mipmap 走的是同步的资源重载路径
+        // （EnableMipmap 的 setter 内部自己 Release + Load）。
+        Host.Input.KeyDown += async k =>
+        {
+            if (k == KeyCode.M)
+            {
+                enableMipmap = !enableMipmap;
+                // 必须用 GetResourceObject 取资源对象本身。
+                // GetResource<RResourceSet> 取的是「使用句柄」（ResourceSetArg），
+                // 强转成 RResourceSet 会抛 InvalidCastException ——
+                // 遍历时一定会碰到 Font 这类句柄类型不同的资源。
+                foreach (var i in Host.Resource.GetAllResourceId())
+                {
+                    if (Host.Resource.GetResourceObject(i) is not RResourceSet t)
+                        continue;
+                    await t.Release();
+                    t.EnableMipmap = enableMipmap;
+                }
+                Log.Debug($"{(enableMipmap ? "Enabled" : "Disabled")} Mipmap");
+            }
+        };
 
         while (Host.Exists)
         {

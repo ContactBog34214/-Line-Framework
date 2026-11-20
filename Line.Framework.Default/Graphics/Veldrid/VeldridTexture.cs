@@ -26,10 +26,25 @@ public sealed class VeldridTexture : ITexture
 
     public string Name => texture.Name;
 
-    internal VeldridTexture(global::Veldrid.Texture source, global::Veldrid.GraphicsDevice gd)
+    /// <summary>
+    /// 是否拥有底层纹理。
+    /// <para>
+    /// 交换链的纹理（含其深度附件）由驱动轮转，<b>绝不能由本对象释放</b>。
+    /// 这类「只包装、不拥有」的实例必须传 <paramref name="owns"/>=false，
+    /// 否则调用方一旦 Dispose 就会破坏交换链。
+    /// </para>
+    /// </summary>
+    private readonly bool owns;
+
+    internal VeldridTexture(
+        global::Veldrid.Texture source,
+        global::Veldrid.GraphicsDevice gd,
+        bool owns = true
+    )
     {
         dev = gd;
         texture = source;
+        this.owns = owns;
         Type = VeldridConverter.ConvertTextureType(source.Type);
         Format = VeldridConverter.ConvertPixelFormat(source.Format);
         SampleCount = VeldridConverter.ConvertSampleCount(source.SampleCount);
@@ -38,7 +53,8 @@ public sealed class VeldridTexture : ITexture
 
     public void Dispose()
     {
-        texture?.Dispose();
+        if (owns)
+            texture?.Dispose();
     }
 
     public void Update(
@@ -53,12 +69,18 @@ public sealed class VeldridTexture : ITexture
         uint arrayLayer = 0
     )
     {
+        // 目标区域的上界必须按「该 mip 层」的尺寸算，不是基础层。
+        // 用基础层尺寸校验 mip1 的数据会判定为「长度不足」（mip1 只有 1/4 大）。
+        uint mipW = MipmapGenerator.GetMipDimension(Width, mipLevel);
+        uint mipH = MipmapGenerator.GetMipDimension(Height, mipLevel);
+        uint mipD = MipmapGenerator.GetMipDimension(Depth, mipLevel);
+
         if (!width.HasValue)
-            width = (int)Width - x;
+            width = (int)mipW - x;
         if (!height.HasValue)
-            height = (int)Height - y;
+            height = (int)mipH - y;
         if (!depth.HasValue)
-            depth = (int)Depth - z;
+            depth = (int)mipD - z;
         (int w, int h, int d) textureSize = new(width.Value, height.Value, depth.Value);
         (int x, int y, int z) pos = new(x, y, z);
         (int x, int y, int z) r = new(
@@ -71,10 +93,12 @@ public sealed class VeldridTexture : ITexture
                 "Position",
                 $"{(x < 0 ? x : "OK")},{(y < 0 ? y : "OK")},{(z < 0 ? z : "OK")}"
             );
-        if (r.x > Width || r.y > Height || r.z > Depth)
+        if (r.x > mipW || r.y > mipH || r.z > mipD)
             throw new ArgumentOutOfRangeException(
                 "TextureSize",
-                $"{(r.x > Width ? r.x : "OK")},{(r.y > Height ? r.y : "OK")},{(r.z > Depth ? r.z : "OK")}"
+                $"{(r.x > mipW ? r.x : "OK")},{(r.y > mipH ? r.y : "OK")},"
+                    + $"{(r.z > mipD ? r.z : "OK")} exceeds mip{mipLevel} "
+                    + $"{mipW}x{mipH}x{mipD}"
             );
         if (textureSize.w <= 0 || textureSize.h <= 0 || textureSize.d <= 0)
             throw new ArgumentOutOfRangeException(
@@ -181,20 +205,43 @@ public partial class VeldridConverter
         };
     }
 
+    /// <summary>
+    /// 抽象层纹理类型 → Veldrid 纹理类型。
+    /// <para>
+    /// <b>数组类型要降维映射</b>：<c>Veldrid.TextureType</c> 只有
+    /// 1D / 2D / 3D 三个取值，没有数组类型 —— 数组层数由
+    /// <see cref="TextureCreateInfo.ArrayLayers"/> 单独表达。
+    /// 因此 <c>Texture2DArray</c> 要映射成 <c>Texture2D</c> 而不是抛异常，
+    /// 否则同一份 TextureCreateInfo 在 SDL3 上能建、在 Veldrid 上建不了。
+    /// </para>
+    /// </summary>
     public static global::Veldrid.TextureType ConvertTextureType(TextureType type)
     {
         return type switch
         {
-            TextureType.Texture1D => global::Veldrid.TextureType.Texture1D,
+            // 一维（含一维数组）
+            TextureType.Texture1D or TextureType.Texture1DArray =>
+                global::Veldrid.TextureType.Texture1D,
 
-            TextureType.Texture2D => global::Veldrid.TextureType.Texture2D,
+            // 二维（含二维数组）
+            TextureType.Texture2D or TextureType.Texture2DArray =>
+                global::Veldrid.TextureType.Texture2D,
 
             TextureType.Texture3D => global::Veldrid.TextureType.Texture3D,
 
+            // 立方体在 Veldrid 4.9 的 TextureType 里没有对应值，
+            // 且球面寻址语义无法用普通 2D 表达，这里保持明确拒绝。
             _ => throw new NotSupportedException($"Unsupported texture type: {type}"),
         };
     }
 
+    /// <summary>
+    /// Veldrid 纹理类型 → 抽象层纹理类型。
+    /// <para>
+    /// 只有维度信息可还原；是否为数组要看实际的 <c>ArrayLayers</c>，
+    /// 因此这里一律返回非数组类型（<see cref="TextureType.Texture2D"/> 等）。
+    /// </para>
+    /// </summary>
     public static TextureType ConvertTextureType(global::Veldrid.TextureType type)
     {
         return type switch

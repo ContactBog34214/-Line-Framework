@@ -396,11 +396,53 @@ namespace Line.Framework.Default.Graphics.Veldrid
 
             var description = VeldridConverter.ConvertPipelineDescription(createInfo, fallback);
 
+            ValidateDepthAttachmentMatch(createInfo, description);
+
             var result = dev.ResourceFactory.CreateGraphicsPipeline(description);
             if (result == null)
                 throw new InvalidOperationException("Veldrid returned a null graphics pipeline.");
 
             return new VeldridPipeline(result, createInfo);
+        }
+
+        /// <summary>
+        /// 校验「管线声明的输出附件」与「深度 / 模板状态」是否自洽。
+        /// <para>
+        /// 两种错配都会让人以为深度在生效、实际却没有：
+        /// <list type="bullet">
+        /// <item>有深度附件但 <c>DepthTestEnabled = false</c> —— 状态被忽略，
+        ///       画面完全不做深度测试（Veldrid 不报错）。</item>
+        /// <item>没有深度附件却 <c>DepthTestEnabled = true</c> ——
+        ///       Veldrid 在 Vulkan 上会创建失败或验证报错，但错误信息指向不明。</item>
+        /// </list>
+        /// 这里直接把两种情况变成明确的启动期异常，与「多颜色附件」「索引缓冲
+        /// usage」的处理方式保持一致。
+        /// </para>
+        /// </summary>
+        private static void ValidateDepthAttachmentMatch(
+            PipelineCreateInfo createInfo,
+            global::Veldrid.GraphicsPipelineDescription description
+        )
+        {
+            if (createInfo.Mode is not GraphicsDescription gd)
+                return;
+
+            bool hasDepthAttachment = description.Outputs.DepthAttachment.HasValue;
+            bool depthTestOn =
+                gd.DepthStencilState.DepthTestEnabled
+                || gd.DepthStencilState.DepthWriteEnabled
+                || gd.DepthStencilState.StencilTestEnabled;
+
+            if (depthTestOn && !hasDepthAttachment)
+                throw new InvalidOperationException(
+                    "DepthStencilState enables depth/stencil testing, but Outputs declares no "
+                        + "depth attachment. Set Outputs from a render target that has depth "
+                        + "(SwapchainCreateInfo.DepthFormat / RenderTargetCreateInfo.DepthFormat), "
+                        + "or use DepthStencilStateDescription.Disabled."
+                );
+
+            // 反过来（有附件但不做测试）是合法的：渲染到带深度的目标、
+            // 但这一趟只想画 UI / 后处理，不需要测试。此时不抛。
         }
     }
 }

@@ -58,6 +58,11 @@ public partial class VeldridConverter
         else if ((usage & BufferUsage.StorageRead) != 0)
             result |= global::Veldrid.BufferUsage.StructuredBufferReadOnly;
 
+        // 必须映射：UniformBuffer 布局元素在绑定时会校验这个标志，
+        // 缺了就是「缓冲创建成功、CreateResourceSet 报错」。
+        if ((usage & BufferUsage.Uniform) != 0)
+            result |= global::Veldrid.BufferUsage.UniformBuffer;
+
         if ((usage & BufferUsage.Dynamic) != 0)
             result |= global::Veldrid.BufferUsage.Dynamic;
 
@@ -86,6 +91,9 @@ public partial class VeldridConverter
         {
             result |= BufferUsage.StorageRead;
         }
+
+        if ((usage & global::Veldrid.BufferUsage.UniformBuffer) != 0)
+            result |= BufferUsage.Uniform;
 
         if ((usage & global::Veldrid.BufferUsage.Dynamic) != 0)
             result |= BufferUsage.Dynamic;

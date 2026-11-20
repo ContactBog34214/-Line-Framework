@@ -4,6 +4,14 @@ namespace Line.Framework.Graphics;
 public enum BufferUsage
 {
     Vertex = 1 << 0,
+
+    /// <summary>
+    /// 可作为索引缓冲绑定。
+    /// <para>
+    /// 配合 <see cref="ICommandList.SetIndexBuffer"/> + <see cref="ICommandList.DrawIndexed"/>
+    /// 使用。漏声明时 Veldrid 在绑定时报错，SDL3 则不报错但绘制结果为空白。
+    /// </para>
+    /// </summary>
     Index = 1 << 1,
     Indirect = 1 << 2,
     StorageRead = 1 << 3,
@@ -22,4 +30,17 @@ public enum BufferUsage
     /// </para>
     /// </summary>
     Dynamic = 1 << 5,
+
+    /// <summary>
+    /// 可作为 UniformBuffer 绑定。
+    /// <para>
+    /// 必须设置，不能省：Veldrid / Vulkan 会在绑定时校验这个标志，
+    /// 缺了就是「创建成功、绑定时报错」。
+    /// </para>
+    /// <para>
+    /// SDL3 无对应的 usage 标志（它靠着色器创建时声明的数量来分配槽位），
+    /// 因此该标志在 SDL3 后端被忽略，仅为跨后端一致性保留。
+    /// </para>
+    /// </summary>
+    Uniform = 1 << 6,
 }
