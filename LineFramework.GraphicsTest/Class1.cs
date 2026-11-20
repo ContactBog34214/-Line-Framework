@@ -105,7 +105,7 @@ public static class GT
     /// 不需要改几何或宽高比 —— 这正是「视口负责映射、NDC 负责几何」的体现。
     /// </para>
     /// </summary>
-    private const bool UseViewportDemo = true;
+    private const bool UseViewportDemo = false;
 
     /// <summary>视口 demo 占窗口宽度的比例（0.5 = 左半屏）。</summary>
     private const float ViewportDemoFraction = 0.5f;
@@ -339,6 +339,17 @@ void main()
         }
 
         Console.WriteLine($"[device] {dev.Name}");
+        {
+            var cap = dev.Capabilities;
+            Console.WriteLine(
+                $"[capabilities] maxColorAttachments={cap.MaxColorAttachments} "
+                    + $"depthStencil={cap.SupportsDepthStencil} "
+                    + $"rgba8_rt={cap.IsTextureFormatSupported(PixelFormat.R8G8B8A8UNorm, TextureUsage.ColorTarget)} "
+                    + $"d24s8_depth={cap.IsTextureFormatSupported(PixelFormat.D24UNormS8UInt, TextureUsage.DepthStencilTarget)} "
+                    + $"d32s8_depth={cap.IsTextureFormatSupported(PixelFormat.D32FloatS8UInt, TextureUsage.DepthStencilTarget)} "
+                    + $"msaa4_rgba8={cap.IsSampleCountSupported(PixelFormat.R8G8B8A8UNorm, SampleCount.Count4)}"
+            );
+        }
         Console.WriteLine(
             $"[frame]  framebuffer={chain.RenderTarget.OutputFormat.ColorAttachments?.Length ?? 0} attach"
         );

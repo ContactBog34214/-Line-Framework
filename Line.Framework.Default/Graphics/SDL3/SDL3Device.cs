@@ -148,6 +148,7 @@ public sealed class SDL3Device : IGraphicsDevice
         }
 
         factory = new SDL3ResourceFactory(this);
+        Capabilities = new SDL3Capabilities(this);
 
         if (driverName != null)
             Log.Info($"SDL3 GPU device created: requested={driverName}, actual={Name}");
@@ -166,9 +167,16 @@ public sealed class SDL3Device : IGraphicsDevice
         ownsVideoSubsystem = false;
         Name = SDL.GetGPUDeviceDriver(dev) ?? "SDL3 GPU";
         factory = new SDL3ResourceFactory(this);
+        Capabilities = new SDL3Capabilities(this);
     }
 
     public IResourceFactory ResourceFactory => factory;
+
+    /// <summary>
+    /// 能力查询。像素格式 / 采样数走 SDL 的真实探测函数；
+    /// 颜色附件数上限是写死的 1（见 <see cref="SDL3Capabilities"/>）。
+    /// </summary>
+    public IGraphicsCapabilities Capabilities { get; }
 
     /// <summary>
     /// 列出当前构建里 SDL 认识的所有 GPU 驱动，按默认尝试顺序。

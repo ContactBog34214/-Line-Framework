@@ -42,6 +42,7 @@ public sealed class VeldridDevice : IGraphicsDevice
         var description = VeldridConverter.ConvertSwapchainDescription(swapchainCreateInfo);
         graphicsDevice = CreateDevice(backend, description);
         ResourceFactory = new VeldridResourceFactory(graphicsDevice);
+        Capabilities = new VeldridCapabilities(graphicsDevice);
 
         swapchain = new VeldridSwapchain(graphicsDevice.MainSwapchain, graphicsDevice);
     }
@@ -57,9 +58,18 @@ public sealed class VeldridDevice : IGraphicsDevice
     {
         graphicsDevice = CreateDevice(backend, null);
         ResourceFactory = new VeldridResourceFactory(graphicsDevice);
+        Capabilities = new VeldridCapabilities(graphicsDevice);
     }
 
     public IResourceFactory ResourceFactory { get; }
+
+    /// <summary>
+    /// 能力查询。像素格式 / 采样数走
+    /// <see cref="GraphicsDevice.GetPixelFormatSupport"/> 与
+    /// <see cref="PixelFormatProperties.IsSampleCountSupported"/> 的真实探测；
+    /// 颜色附件数上限按 Vulkan 保证的最小值 8 写死（见 VeldridCapabilities）。
+    /// </summary>
+    public IGraphicsCapabilities Capabilities { get; }
 
     /// <summary>
     /// 创建设备。<paramref name="description"/> 非空时一并创建 surface，

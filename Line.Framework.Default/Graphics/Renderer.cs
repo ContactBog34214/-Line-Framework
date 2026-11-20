@@ -134,9 +134,12 @@ void main()
             vert.Add(
                 new()
                 {
-                    // 缩放不再在这里做：交由 SetViewport 在光栅化阶段完成。
-                    // 见 Render 里设置视口处的推导说明。
-                    Position = idx.Position,
+                    // 缩放必须在这里做，不能交给视口 —— 原因见 Render 里
+                    // 「为什么这里不用 SetViewport 做缩放」那段注释：
+                    // 这行除法同时把 ndc 从 [-1, 2s-1] 压回 [-1, 1]，
+                    // 而视口改变不了裁剪范围。
+                    Position =
+                        (idx.Position + new Vector2(1 - Host.Scale, Host.Scale - 1)) / Host.Scale,
                     Color = c,
                     UV = idx.UV,
                 }
@@ -177,46 +180,26 @@ void main()
                 cl.ClearColorTarget(0, new(0, 0, 0, 0));
                 cl.SetPipeline(_pipeline);
 
-                // ---- UI 缩放交给视口 --------------------------------------
-                // 原来每个顶点在 CPU 端做：
-                //     ndc' = (ndc + (1 - s, s - 1)) / s
-                // 展开后可以证明它精确等价于「把整个绘制压到
-                // 左上角起、尺寸为 (W/s, H/s) 的视口」：
+                // ---- 为什么这里不用 SetViewport 做缩放 ----
                 //
-                //   x: pixel = (ndc' + 1)/2 * W
-                //            = ((ndc + 1 - s)/s + 1)/2 * W
-                //            = (ndc + 1)/2 * (W/s)
-                //   y: pixel = (1 - ndc')/2 * H
-                //            = (1 - ndc)/2 * (H/s)
+                // 曾经试图把 UI 缩放从逐顶点变换改为视口：
+                //     旧: ndc' = (ndc + (1 - s, s - 1)) / s
+                //     新: 视口 (0, 0, W/s, H/s) + 顶点直传
                 //
-                // 也就是说视口取 (0, 0, W/s, H/s) 时两者逐像素相同 ——
-                // 锚点都是左上角，不引入任何取整或采样差异。
+                // 数学上两者确实逐像素等价 —— 但只在 ndc ∈ [-1, 1] 时成立，
+                // 而这个前提在这里<b>不成立</b>：
+                //   UIScreen 的尺寸是 (W*s, H*s)，而下面换算 NDC 用的
+                //   screenSize 是 Host.Size（逻辑尺寸 W, H），所以
+                //   ndc 的实际范围是 [-1, 2s-1]（s=2 时是 [-1, 3]）。
                 //
-                // 结合 UIScreen 的设定可以确认语义没变：根控件的逻辑尺寸是
-                // (W*s, H*s)（见 UIScreen.UpdateScreenSize），它的右边界
-                // x = W*s 在新方案下落到像素 W/s*s = W，正好是整屏右缘；
-                // 旧方案靠 ndc' = 1 落到同一处。两边行为一致。
+                // 那一行除法做了两件事：缩放 1/s，以及把 [-1, 2s-1]
+                // 压回 [-1, 1]。视口改变不了裁剪范围 —— 超出 [-1,1] 的顶点
+                // 在 clip 阶段就被裁掉了，等不到视口映射。实测 s=2 时
+                // 只剩左上 1/4 区域有画面，且三角形被裁成直角三角。
                 //
-                // 好处不只是省掉每帧每个顶点的一次加法 + 一次除法：
-                // 顶点保持真实 NDC，纹理采样发生在最终分辨率上，
-                // 而原先是先把几何缩小再画，等于用低分辨率采样。
-                //
-                // 必须在 SetRenderTarget 之后：换目标会重建渲染通道，
-                // 视口是通道状态。尺寸用渲染目标的像素尺寸，不是逻辑尺寸。
-                float uiScale = Host.Scale;
-                if (uiScale > 0 && renderTarget.Width > 0 && renderTarget.Height > 0)
-                {
-                    // 即使 uiScale == 1 也显式设置：两个后端对「换目标后视口
-                    // 是否回到默认值」的行为不保证一致，显式设一次让结果确定。
-                    cl.SetViewport(
-                        0,
-                        0,
-                        renderTarget.Width / uiScale,
-                        renderTarget.Height / uiScale,
-                        0f,
-                        1f
-                    );
-                }
+                // 要用视口实现缩放，前提是先让 ndc 落在 [-1,1] 内，
+                // 也就是让 screenSize 与 UIScreen 的尺寸语义一致 ——
+                // 那属于 UI 坐标系重构，不在这一步的范围内。
 
                 cl.SetVertexBuffer(0, _vertexBuffer);
 

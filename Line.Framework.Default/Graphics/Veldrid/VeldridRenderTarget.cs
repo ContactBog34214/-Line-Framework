@@ -145,6 +145,12 @@ public partial class VeldridResourceFactory
             // ---- 颜色附件 ----
             if (createInfo.ColorTextures is { Length: > 0 } providedColors)
             {
+                if (providedColors.Length > Capabilities.MaxColorAttachments)
+                    throw new NotSupportedException(
+                        $"This backend supports at most {Capabilities.MaxColorAttachments} "
+                            + $"color attachments, got {providedColors.Length}."
+                    );
+
                 // 提交已有纹理：不拥有。尺寸留 0 时从第一个纹理推导。
                 colors = providedColors;
                 ownsColorTextures = false;
@@ -176,6 +182,11 @@ public partial class VeldridResourceFactory
                         "RenderTargetCreateInfo has neither ColorTextures nor ColorFormats; "
                             + "there is nothing to render into.",
                         nameof(createInfo)
+                    );
+                if (formats.Length > Capabilities.MaxColorAttachments)
+                    throw new NotSupportedException(
+                        $"This backend supports at most {Capabilities.MaxColorAttachments} "
+                            + $"color attachments, got {formats.Length} in ColorFormats."
                     );
                 if (width == 0 || height == 0)
                     throw new ArgumentException(

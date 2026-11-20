@@ -119,7 +119,7 @@ public partial class SDL3ResourceFactory
             // ---- 颜色附件 ----
             if (createInfo.ColorTextures is { Length: > 0 } providedColors)
             {
-                if (providedColors.Length > 1)
+                if (providedColors.Length > device.Capabilities.MaxColorAttachments)
                     throw new NotSupportedException(
                         $"The SDL3 backend supports a single color attachment, "
                             + $"got {providedColors.Length}. Create one render target per target "
@@ -156,7 +156,7 @@ public partial class SDL3ResourceFactory
                             + "there is nothing to render into.",
                         nameof(createInfo)
                     );
-                if (formats.Length > 1)
+                if (formats.Length > device.Capabilities.MaxColorAttachments)
                     throw new NotSupportedException(
                         $"The SDL3 backend supports a single color attachment, "
                             + $"got {formats.Length} in ColorFormats."

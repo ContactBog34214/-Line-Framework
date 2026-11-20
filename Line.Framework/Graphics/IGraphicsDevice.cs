@@ -39,4 +39,13 @@ public interface IGraphicsDevice : IDisposable, IName
 
     /// <summary>本设备的资源工厂：创建纹理、缓冲、管线、交换链等。</summary>
     IResourceFactory ResourceFactory { get; }
+
+    /// <summary>
+    /// 本设备的能力查询。
+    /// <para>
+    /// 在依赖某项可选能力（多颜色附件、MSAA、某个深度格式）之前先查这里，
+    /// 而不是先尝试创建再捕获 <see cref="NotSupportedException"/>。
+    /// </para>
+    /// </summary>
+    IGraphicsCapabilities Capabilities { get; }
 }

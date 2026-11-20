@@ -222,7 +222,7 @@ public static class SimpleGameMain
         };
 
         VisualTouch();
-        Host.Scale = 1.2f;
+        Host.Scale = 2f;
 
         Host.RequestQuit = async () =>
         {
