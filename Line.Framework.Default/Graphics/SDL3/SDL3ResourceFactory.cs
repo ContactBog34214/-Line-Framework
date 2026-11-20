@@ -5,7 +5,7 @@ using static SDL3.SDL;
 
 namespace Line.Framework.Default.Graphics.SDL3;
 
-public sealed class SDL3ResourceFactory : IResourceFactory
+public sealed partial class SDL3ResourceFactory : IResourceFactory
 {
     private readonly SDL3Device device;
     private ISampler defaultSampler;
@@ -798,18 +798,11 @@ public sealed class SDL3ResourceFactory : IResourceFactory
         );
     }
 
-    // ---------------------------------------------------------------- FrameBuffer
-
-    public IFrameBuffer CreateFrameBuffer(FramebufferCreateInfo createInfo)
-    {
-        // SDL3 没有 framebuffer 对象：渲染通道直接以纹理为目标。
-        // 离屏渲染请直接把目标纹理交给命令列表（尚未接入抽象层）。
-        throw new NotSupportedException(
-            "The SDL3 backend does not support explicitly created framebuffers. "
-                + "SDL3's render target is the texture itself, bound directly by "
-                + "BeginGPURenderPass. For swapchain targets use ISwapchain.FrameBuffer."
-        );
-    }
+    // ---------------------------------------------------------------- RenderTarget
+    //
+    // CreateRenderTarget 实现在 SDL3RenderTarget.cs（同一个 partial class）。
+    // SDL3 没有 framebuffer 对象，所以这里没有对应的「创建帧缓冲」入口 ——
+    // 渲染目标就是一组纹理，在 BeginGPURenderPass 时直接交给驱动。
 
     // ---------------------------------------------------------------- Pipeline
 
@@ -950,8 +943,14 @@ public sealed class SDL3ResourceFactory : IResourceFactory
             DepthStencilState = new GPUDepthStencilState
             {
                 CompareOp = SDL3Converter.ConvertCompareOp(gd.DepthStencilState.DepthComparison),
-                BackStencilState = default,
-                FrontStencilState = default,
+                // 必须显式转换，不能留 default：带模板的深度格式下
+                // stencilOpState 的 op 即使是 Invalid 也可能让管线创建失败。
+                BackStencilState = SDL3Converter.ConvertStencilBehavior(
+                    gd.DepthStencilState.StencilBack
+                ),
+                FrontStencilState = SDL3Converter.ConvertStencilBehavior(
+                    gd.DepthStencilState.StencilFront
+                ),
                 CompareMask = gd.DepthStencilState.StencilReadMask,
                 WriteMask = gd.DepthStencilState.StencilWriteMask,
                 EnableDepthTest = gd.DepthStencilState.DepthTestEnabled,
@@ -999,7 +998,16 @@ public sealed class SDL3ResourceFactory : IResourceFactory
                 nameof(createInfo)
             );
 
-        return new SDL3Swapchain(device, createInfo.Source.Surface, name: null, ownsClaim: true);
+        // SDL3 的交换链纹理由 SDL 提供，但**深度纹理不提供**，必须自己建。
+        // 那条路径在 SDL3Swapchain.EnsureDepthTexture 里（按 acquire 到的
+        // 真实尺寸创建 / 重建）。
+        return new SDL3Swapchain(
+            device,
+            createInfo.Source.Surface,
+            name: null,
+            ownsClaim: true,
+            depthFormat: createInfo.DepthFormat
+        );
     }
 }
 

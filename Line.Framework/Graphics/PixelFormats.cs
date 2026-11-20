@@ -90,4 +90,29 @@ public enum PixelFormat : ushort
 
     /// <summary>8 位 RGBA 有符号整数。</summary>
     R8G8B8A8SInt = 24,
+
+    /// <summary>
+    /// 24 位深度 + 8 位模板。
+    /// <para>
+    /// <b>深度附件的推荐默认值</b>：Vulkan 上几乎所有实现都原生支持，
+    /// 也是两个后端（Veldrid 与 SDL3）都提供的最小公分母。
+    /// </para>
+    /// <para>
+    /// 只用于 <see cref="TextureUsage.DepthStencilTarget"/>。
+    /// 目前没有「无模板的纯深度格式」——Veldrid 4.9 只提供带模板的两种，
+    /// 因此模板部分在不需要时必须显式关闭（<c>StencilTestEnabled = false</c>）。
+    /// </para>
+    /// </summary>
+    D24UNormS8UInt = 25,
+
+    /// <summary>
+    /// 32 位浮点深度 + 8 位模板。
+    /// <para>
+    /// 精度优于 <see cref="D24UNormS8UInt"/>（浮点深度在大场景远景下
+    /// 更不容易出现 z-fighting），但并非所有驱动都支持 ——
+    /// SDL3 文档明确写深度格式是「二选一，不保证两者都在」。
+    /// 需要可移植性时用 24 位那个。
+    /// </para>
+    /// </summary>
+    D32FloatS8UInt = 26,
 }

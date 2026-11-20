@@ -59,6 +59,12 @@ public static partial class VeldridConverter
 
             PixelFormat.R8G8B8A8SInt => global::Veldrid.PixelFormat.R8_G8_B8_A8_SInt,
 
+            // 深度：只用于深度附件，不作为颜色格式使用。
+            // Veldrid 4.9 只提供带模板的两种深度格式，没有纯 D32_Float。
+            PixelFormat.D24UNormS8UInt => global::Veldrid.PixelFormat.D24_UNorm_S8_UInt,
+
+            PixelFormat.D32FloatS8UInt => global::Veldrid.PixelFormat.D32_Float_S8_UInt,
+
             _ => throw new NotSupportedException($"Unsupported pixel format: {format}"),
         };
     }
@@ -116,6 +122,11 @@ public static partial class VeldridConverter
             global::Veldrid.PixelFormat.R8_G8_SInt => PixelFormat.R8G8SInt,
 
             global::Veldrid.PixelFormat.R8_G8_B8_A8_SInt => PixelFormat.R8G8B8A8SInt,
+
+            // 深度格式：读回方向（如从 framebuffer.OutputDescription 反查）。
+            global::Veldrid.PixelFormat.D24_UNorm_S8_UInt => PixelFormat.D24UNormS8UInt,
+
+            global::Veldrid.PixelFormat.D32_Float_S8_UInt => PixelFormat.D32FloatS8UInt,
 
             _ => throw new NotSupportedException($"Unsupported Veldrid pixel format: {format}"),
         };

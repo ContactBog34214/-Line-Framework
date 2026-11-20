@@ -28,8 +28,15 @@ public interface ISwapchain : IDisposable, IName
     /// </summary>
     void Resize(int width, int height);
 
-    /// <summary>本交换链的渲染目标，用作命令列表的 <c>SetFrameBuffer</c> 参数。</summary>
-    IFrameBuffer FrameBuffer { get; }
+    /// <summary>
+    /// 本交换链的渲染目标，用作命令列表的 <c>SetRenderTarget</c> 参数。
+    /// <para>
+    /// 它的纹理每帧由驱动轮转，因此 <see cref="IRenderTarget.ColorTextures"/>
+    /// 是空列表（不可采样）。<b>不要跨帧缓存这个对象</b> ——
+    /// Veldrid 在 Resize 后会换一个新的底层实例。
+    /// </para>
+    /// </summary>
+    IRenderTarget RenderTarget { get; }
 
     /// <summary>呈现当前帧。SDL3 下是空操作（提交即呈现）。</summary>
     void Swap();

@@ -73,7 +73,7 @@ void main()
     IDeviceBuffer _vertexBuffer;
     public override IResourceLayout TextureLayout => _textureLayout;
 
-    public override void Render(IEnumerable<Vertex> vertices, IFrameBuffer frameBuffer)
+    public override void Render(IEnumerable<Vertex> vertices, IRenderTarget renderTarget)
     {
         if (!Host.Exists)
             return;
@@ -82,7 +82,7 @@ void main()
             CreateShader(gd);
         if (_pipeline == null)
         {
-            ReCreatePipeline(Host, frameBuffer);
+            ReCreatePipeline(Host, renderTarget);
         }
 
         var values = vertices;
@@ -134,8 +134,9 @@ void main()
             vert.Add(
                 new()
                 {
-                    Position =
-                        (idx.Position + new Vector2(1 - Host.Scale, Host.Scale - 1)) / Host.Scale,
+                    // 缩放不再在这里做：交由 SetViewport 在光栅化阶段完成。
+                    // 见 Render 里设置视口处的推导说明。
+                    Position = idx.Position,
                     Color = c,
                     UV = idx.UV,
                 }
@@ -172,9 +173,50 @@ void main()
         {
             using (cl.Record())
             {
-                cl.SetFrameBuffer(frameBuffer);
+                cl.SetRenderTarget(renderTarget);
                 cl.ClearColorTarget(0, new(0, 0, 0, 0));
                 cl.SetPipeline(_pipeline);
+
+                // ---- UI 缩放交给视口 --------------------------------------
+                // 原来每个顶点在 CPU 端做：
+                //     ndc' = (ndc + (1 - s, s - 1)) / s
+                // 展开后可以证明它精确等价于「把整个绘制压到
+                // 左上角起、尺寸为 (W/s, H/s) 的视口」：
+                //
+                //   x: pixel = (ndc' + 1)/2 * W
+                //            = ((ndc + 1 - s)/s + 1)/2 * W
+                //            = (ndc + 1)/2 * (W/s)
+                //   y: pixel = (1 - ndc')/2 * H
+                //            = (1 - ndc)/2 * (H/s)
+                //
+                // 也就是说视口取 (0, 0, W/s, H/s) 时两者逐像素相同 ——
+                // 锚点都是左上角，不引入任何取整或采样差异。
+                //
+                // 结合 UIScreen 的设定可以确认语义没变：根控件的逻辑尺寸是
+                // (W*s, H*s)（见 UIScreen.UpdateScreenSize），它的右边界
+                // x = W*s 在新方案下落到像素 W/s*s = W，正好是整屏右缘；
+                // 旧方案靠 ndc' = 1 落到同一处。两边行为一致。
+                //
+                // 好处不只是省掉每帧每个顶点的一次加法 + 一次除法：
+                // 顶点保持真实 NDC，纹理采样发生在最终分辨率上，
+                // 而原先是先把几何缩小再画，等于用低分辨率采样。
+                //
+                // 必须在 SetRenderTarget 之后：换目标会重建渲染通道，
+                // 视口是通道状态。尺寸用渲染目标的像素尺寸，不是逻辑尺寸。
+                float uiScale = Host.Scale;
+                if (uiScale > 0 && renderTarget.Width > 0 && renderTarget.Height > 0)
+                {
+                    // 即使 uiScale == 1 也显式设置：两个后端对「换目标后视口
+                    // 是否回到默认值」的行为不保证一致，显式设一次让结果确定。
+                    cl.SetViewport(
+                        0,
+                        0,
+                        renderTarget.Width / uiScale,
+                        renderTarget.Height / uiScale,
+                        0f,
+                        1f
+                    );
+                }
 
                 cl.SetVertexBuffer(0, _vertexBuffer);
 
@@ -216,7 +258,7 @@ void main()
 
     protected ITexture whiteTexture;
 
-    protected void ReCreatePipeline(WindowType window, IFrameBuffer frameBuffer)
+    protected void ReCreatePipeline(WindowType window, IRenderTarget renderTarget)
     {
         _textureResourceSet?.Dispose();
         var gd = window.Dev;
@@ -262,7 +304,7 @@ void main()
             },
             PrimitiveTopology = PrimitiveTopology.TriangleList,
             ShaderSet = new() { VertexLayouts = [vertexLayout], Shaders = _shaders },
-            Outputs = frameBuffer.OutputFormat,
+            Outputs = renderTarget.OutputFormat,
             BlendState = BlendStateDescription.SingleAlphaBlend,
         };
 

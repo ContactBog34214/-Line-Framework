@@ -4,6 +4,14 @@ namespace Line.Framework.Graphics;
 public enum BufferUsage
 {
     Vertex = 1 << 0,
+
+    /// <summary>
+    /// 可作为索引缓冲绑定。
+    /// <para>
+    /// 配合 <see cref="ICommandList.SetIndexBuffer"/> + <see cref="ICommandList.DrawIndexed"/>
+    /// 使用。漏声明时 Veldrid 在绑定时报错，SDL3 则不报错但绘制结果为空白。
+    /// </para>
+    /// </summary>
     Index = 1 << 1,
     Indirect = 1 << 2,
     StorageRead = 1 << 3,

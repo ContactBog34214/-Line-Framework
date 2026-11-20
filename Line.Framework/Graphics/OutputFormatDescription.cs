@@ -3,9 +3,9 @@ namespace Line.Framework.Graphics
     /// <summary>
     /// 一组输出附件的格式描述，用于创建管线。
     /// <para>
-    /// <b>获取方式</b>：从 <see cref="IFrameBuffer.OutputFormat"/> 读取
-    /// （交换链的帧缓冲即 <see cref="ISwapchain.FrameBuffer"/>）。
-    /// 不要通过遍历 <see cref="IFrameBuffer.ColorTargets"/> 自行拼装 ——
+    /// <b>获取方式</b>：从 <see cref="IRenderTarget.OutputFormat"/> 读取
+    /// （交换链的渲染目标即 <see cref="ISwapchain.RenderTarget"/>）。
+    /// 不要通过遍历 <see cref="IRenderTarget.ColorTextures"/> 自行拼装 ——
     /// SDL3 后端的 ColorTargets 是空数组，那样做会得到错误结果。
     /// </para>
     /// </summary>

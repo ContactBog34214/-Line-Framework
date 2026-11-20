@@ -42,6 +42,11 @@ public static class SDL3Converter
             PixelFormat.R32Float => GPUTextureFormat.R32Float,
             PixelFormat.R32G32Float => GPUTextureFormat.R32G32Float,
             PixelFormat.R32G32B32A32Float => GPUTextureFormat.R32G32B32A32Float,
+            // 深度格式：SDL3 也只提供带模板的两种（与 Veldrid 的最小公分母一致）。
+            // 注意 SDL3 官方文档说这两个是「二选一，不保证两者都支持」，
+            // 引擎实际支持哪个要看驱动，接深度时需要能力探测。
+            PixelFormat.D24UNormS8UInt => GPUTextureFormat.D24UnormS8Uint,
+            PixelFormat.D32FloatS8UInt => GPUTextureFormat.D32FloatS8Uint,
             // SDL3 没有 8/16 位整型纹理格式（只有 unorm/snorm/float）
             _ => throw new NotSupportedException(
                 $"PixelFormat {format} has no SDL3 GPU equivalent."
@@ -69,6 +74,8 @@ public static class SDL3Converter
             GPUTextureFormat.R32Float => PixelFormat.R32Float,
             GPUTextureFormat.R32G32Float => PixelFormat.R32G32Float,
             GPUTextureFormat.R32G32B32A32Float => PixelFormat.R32G32B32A32Float,
+            GPUTextureFormat.D24UnormS8Uint => PixelFormat.D24UNormS8UInt,
+            GPUTextureFormat.D32FloatS8Uint => PixelFormat.D32FloatS8UInt,
             _ => throw new NotSupportedException(
                 $"GPUTextureFormat {format} has no framework equivalent."
             ),
@@ -384,8 +391,7 @@ public static class SDL3Converter
         };
     }
 
-    public static GPUCompareOp ConvertCompareOp(CompareFunction f)
-    {
+    public static GPUCompareOp ConvertCompareOp(CompareFunction f)    {
         return f switch
         {
             CompareFunction.Never => GPUCompareOp.Never,
@@ -397,6 +403,55 @@ public static class SDL3Converter
             CompareFunction.GreaterOrEqual => GPUCompareOp.GreaterOrEqual,
             CompareFunction.Always => GPUCompareOp.Always,
             _ => throw new ArgumentOutOfRangeException(nameof(f), f, null),
+        };
+    }
+
+    /// <summary>
+    /// 模板操作转换。
+    /// <para>
+    /// <b>不能强转</b>：抽象层的 <see cref="StencilOperation"/> 从 <c>Keep = 0</c>
+    /// 开始，而 SDL3 的 <c>GPUStencilOp</c> 有独立的 Invalid 值，
+    /// 两边编号并不对应。必须逐个映射。
+    /// </para>
+    /// </summary>
+    public static GPUStencilOp ConvertStencilOperation(StencilOperation op)
+    {
+        return op switch
+        {
+            StencilOperation.Keep => GPUStencilOp.Keep,
+            StencilOperation.Zero => GPUStencilOp.Zero,
+            StencilOperation.Replace => GPUStencilOp.Replace,
+            StencilOperation.IncrementAndClamp => GPUStencilOp.IncrementAndClamp,
+            StencilOperation.DecrementAndClamp => GPUStencilOp.DecrementAndClamp,
+            StencilOperation.Invert => GPUStencilOp.Invert,
+            StencilOperation.IncrementAndWrap => GPUStencilOp.IncrementAndWrap,
+            StencilOperation.DecrementAndWrap => GPUStencilOp.DecrementAndWrap,
+            _ => throw new ArgumentOutOfRangeException(nameof(op), op, null),
+        };
+    }
+
+    /// <summary>
+    /// 模板行为转换。
+    /// <para>
+    /// 必须显式构造而不能留 <c>default</c>：即使
+    /// <c>EnableStencilTest = false</c>，Vulkan 的 stencilOpState 里
+    /// fail/pass/depthFail 仍要求是合法枚举值，默认的 0（Invalid）
+    /// 可能导致管线创建失败。带模板的深度格式让这一点变得必须处理。
+    /// </para>
+    /// <para>
+    /// 注意 <c>default(StencilBehaviorDescription)</c> 的 <c>Comparison</c> 是
+    /// <see cref="CompareFunction.Never"/>，且三个操作都是 <c>Keep</c> ——
+    /// 启用模板测试的调用方必须自己给出比较方式。
+    /// </para>
+    /// </summary>
+    public static GPUStencilOpState ConvertStencilBehavior(StencilBehaviorDescription des)
+    {
+        return new GPUStencilOpState
+        {
+            FailOp = ConvertStencilOperation(des.Fail),
+            PassOp = ConvertStencilOperation(des.Pass),
+            DepthFailOp = ConvertStencilOperation(des.DepthFail),
+            CompareOp = ConvertCompareOp(des.Comparison),
         };
     }
 

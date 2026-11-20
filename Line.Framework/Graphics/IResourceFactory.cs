@@ -33,11 +33,27 @@ public interface IResourceFactory
     IShader CreateShader(ShaderCreateInfo createInfo);
 
     /// <summary>
-    /// 创建离屏帧缓冲。
-    /// <b>SDL3 后端不支持</b>（它会抛 <see cref="NotSupportedException"/>）——
-    /// 该后端没有帧缓冲对象，渲染目标就是纹理本身。
+    /// 创建离屏渲染目标。
+    /// <para>
+    /// 两个后端都支持 —— 渲染目标的语义（往哪些纹理写）在所有后端都成立，
+    /// 差异只在内部实现：Veldrid 有 framebuffer 对象，
+    /// SDL3 直接把纹理交给 <c>BeginGPURenderPass</c>，不需要额外对象。
+    /// </para>
+    /// <para>
+    /// <b>所有权</b>：只给 <see cref="RenderTargetCreateInfo.ColorFormats"/> /
+    /// <see cref="RenderTargetCreateInfo.DepthFormat"/> 时，纹理由本方法创建、
+    /// 由返回的目标拥有（释放目标即释放纹理）。若提交了已有的
+    /// <see cref="RenderTargetCreateInfo.ColorTextures"/> /
+    /// <see cref="RenderTargetCreateInfo.DepthTexture"/>，则<b>不拥有</b>它们。
+    /// </para>
+    /// <para>
+    /// 创建出来的颜色纹理自动带 <see cref="TextureUsage.ColorTarget"/> 与
+    /// <see cref="TextureUsage.Sampled"/>，深度纹理带
+    /// <see cref="TextureUsage.DepthStencilTarget"/> —— 调用方不需要（也无法）
+    /// 声明用途。
+    /// </para>
     /// </summary>
-    IFrameBuffer CreateFrameBuffer(FramebufferCreateInfo createInfo);
+    IRenderTarget CreateRenderTarget(RenderTargetCreateInfo createInfo);
 
     /// <summary>创建图形管线。交换链的帧缓冲存在时才能取到有效的输出格式。</summary>
     IPipeline CreatePipeline(PipelineCreateInfo createInfo);

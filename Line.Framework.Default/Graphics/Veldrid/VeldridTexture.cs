@@ -26,10 +26,25 @@ public sealed class VeldridTexture : ITexture
 
     public string Name => texture.Name;
 
-    internal VeldridTexture(global::Veldrid.Texture source, global::Veldrid.GraphicsDevice gd)
+    /// <summary>
+    /// 是否拥有底层纹理。
+    /// <para>
+    /// 交换链的纹理（含其深度附件）由驱动轮转，<b>绝不能由本对象释放</b>。
+    /// 这类「只包装、不拥有」的实例必须传 <paramref name="owns"/>=false，
+    /// 否则调用方一旦 Dispose 就会破坏交换链。
+    /// </para>
+    /// </summary>
+    private readonly bool owns;
+
+    internal VeldridTexture(
+        global::Veldrid.Texture source,
+        global::Veldrid.GraphicsDevice gd,
+        bool owns = true
+    )
     {
         dev = gd;
         texture = source;
+        this.owns = owns;
         Type = VeldridConverter.ConvertTextureType(source.Type);
         Format = VeldridConverter.ConvertPixelFormat(source.Format);
         SampleCount = VeldridConverter.ConvertSampleCount(source.SampleCount);
@@ -38,7 +53,8 @@ public sealed class VeldridTexture : ITexture
 
     public void Dispose()
     {
-        texture?.Dispose();
+        if (owns)
+            texture?.Dispose();
     }
 
     public void Update(

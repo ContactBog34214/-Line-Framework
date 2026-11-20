@@ -15,7 +15,7 @@ public static class Desktop
     /// 主线程调度器在整个窗口生命周期内饿死，没有意义。
     /// </para>
     /// </summary>
-    private const bool UseGraphicsTest = false;
+    private const bool UseGraphicsTest = true;
 
     public static async Task Main(string[] args)
     {

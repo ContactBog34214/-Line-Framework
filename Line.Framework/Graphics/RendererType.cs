@@ -28,10 +28,10 @@ public abstract class RendererType : IDisposable
     /// 合成器输出的顶点流，位置为屏幕像素坐标；
     /// 实现负责换算到 NDC，并按纹理 / 资源集分批提交。
     /// </param>
-    /// <param name="frameBuffer">
-    /// 本次绘制的目标。传交换链的帧缓冲即为呈现到窗口。
+    /// <param name="renderTarget">
+    /// 本次绘制的目标。传交换链的 <see cref="ISwapchain.RenderTarget"/> 即为呈现到窗口。
     /// </param>
-    public abstract void Render(IEnumerable<Vertex> vertices, IFrameBuffer frameBuffer);
+    public abstract void Render(IEnumerable<Vertex> vertices, IRenderTarget renderTarget);
 
     /// <summary>宿主窗口（旧设计的耦合点）。</summary>
     protected virtual WindowType Host { get; }

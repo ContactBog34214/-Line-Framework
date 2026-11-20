@@ -32,6 +32,131 @@ public static class GT
     /// </summary>
     private const bool UseUniformBufferDemo = true;
 
+    /// <summary>
+    /// true = 用索引缓冲绘制（24 顶点 + 36 个 UInt16 索引），
+    /// false = 原来的非索引绘制（36 顶点，三角形各自独立）。
+    /// <para>
+    /// 两者共用同一份着色器、同一个 UBO、同一套画家算法排序，
+    /// 只有「几何怎么组织」和「最后那一次绘制调用」不同 ——
+    /// 画面应当完全一致。不一致就说明索引路径有问题。
+    /// </para>
+    /// <para>
+    /// 只在 <see cref="UseUniformBufferDemo"/> 为 true 时有效。
+    /// </para>
+    /// </summary>
+    private const bool UseIndexedDemo = true;
+
+    /// <summary>
+    /// 索引缓冲字节偏移的探针。
+    /// <para>
+    /// true 时在真正的索引数据前塞 36 个占位索引（72 字节），
+    /// 绑定索引缓冲时传 <c>offset = 72</c>。这专门用来验证
+    /// <see cref="ICommandList.SetIndexBuffer"/> 的 offset 是<b>字节</b>
+    /// 而不是索引个数 —— 这两套单位混用是目前最容易写错的地方。
+    /// </para>
+    /// <para>
+    /// 判读：<b>立方体正常显示</b> = 偏移语义正确；
+    /// <b>什么都不显示</b> = 偏移被当成索引个数（起点跑到 144 字节，越界）；
+    /// <b>画面错乱</b> = 偏移方向/单位换算有问题。
+    /// </para>
+    /// <para>
+    /// 默认关闭，先看正常效果再打开它做验证。
+    /// </para>
+    /// </summary>
+    private const bool IndexBufferOffsetProbe = true;
+
+    /// <summary>
+    /// true = 跑离屏渲染目标验证：把旋转立方体渲到一张 512×512 的离屏纹理，
+    /// 再把这张纹理贴成一个全屏 quad 呈现到窗口。
+    /// <para>
+    /// 这是 <see cref="IRenderTarget"/> 的端到端验收：一次性验证
+    /// 「离屏目标能创建」「同一命令缓冲里两次 SetRenderTarget 能切换通道」
+    /// 「渲完的纹理能被采样」。画面应当与直接渲染一模一样。
+    /// </para>
+    /// <para>打开时忽略 <see cref="UseUniformBufferDemo"/> / <see cref="UseIndexedDemo"/>。</para>
+    /// </summary>
+    private const bool UseOffscreenDemo = false;
+
+    /// <summary>
+    /// 采样离屏纹理时是否翻转 V。
+    /// <para>
+    /// 离屏渲染用与本框架一致的 NDC（y 向上），而纹理坐标原点在左上，
+    /// 因此通常需要上下翻转。若画面上下颠倒，把这个开关反过来即可。
+    /// </para>
+    /// </summary>
+    private const bool FlipOffscreenV = true;
+
+    /// <summary>
+    /// true = 验证 <see cref="ICommandList.SetViewport"/>：把绘制内容压到左半边。
+    /// <para>
+    /// <b>对两个 demo 都生效</b>，不依赖 <see cref="UseOffscreenDemo"/>：
+    /// <list type="bullet">
+    /// <item><see cref="RunUniformCube"/>：立方体被压进左半边。</item>
+    /// <item><see cref="RunOffscreenDemo"/>：全屏 quad 被压进左半边。</item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// 判读：<b>内容完整出现在左半边、右半片是清屏色</b>。
+    /// 若整个窗口都是图像，说明视口没生效（多半是写在 SetRenderTarget 之前了，
+    /// 换目标会重置视口）；若右半边出现拉伸或错位，说明坐标原点或方向不对。
+    /// </para>
+    /// <para>
+    /// 顶点保持 NDC 满幅（-1..1），视口缩到半宽后被自然压进左半边,
+    /// 不需要改几何或宽高比 —— 这正是「视口负责映射、NDC 负责几何」的体现。
+    /// </para>
+    /// </summary>
+    private const bool UseViewportDemo = true;
+
+    /// <summary>视口 demo 占窗口宽度的比例（0.5 = 左半屏）。</summary>
+    private const float ViewportDemoFraction = 0.5f;
+
+    /// <summary>
+    /// true = 立方体用深度缓冲 + 背面剔除绘制，而不是 CPU 画家算法排序。
+    /// <para>
+    /// 打开后：交换链请求 <see cref="PixelFormat.D24UNormS8UInt"/> 深度附件，
+    /// 管线用 <see cref="DepthStencilStateDescription.DepthOnlyLessEqual"/>、
+    /// 剔除背面，并且<b>完全删掉每帧的 6 面排序</b> —— 一次绘制全部画完。
+    /// </para>
+    /// <para>
+    /// <b>验收标准</b>：开关前后画面应当完全一致（凸多面体下画家算法与深度测试
+    /// 结果相同）。不一致就说明深度链路有问题，这是最有价值的一组对照。
+    /// </para>
+    /// <para>
+    /// 两个后端都支持。SDL3 的深度纹理不随交换链提供，由
+    /// <c>SDL3Swapchain</c> 自己按 acquire 到的真实尺寸创建 / 重建。
+    /// </para>
+    /// </summary>
+    private const bool UseDepthBuffer = true;
+
+    /// <summary>
+    /// 深度开关打开时是否同时剔除背面。
+    /// <para>
+    /// 凸体上剔除背面能让片元着色量减半，也是深度测试的常规搭配。
+    /// 开启后若看到的是立方体「内壁」（只剩背面），说明绕序判定反了 ——
+    /// 改 <see cref="CubeWinding"/>，不要退回 <c>CullMode.None</c>。
+    /// </para>
+    /// </summary>
+    private const bool CullBackFaces = true;
+
+    /// <summary>
+    /// 立方体的正面绕序。
+    /// <para>
+    /// <b>实测修正</b>：几何数据注释里写的是「按外表面逆时针排列」，
+    /// 但配合 <c>FrontFace.Clockwise</c> + <c>CullMode.Back</c> 时
+    /// 只剩下背面可见 —— 说明屏幕空间里的实际绕序与注释相反
+    /// （NDC y 向上 vs 帧缓冲 y 向下的换算把它翻了一次）。
+    /// </para>
+    /// <para>
+    /// 这个错误此前一直存在，只是所有管线都用 <c>CullMode.None</c>，
+    /// 两侧都画、再由画家算法排序掩盖了它。开启剔除后才暴露。
+    /// </para>
+    /// <para>
+    /// 判定方法：若改成 <see cref="FrontFace.Clockwise"/> 后画面反了
+    /// （看到内壁），说明这一项设对了。
+    /// </para>
+    /// </summary>
+    private static readonly FrontFace CubeWinding = FrontFace.CounterClockwise;
+
     /// <summary>true = 打印 Debug 级诊断（着色器资源计数、资源集首绑信息）。</summary>
     private const bool VerboseLog = true;
 
@@ -189,6 +314,12 @@ void main()
             Width = (uint)pixelW,
             Height = (uint)pixelH,
             SyncToVerticalBlank = false,
+            // 深度附件。Veldrid 由交换链原生创建并随 resize 重建；
+            // SDL3 由 SDL3Swapchain 自己建纹理（SDL 只提供颜色纹理），
+            // 尺寸在每次 acquire 后校验、不符则重建。
+            // 用 24 位深度 + 8 位模板：Veldrid 4.9 没有无模板的纯深度格式，
+            // 且这个格式在 Vulkan 上通用性最好。
+            DepthFormat = UseDepthBuffer ? PixelFormat.D24UNormS8UInt : null,
         };
 
         // ---- 设备 + 交换链 ------------------------------------------------
@@ -209,13 +340,15 @@ void main()
 
         Console.WriteLine($"[device] {dev.Name}");
         Console.WriteLine(
-            $"[frame]  framebuffer={chain.FrameBuffer.OutputFormat.ColorAttachments?.Length ?? 0} attach"
+            $"[frame]  framebuffer={chain.RenderTarget.OutputFormat.ColorAttachments?.Length ?? 0} attach"
         );
 
         using (dev)
         using (chain)
         {
-            if (UseUniformBufferDemo)
+            if (UseOffscreenDemo)
+                RunOffscreenDemo(dev, chain, window);
+            else if (UseUniformBufferDemo)
                 RunUniformCube(dev, chain, window);
             else
                 RunLoop(dev, chain, window);
@@ -324,7 +457,7 @@ void main()
             PrimitiveTopology = PrimitiveTopology.TriangleList,
             ShaderSet = new() { Shaders = [vs, fs], VertexLayouts = [layout] },
             BlendState = BlendStateDescription.SingleAlphaBlend,
-            Outputs = chain.FrameBuffer.OutputFormat,
+            Outputs = chain.RenderTarget.OutputFormat,
             DepthStencilState = DepthStencilStateDescription.Disabled,
             FlipY = true,
         };
@@ -537,7 +670,7 @@ void main()
             using var cl = dev.ResourceFactory.CreateCommandList();
             using (cl.Record())
             {
-                cl.SetFrameBuffer(chain.FrameBuffer);
+                cl.SetRenderTarget(chain.RenderTarget);
                 cl.ClearColorTarget(0, new(0.06f, 0.06f, 0.08f, alpha / 255f));
                 cl.SetPipeline(pipeline);
                 cl.SetVertexBuffer(0, vb);
@@ -710,6 +843,9 @@ void main()
         const float Far = 100f;
         const int VertsPerFace = 6;
 
+        /// 每面 6 个索引（4 个顶点拼 2 个三角形），与非索引版的 6 个顶点等价。
+        const int IndicesPerFace = 6;
+
         // ---- 资源布局 + UBO + 资源集 --------------------------------------
         // 释放顺序由 using 的逆序保证：resourceSet 先于 ubo，ubo 先于 layout。
         using var uboLayout = dev.ResourceFactory.CreateResourceLayout(
@@ -834,32 +970,52 @@ void main()
                 {
                     RasterizerState = new()
                     {
-                        CullMode = FaceCullMode.None,
+                        // 深度测试生效时顺手剔除背面（凸体上片元量减半）。
+                        CullMode =
+                            UseDepthBuffer && CullBackFaces ? FaceCullMode.Back : FaceCullMode.None,
                         FillMode = PolygonFillMode.Solid,
-                        FrontFace = FrontFace.Clockwise,
+                        // 见 CubeWinding 的说明：屏幕空间的实际绕序是逆时针。
+                        FrontFace = CubeWinding,
                         DepthClipEnabled = true,
                         ScissorTestEnabled = false,
                     },
                     PrimitiveTopology = PrimitiveTopology.TriangleList,
                     ShaderSet = new() { Shaders = [vs, fs], VertexLayouts = [layout] },
                     BlendState = BlendStateDescription.SingleAlphaBlend,
-                    Outputs = chain.FrameBuffer.OutputFormat,
-                    DepthStencilState = DepthStencilStateDescription.Disabled,
+                    Outputs = chain.RenderTarget.OutputFormat,
+                    // 有深度附件就必须用与之匹配的状态，否则 Veldrid 要么
+                    // 忽略测试（画面穿模）、要么创建失败。这里由
+                    // VeldridPipeline.ValidateDepthAttachmentMatch 兜底拦截。
+                    DepthStencilState = UseDepthBuffer
+                        ? DepthStencilStateDescription.DepthOnlyLessEqual
+                        : DepthStencilStateDescription.Disabled,
                     FlipY = true,
                 },
                 ResourceLayouts = [uboLayout],
             }
         );
 
-        // 每面 6 个顶点，静态顶点缓冲
-        float[] verts = new float[6 * VertsPerFace * 7];
+        // ---- 静态顶点数据 -------------------------------------------------
+        // 索引版：每面 4 个角（共 24 个顶点），由 36 个 UInt16 索引拼出 12 个三角形。
+        // 非索引版：每面 6 个独立顶点（共 36 个），三角形各自展开、顶点重复。
+        //
+        // 两种模式的顶点布局相同（vec3 位置 + vec4 颜色，stride 28），
+        // 所以可以共用同一个管线，只有绘制调用不同。
+        int vertsPerFace = UseIndexedDemo ? 4 : VertsPerFace;
+        int vertexTotal = 6 * vertsPerFace;
+
+        float[] verts = new float[vertexTotal * 7];
         int c = 0;
         for (int f = 0; f < 6; f++)
         {
             var col = faceColors[f];
-            for (int k = 0; k < VertsPerFace; k++)
+            for (int k = 0; k < vertsPerFace; k++)
             {
-                var p = cubeCorners[faces[f][k]];
+                // faces[f] 是 6 项的展开形式 (a, b, c, a, c, d)：
+                //   - 非索引模式按原样取 6 项（三角形各自展开）
+                //   - 索引模式只取 4 个角，即 [0]、[1]、[2]、[5]
+                int corner = vertsPerFace == 4 && k == 3 ? faces[f][5] : faces[f][k];
+                var p = cubeCorners[corner];
                 verts[c++] = p.X;
                 verts[c++] = p.Y;
                 verts[c++] = p.Z;
@@ -880,6 +1036,20 @@ void main()
         );
         vb.Update(0, MemoryMarshal.AsBytes(verts.AsSpan()));
 
+        // ---- 索引缓冲（仅索引模式创建）-----------------------------------
+        //
+        // offset 的单位是「字节」，indexStart 的单位是「索引个数」——
+        // 这两个单位是本次接入最容易写错的地方，所以专门留一个探针：
+        // 打开 IndexBufferOffsetProbe 时在真数据前塞 36 个占位索引（72 字节），
+        // 绑定偏移传 72。若后端把它当成「索引个数」，起点会跑到 144 字节外，
+        // 立方体直接消失。
+        int padIndices = IndexBufferOffsetProbe ? 6 * 6 : 0;
+        ulong indexOffsetBytes = (ulong)padIndices * sizeof(ushort);
+
+        // using 声明对 null 是安全的（编译器会生成 null 检查），
+        // 因此非索引模式下这里不创建任何东西。
+        using IDeviceBuffer ib = UseIndexedDemo ? BuildIndexBuffer(dev, padIndices) : null;
+
         // ---- 每帧临时状态 -------------------------------------------------
         var uniformScratch = new TransformUniform[1];
         var cornerDepth = new float[8];
@@ -891,7 +1061,15 @@ void main()
             lastHeight = InitialHeight;
         bool running = true;
 
-        Console.WriteLine("[uniform] static VB + per-frame UBO (80 bytes). Close to exit.");
+        Console.WriteLine(
+            $"[uniform] static VB ({vertexTotal} verts) + per-frame UBO (80 bytes), "
+                + (
+                    UseIndexedDemo
+                        ? $"indexed draw (36 x UInt16, offset={indexOffsetBytes}B)."
+                        : "non-indexed draw (36 verts)."
+                )
+                + " Close to exit."
+        );
 
         while (running)
         {
@@ -940,34 +1118,43 @@ void main()
             var projection = CreatePerspective(FocalLength, aspect, Near, Far);
             var modelView = model * view;
 
-            // ---- 画家算法：只需要 8 个角点的相机空间深度 ------------------
-            for (int i = 0; i < 8; i++)
+            // ---- 画家算法（仅在没有深度缓冲时需要）--------------------------
+            // 深度测试生效时，遮挡关系由 GPU 按片元深度解决，
+            // 所以不排序、也不按面分次绘制 —— 一次画完 24 顶点 / 36 索引。
+            if (!UseDepthBuffer)
             {
-                // 相机看向 -Z，所以 -cam.Z 就是到相机的距离（越大越远）
-                cornerDepth[i] = -Vector3.Transform(cubeCorners[i], modelView).Z;
-            }
-
-            for (int f = 0; f < 6; f++)
-            {
-                float sum = 0;
-                for (int k = 0; k < VertsPerFace; k++)
-                    sum += cornerDepth[faces[f][k]];
-                faceDepth[f] = sum / VertsPerFace;
-                faceOrder[f] = f;
-            }
-
-            // 远的先画（插入排序，6 个元素无所谓复杂度）
-            for (int i = 1; i < 6; i++)
-            {
-                int key = faceOrder[i];
-                float keyDepth = faceDepth[key];
-                int j = i - 1;
-                while (j >= 0 && faceDepth[faceOrder[j]] < keyDepth)
+                for (int i = 0; i < 8; i++)
                 {
-                    faceOrder[j + 1] = faceOrder[j];
-                    j--;
+                    // 相机看向 -Z，所以 -cam.Z 就是到相机的距离（越大越远）
+                    cornerDepth[i] = -Vector3.Transform(cubeCorners[i], modelView).Z;
                 }
-                faceOrder[j + 1] = key;
+
+                // faces[f] 是 (a, b, c, a, c, d) 的展开形式，
+                // 真正的 4 个角是下标 [0][1][2][5]。
+                ReadOnlySpan<int> quadCorner = [0, 1, 2, 5];
+
+                for (int f = 0; f < 6; f++)
+                {
+                    float sum = 0;
+                    for (int k = 0; k < quadCorner.Length; k++)
+                        sum += cornerDepth[faces[f][quadCorner[k]]];
+                    faceDepth[f] = sum / quadCorner.Length;
+                    faceOrder[f] = f;
+                }
+
+                // 远的先画（插入排序，6 个元素无所谓复杂度）
+                for (int i = 1; i < 6; i++)
+                {
+                    int key = faceOrder[i];
+                    float keyDepth = faceDepth[key];
+                    int j = i - 1;
+                    while (j >= 0 && faceDepth[faceOrder[j]] < keyDepth)
+                    {
+                        faceOrder[j + 1] = faceOrder[j];
+                        j--;
+                    }
+                    faceOrder[j + 1] = key;
+                }
             }
 
             // ---- 更新 UBO -------------------------------------------------
@@ -996,15 +1183,58 @@ void main()
                 // 无需为任何后端特化顺序。
                 cl.SetGraphicsResourceSet(0, resourceSet);
 
-                cl.SetFrameBuffer(chain.FrameBuffer);
+                cl.SetRenderTarget(chain.RenderTarget);
                 cl.ClearColorTarget(0, new(0.06f, 0.06f, 0.08f, alpha / 255f));
+                // 清深度必须在 SetPipeline 之前；清成 1.0 = 最远，
+                // 配合 LessOrEqual 让所有几何都能通过首帧测试。
+                // 即使不调用，框架也按 1.0 处理（见 ClearDepthTarget 文档）。
+                if (UseDepthBuffer)
+                    cl.ClearDepthTarget();
                 cl.SetPipeline(pipeline);
+
+                // 视口验证：把立方体压到左半边。
+                // 必须在 SetRenderTarget 之后 —— 换目标会重建渲染通道，
+                // 而视口是通道状态（SDL3 会重置回整个 target）。
+                // 立方体顶点是 NDC（由矩阵投影得到），视口缩到半宽后
+                // 自然被压进左半边，几何与管线都不需要改。
+                if (UseViewportDemo)
+                    cl.SetViewport(0, 0, pixW * ViewportDemoFraction, pixH, 0f, 1f);
+
                 cl.SetVertexBuffer(0, vb);
 
-                for (int fi = 0; fi < 6; fi++)
+                if (!UseDepthBuffer)
                 {
-                    int face = faceOrder[fi];
-                    cl.Draw(VertsPerFace, 1, (uint)(face * VertsPerFace), 0);
+                    // 画家算法：按深度从远到近逐面绘制。
+                    if (UseIndexedDemo)
+                    {
+                        // offset 是字节偏移；下面 DrawIndexed 的 indexStart 是索引序号，
+                        // 相对于这个偏移之后的起点，所以两者不会叠加。
+                        cl.SetIndexBuffer(ib, IndexFormat.UInt16, (int)indexOffsetBytes);
+
+                        for (int fi = 0; fi < 6; fi++)
+                        {
+                            int face = faceOrder[fi];
+                            cl.DrawIndexed(IndicesPerFace, 1, (uint)(face * IndicesPerFace), 0, 0);
+                        }
+                    }
+                    else
+                    {
+                        for (int fi = 0; fi < 6; fi++)
+                        {
+                            int face = faceOrder[fi];
+                            cl.Draw(VertsPerFace, 1, (uint)(face * VertsPerFace), 0);
+                        }
+                    }
+                }
+                else if (UseIndexedDemo)
+                {
+                    // 深度测试接管遮挡：一次绘制画完全部 6 个面，顺序无关。
+                    cl.SetIndexBuffer(ib, IndexFormat.UInt16, (int)indexOffsetBytes);
+                    cl.DrawIndexed(6 * IndicesPerFace, 1, 0, 0, 0);
+                }
+                else
+                {
+                    cl.Draw(6 * VertsPerFace, 1, 0, 0);
                 }
             }
             dev.SubmitCommands(cl);
@@ -1014,6 +1244,553 @@ void main()
         }
 
         dev.WaitForIdle();
+    }
+
+    // =====================================================================
+    //  离屏渲染目标验证
+    // =====================================================================
+
+    /// <summary>全屏 quad 的顶点着色器：位置即 NDC，原样透传 UV。</summary>
+    private const string QuadVertexCode =
+        @"
+#version 450
+layout(location = 0) in vec2 Position;
+layout(location = 1) in vec2 UV;
+
+layout(location = 0) out vec2 fsin_UV;
+
+void main()
+{
+    gl_Position = vec4(Position, 0, 1);
+    fsin_UV = UV;
+}";
+
+    /// <summary>全屏 quad 的片元着色器：直接采样离屏纹理。</summary>
+    private const string QuadFragmentCode =
+        @"
+#version 450
+layout(location = 0) in vec2 fsin_UV;
+
+layout(location = 0) out vec4 fsout_Color;
+
+layout(set = 0, binding = 0) uniform sampler2D Source;
+
+void main()
+{
+    fsout_Color = texture(Source, fsin_UV);
+}";
+
+    /// <summary>
+    /// 离屏渲染目标验证：立方体 → 离屏纹理 → 全屏 quad → 窗口。
+    /// <para>
+    /// 这段代码存在的意义是验证 <see cref="IRenderTarget"/>：
+    /// <list type="number">
+    /// <item>离屏目标能创建，且 <see cref="IRenderTarget.OutputFormat"/>
+    ///       能直接用于建管线（SDL3 尤其重要，它漏填深度格式会静默失效）；</item>
+    /// <item>同一个命令缓冲里两次 <c>SetRenderTarget</c> 能正确切换渲染通道；</item>
+    /// <item>渲染结果的纹理能被采样（<see cref="IRenderTarget.ColorTextures"/> 可用）。</item>
+    /// </list>
+    /// </para>
+    /// </summary>
+    private static void RunOffscreenDemo(IGraphicsDevice dev, ISwapchain chain, IntPtr window)
+    {
+        const int OffscreenSize = 512;
+        const float CameraDistance = 4.5f;
+        const float FocalLength = 2.5f;
+        const float Near = 0.1f;
+        const float Far = 100f;
+        const int VertsPerFace = 4;
+        const int IndicesPerFace = 6;
+
+        // ---- 离屏渲染目标 -------------------------------------------------
+        using var offscreen = dev.ResourceFactory.CreateRenderTarget(
+            new RenderTargetCreateInfo
+            {
+                Width = OffscreenSize,
+                Height = OffscreenSize,
+                ColorFormats = [PixelFormat.R8G8B8A8UNorm],
+                // 离屏目标同样支持深度：这与交换链的深度附件走的是
+                // 不同的实现路径（这里由 CreateRenderTarget 建纹理并拥有），
+                // 正好一起验证。
+                DepthFormat = UseDepthBuffer ? PixelFormat.D24UNormS8UInt : null,
+            }
+        );
+
+        Console.WriteLine(
+            $"[offscreen] {offscreen.Width}x{offscreen.Height} "
+                + $"colors={offscreen.ColorTextures.Count} "
+                + $"depth={(offscreen.DepthTexture is null ? "none" : "set")} "
+                + $"format={offscreen.OutputFormat.ColorAttachments?[0].Format}"
+        );
+
+        // ---- 立方体这一侧：UBO + 资源集 + 管线 -----------------------------
+        using var uboLayout = dev.ResourceFactory.CreateResourceLayout(
+            new ResourceLayoutCreateInfo
+            {
+                Elements =
+                [
+                    new()
+                    {
+                        Name = "Transform",
+                        Kind = ResourceKind.UniformBuffer,
+                        Stages = ShaderStage.Vertex,
+                        SizeInBytes = TransformUniform.SizeInBytes,
+                    },
+                ],
+            }
+        );
+
+        using var ubo = dev.ResourceFactory.CreateBuffer(
+            new BufferCreateInfo
+            {
+                SizeInBytes = TransformUniform.SizeInBytes,
+                Usage = BufferUsage.Uniform | BufferUsage.Dynamic,
+            }
+        );
+
+        using var cubeResourceSet = dev.ResourceFactory.CreateResourceSet(
+            new ResourceSetCreateInfo
+            {
+                Layout = uboLayout,
+                Bindings = [ResourceBinding.FromBuffer(ubo)],
+            }
+        );
+
+        using var cubeVs = dev.ResourceFactory.CreateShader(
+            new()
+            {
+                Stage = ShaderStage.Vertex,
+                Bytes = Encoding.UTF8.GetBytes(UniformVertexCode),
+                EntryPoint = "main",
+                ResourceLayout = uboLayout,
+            }
+        );
+        using var cubeFs = dev.ResourceFactory.CreateShader(
+            new()
+            {
+                Stage = ShaderStage.Fragment,
+                Bytes = Encoding.UTF8.GetBytes(UniformFragmentCode),
+                EntryPoint = "main",
+            }
+        );
+
+        Vector3[] cubeCorners =
+        [
+            new(-1, -1, -1),
+            new(1, -1, -1),
+            new(1, 1, -1),
+            new(-1, 1, -1),
+            new(-1, -1, 1),
+            new(1, -1, 1),
+            new(1, 1, 1),
+            new(-1, 1, 1),
+        ];
+
+        int[][] faces =
+        [
+            [4, 5, 6, 4, 6, 7],
+            [1, 0, 3, 1, 3, 2],
+            [0, 4, 7, 0, 7, 3],
+            [5, 1, 2, 5, 2, 6],
+            [3, 7, 6, 3, 6, 2],
+            [0, 1, 5, 0, 5, 4],
+        ];
+
+        (float R, float G, float B)[] faceColors =
+        [
+            (1.00f, 0.30f, 0.30f),
+            (0.30f, 0.50f, 1.00f),
+            (0.30f, 1.00f, 0.40f),
+            (1.00f, 0.85f, 0.25f),
+            (0.75f, 0.40f, 1.00f),
+            (0.25f, 0.90f, 0.95f),
+        ];
+
+        var cubeLayout = new VertexLayoutDescription
+        {
+            Stride = 28,
+            Attributes =
+            [
+                new() { Format = VertexFormat.Float3, Offset = 0 },
+                new() { Format = VertexFormat.Float4, Offset = 12 },
+            ],
+        };
+
+        using var cubePipeline = dev.ResourceFactory.CreatePipeline(
+            new()
+            {
+                Mode = new GraphicsDescription
+                {
+                    RasterizerState = new()
+                    {
+                        CullMode =
+                            UseDepthBuffer && CullBackFaces ? FaceCullMode.Back : FaceCullMode.None,
+                        FillMode = PolygonFillMode.Solid,
+                        // 见 CubeWinding 的说明：屏幕空间的实际绕序是逆时针。
+                        FrontFace = CubeWinding,
+                        DepthClipEnabled = true,
+                        ScissorTestEnabled = false,
+                    },
+                    PrimitiveTopology = PrimitiveTopology.TriangleList,
+                    ShaderSet = new() { Shaders = [cubeVs, cubeFs], VertexLayouts = [cubeLayout] },
+                    BlendState = BlendStateDescription.SingleAlphaBlend,
+                    // 关键：直接吃离屏目标的输出格式（含深度附件）。
+                    Outputs = offscreen.OutputFormat,
+                    DepthStencilState = UseDepthBuffer
+                        ? DepthStencilStateDescription.DepthOnlyLessEqual
+                        : DepthStencilStateDescription.Disabled,
+                    FlipY = true,
+                },
+                ResourceLayouts = [uboLayout],
+            }
+        );
+
+        // 24 顶点 + 36 索引
+        float[] cubeVerts = new float[6 * VertsPerFace * 7];
+        int c = 0;
+        for (int f = 0; f < 6; f++)
+        {
+            var col = faceColors[f];
+            for (int k = 0; k < VertsPerFace; k++)
+            {
+                // faces[f] 是 (a,b,c,a,c,d) 展开形式，四边形 4 个角是 [0][1][2][5]
+                int cornerIdx = k < 3 ? faces[f][k] : faces[f][5];
+                var p = cubeCorners[cornerIdx];
+                cubeVerts[c++] = p.X;
+                cubeVerts[c++] = p.Y;
+                cubeVerts[c++] = p.Z;
+                cubeVerts[c++] = col.R;
+                cubeVerts[c++] = col.G;
+                cubeVerts[c++] = col.B;
+                cubeVerts[c++] = 1f;
+            }
+        }
+
+        using var cubeVb = dev.ResourceFactory.CreateBuffer(
+            new BufferCreateInfo
+            {
+                SizeInBytes = (ulong)cubeVerts.Length * sizeof(float),
+                Usage = BufferUsage.Vertex,
+            }
+        );
+        cubeVb.Update(0, MemoryMarshal.AsBytes(cubeVerts.AsSpan()));
+
+        using var cubeIb = BuildIndexBuffer(dev, 0);
+
+        // ---- 全屏 quad 这一侧：纹理资源集 + 管线 ---------------------------
+        using var quadTexLayout = dev.ResourceFactory.CreateResourceLayout(
+            new ResourceLayoutCreateInfo
+            {
+                Elements =
+                [
+                    new() { Kind = ResourceKind.TextureSampler, Stages = ShaderStage.Fragment },
+                ],
+            }
+        );
+
+        // 离屏纹理就在这里被当作普通采样纹理使用 —— 这正是 ColorTextures 的意义。
+        using var quadResourceSet = dev.ResourceFactory.CreateResourceSet(
+            new ResourceSetCreateInfo
+            {
+                Layout = quadTexLayout,
+                Bindings = [ResourceBinding.FromTextureSampler(offscreen.ColorTextures[0])],
+            }
+        );
+
+        using var quadVs = dev.ResourceFactory.CreateShader(
+            new()
+            {
+                Stage = ShaderStage.Vertex,
+                Bytes = Encoding.UTF8.GetBytes(QuadVertexCode),
+                EntryPoint = "main",
+            }
+        );
+        using var quadFs = dev.ResourceFactory.CreateShader(
+            new()
+            {
+                Stage = ShaderStage.Fragment,
+                Bytes = Encoding.UTF8.GetBytes(QuadFragmentCode),
+                EntryPoint = "main",
+                ResourceLayout = quadTexLayout,
+            }
+        );
+
+        var quadLayout = new VertexLayoutDescription
+        {
+            Stride = 16, // vec2 position + vec2 uv
+            Attributes =
+            [
+                new() { Format = VertexFormat.Float2, Offset = 0 },
+                new() { Format = VertexFormat.Float2, Offset = 8 },
+            ],
+        };
+
+        using var quadPipeline = dev.ResourceFactory.CreatePipeline(
+            new()
+            {
+                Mode = new GraphicsDescription
+                {
+                    RasterizerState = new()
+                    {
+                        CullMode = FaceCullMode.None,
+                        FillMode = PolygonFillMode.Solid,
+                        FrontFace = FrontFace.Clockwise,
+                        DepthClipEnabled = false,
+                        ScissorTestEnabled = false,
+                    },
+                    PrimitiveTopology = PrimitiveTopology.TriangleList,
+                    ShaderSet = new() { Shaders = [quadVs, quadFs], VertexLayouts = [quadLayout] },
+                    BlendState = BlendStateDescription.SingleAlphaBlend,
+                    Outputs = chain.RenderTarget.OutputFormat,
+                    DepthStencilState = DepthStencilStateDescription.Disabled,
+                    FlipY = true,
+                },
+                ResourceLayouts = [quadTexLayout],
+            }
+        );
+
+        // NDC 全屏四边形。y = -1 在屏幕底部（FlipY = true），
+        // 而纹理 V = 0 在顶部，因此默认需要翻转 V。
+        float vBottom = FlipOffscreenV ? 1f : 0f;
+        float vTop = FlipOffscreenV ? 0f : 1f;
+        float[] quadVerts =
+        [
+            -1f,
+            -1f,
+            0f,
+            vBottom,
+            1f,
+            -1f,
+            1f,
+            vBottom,
+            -1f,
+            1f,
+            0f,
+            vTop,
+            1f,
+            -1f,
+            1f,
+            vBottom,
+            -1f,
+            1f,
+            0f,
+            vTop,
+            1f,
+            1f,
+            1f,
+            vTop,
+        ];
+
+        using var quadVb = dev.ResourceFactory.CreateBuffer(
+            new BufferCreateInfo
+            {
+                SizeInBytes = (ulong)quadVerts.Length * sizeof(float),
+                Usage = BufferUsage.Vertex,
+            }
+        );
+        quadVb.Update(0, MemoryMarshal.AsBytes(quadVerts.AsSpan()));
+
+        // ---- 每帧状态 -----------------------------------------------------
+        var uniformScratch = new TransformUniform[1];
+        var cornerDepth = new float[8];
+        var faceDepth = new float[6];
+        Span<int> faceOrder = stackalloc int[6];
+
+        var stopwatch = Stopwatch.StartNew();
+        int lastWidth = InitialWidth,
+            lastHeight = InitialHeight;
+        bool running = true;
+
+        Console.WriteLine("[offscreen] cube -> 512x512 target -> fullscreen quad. Close to exit.");
+
+        while (running)
+        {
+            SDL.PumpEvents();
+            while (SDL.PollEvent(out var ev))
+            {
+                var type = (SDL.EventType)ev.Type;
+                if (type is SDL.EventType.Quit or SDL.EventType.WindowCloseRequested)
+                    running = false;
+            }
+            if (!running)
+                break;
+
+            SDL.GetWindowSize(window, out int winW, out int winH);
+            int pixW = winW,
+                pixH = winH;
+            if (!SDL.GetWindowSizeInPixels(window, out pixW, out pixH))
+            {
+                pixW = winW;
+                pixH = winH;
+            }
+
+            if (pixW != lastWidth || pixH != lastHeight)
+            {
+                lastWidth = pixW;
+                lastHeight = pixH;
+                if (pixW > 0 && pixH > 0)
+                {
+                    dev.WaitForIdle();
+                    chain.Resize(pixW, pixH);
+                }
+            }
+
+            if (pixW <= 0 || pixH <= 0)
+            {
+                Thread.Sleep(16);
+                continue;
+            }
+
+            // 离屏是正方形，用 1:1 的宽高比保持立方体不被拉伸。
+            float aspect = 1f;
+            float t = (float)stopwatch.Elapsed.TotalSeconds;
+
+            var model = Matrix4x4.CreateRotationY(t * 1.1f) * Matrix4x4.CreateRotationX(t * 0.7f);
+            var view = Matrix4x4.CreateTranslation(0, 0, -CameraDistance);
+            var projection = CreatePerspective(FocalLength, aspect, Near, Far);
+            var modelView = model * view;
+
+            // 深度接管遮挡时不排序：绘制顺序无关。
+            if (!UseDepthBuffer)
+            {
+                for (int i = 0; i < 8; i++)
+                    cornerDepth[i] = -Vector3.Transform(cubeCorners[i], modelView).Z;
+
+                // faces[f] 是 (a, b, c, a, c, d) 的展开形式，四边形真正的 4 个角
+                // 是下标 [0][1][2][5]。
+                //
+                // 这里曾经直接用 k = 0..VertsPerFace-1（即 0..3）去取，
+                // 得到的是 a, b, c, a —— 漏掉 d 且 a 重复。面平均深度因此偏移，
+                // 排序结果错误，表现为「某些角度下遮挡关系乱掉」。
+                ReadOnlySpan<int> quadCorner = [0, 1, 2, 5];
+
+                for (int f = 0; f < 6; f++)
+                {
+                    float sum = 0;
+                    for (int k = 0; k < quadCorner.Length; k++)
+                        sum += cornerDepth[faces[f][quadCorner[k]]];
+                    faceDepth[f] = sum / quadCorner.Length;
+                    faceOrder[f] = f;
+                }
+
+                for (int i = 1; i < 6; i++)
+                {
+                    int key = faceOrder[i];
+                    float keyDepth = faceDepth[key];
+                    int j = i - 1;
+                    while (j >= 0 && faceDepth[faceOrder[j]] < keyDepth)
+                    {
+                        faceOrder[j + 1] = faceOrder[j];
+                        j--;
+                    }
+                    faceOrder[j + 1] = key;
+                }
+            }
+
+            float pulse = 0.85f + 0.15f * MathF.Sin(t * 3f);
+            uniformScratch[0].Mvp = modelView * projection;
+            uniformScratch[0].Tint = new Vector4(pulse, pulse, pulse, alpha / 255f);
+            ubo.Update(0, MemoryMarshal.AsBytes(uniformScratch.AsSpan()));
+
+            using var cl = dev.ResourceFactory.CreateCommandList();
+            using (cl.Record())
+            {
+                // ---- Pass 1：立方体 → 离屏目标 ----
+                cl.SetRenderTarget(offscreen);
+                // 清屏色必须和 RunUniformCube 完全一致，A/B 对照才有意义。
+                // 之前这里故意写成紫色 (0.10, 0.02, 0.20) 用来区分两个 pass，
+                // 但全屏 quad 会覆盖整个窗口，紫色背景就成了最终画面的一部分 ——
+                // 看起来像"离屏导致偏色"，其实是这个清屏值本身。
+                cl.ClearColorTarget(0, new(0.06f, 0.06f, 0.08f, 1f));
+                if (UseDepthBuffer)
+                    cl.ClearDepthTarget();
+                cl.SetPipeline(cubePipeline);
+                cl.SetGraphicsResourceSet(0, cubeResourceSet);
+                cl.SetVertexBuffer(0, cubeVb);
+                cl.SetIndexBuffer(cubeIb, IndexFormat.UInt16, 0);
+
+                if (UseDepthBuffer)
+                {
+                    // 一次绘制画完 6 个面，顺序无关。
+                    cl.DrawIndexed(6 * IndicesPerFace, 1, 0, 0, 0);
+                }
+                else
+                {
+                    for (int fi = 0; fi < 6; fi++)
+                    {
+                        int face = faceOrder[fi];
+                        cl.DrawIndexed(IndicesPerFace, 1, (uint)(face * IndicesPerFace), 0, 0);
+                    }
+                }
+
+                // ---- Pass 2：离屏纹理 → 窗口 ----
+                // 这一步同样验证了「切目标会结束上一个渲染通道」。
+                cl.SetRenderTarget(chain.RenderTarget);
+                cl.ClearColorTarget(0, new(0.06f, 0.06f, 0.08f, 1f));
+                cl.SetPipeline(quadPipeline);
+
+                // 视口必须在 SetRenderTarget 之后设置：换目标会重建渲染通道，
+                // 而视口属于通道状态（SDL3 会重置成整个 target）。
+                if (UseViewportDemo)
+                {
+                    cl.SetViewport(0, 0, pixW * ViewportDemoFraction, pixH, 0f, 1f);
+                }
+
+                cl.SetGraphicsResourceSet(0, quadResourceSet);
+                cl.SetVertexBuffer(0, quadVb);
+                cl.Draw(6, 1, 0, 0);
+            }
+            dev.SubmitCommands(cl);
+            chain.Swap();
+
+            Thread.Sleep(16);
+        }
+
+        dev.WaitForIdle();
+    }
+
+    /// <summary>
+    /// 生成 24 顶点版本的索引缓冲：每面 4 个顶点、6 个索引。
+    /// <para>
+    /// 索引是<b>绝对</b>顶点号（第 f 面占 4f..4f+3），配合
+    /// <c>DrawIndexed</c> 的 <c>vertexOffset = 0</c>。
+    /// 如果改用 <c>vertexOffset</c> 共享一个大顶点池，这里就应写相对索引。
+    /// </para>
+    /// <para>
+    /// <paramref name="padIndices"/> &gt; 0 时在真数据前填一段 0，
+    /// 仅用于验证「绑定偏移按字节计算」—— 那段数据永远不会被读到。
+    /// </para>
+    /// </summary>
+    private static IDeviceBuffer BuildIndexBuffer(IGraphicsDevice dev, int padIndices)
+    {
+        const int IndicesPerFace = 6;
+
+        var indices = new ushort[padIndices + 6 * IndicesPerFace];
+        for (int f = 0; f < 6; f++)
+        {
+            int baseVertex = f * 4;
+            int o = padIndices + f * IndicesPerFace;
+
+            // 与 RunLoop 里 (a,b,c)+(a,c,d) 的绕序保持一致
+            indices[o + 0] = (ushort)(baseVertex + 0);
+            indices[o + 1] = (ushort)(baseVertex + 1);
+            indices[o + 2] = (ushort)(baseVertex + 2);
+            indices[o + 3] = (ushort)(baseVertex + 0);
+            indices[o + 4] = (ushort)(baseVertex + 2);
+            indices[o + 5] = (ushort)(baseVertex + 3);
+        }
+
+        var buffer = dev.ResourceFactory.CreateBuffer(
+            new BufferCreateInfo
+            {
+                SizeInBytes = (ulong)indices.Length * sizeof(ushort),
+                // 必须声明 Index：两个后端都会在 SetIndexBuffer 时校验，
+                // 缺了直接抛（SDL3 原生不报错，只是绘制结果空白）。
+                Usage = BufferUsage.Index,
+            }
+        );
+        buffer.Update(0, MemoryMarshal.AsBytes(indices.AsSpan()));
+        return buffer;
     }
 
     /// <summary>

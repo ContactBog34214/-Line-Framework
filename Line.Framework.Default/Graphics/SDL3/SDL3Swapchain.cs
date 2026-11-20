@@ -1,6 +1,9 @@
 using Line.Framework.Graphics;
 using SDL3;
 using static SDL3.SDL;
+// SDL3.SDL 里也有一个 PixelFormat（纹理格式的旧枚举），
+// 与抽象层的同名类型冲突，必须显式指向抽象层那个。
+using PixelFormat = Line.Framework.Graphics.PixelFormat;
 
 namespace Line.Framework.Default.Graphics.SDL3;
 
@@ -18,16 +21,42 @@ namespace Line.Framework.Default.Graphics.SDL3;
 /// </summary>
 public sealed class SDL3Swapchain : ISwapchain
 {
+    private readonly SDL3Device device;
     private readonly IntPtr window;
-    private readonly SDL3FrameBuffer framebuffer;
+    private readonly SDL3SwapchainTarget renderTarget;
     private readonly bool ownsClaim;
+
+    /// <summary>请求的深度格式；null = 不带深度附件。</summary>
+    private readonly PixelFormat? depthFormat;
+
+    /// <summary>
+    /// 交换链的深度纹理。
+    /// <para>
+    /// SDL 只提供颜色纹理，深度必须自己建。它的尺寸必须与
+    /// acquire 到的交换链纹理<b>完全一致</b>，因此真实尺寸要等到
+    /// <c>SDL_WaitAndAcquireGPUSwapchainTexture</c> 之后才知道 ——
+    /// 见 <see cref="EnsureDepthTexture"/>。
+    /// </para>
+    /// </summary>
+    private ITexture depthTexture;
+
+    private uint depthWidth;
+    private uint depthHeight;
 
     public string Name { get; }
 
-    internal SDL3Swapchain(SDL3Device device, IntPtr window, string name, bool ownsClaim)
+    internal SDL3Swapchain(
+        SDL3Device device,
+        IntPtr window,
+        string name,
+        bool ownsClaim,
+        PixelFormat? depthFormat
+    )
     {
+        this.device = device;
         this.window = window;
         this.ownsClaim = ownsClaim;
+        this.depthFormat = depthFormat;
         Name = name ?? "SDL3Swapchain";
 
         // SDL_GPU 不接受带 SDL_WINDOW_TRANSPARENT 的窗口。
@@ -75,14 +104,68 @@ public sealed class SDL3Swapchain : ISwapchain
                     Format = SDL3Converter.ConvertPixelFormat(swapFormat),
                 },
             ],
-            DepthAttachment = null,
+            // 深度格式在这里就确定下来，而不是等纹理建好才填：
+            // 管线创建只读这个值（DepthStencilFormat 由它决定），
+            // 而管线通常在 acquire 之前就建好了。
+            DepthAttachment = depthFormat.HasValue
+                ? new OutputAttachmentDescription { Format = depthFormat.Value }
+                : null,
             SampleCount = SampleCount.Count1,
         };
 
-        framebuffer = new SDL3FrameBuffer(window, name) { OutputFormat = outputFormat };
+        renderTarget = new SDL3SwapchainTarget(this, window, name) { OutputFormat = outputFormat };
     }
 
-    public IFrameBuffer FrameBuffer => framebuffer;
+    /// <summary>当前深度纹理；由 <see cref="EnsureDepthTexture"/> 维护。</summary>
+    internal ITexture CurrentDepthTexture => depthTexture;
+
+    public IRenderTarget RenderTarget => renderTarget;
+
+    /// <summary>
+    /// 确保深度纹理存在且尺寸与本次 acquire 到的交换链纹理一致，返回其句柄。
+    /// <para>
+    /// <b>必须在每次 acquire 之后调用</b>：交换链纹理的真实尺寸只有 acquire
+    /// 才知道（窗口缩放与 present 时序可能错开），而渲染通道要求深度附件
+    /// 与颜色附件尺寸完全相同，否则 Vulkan 会截断或报验证错误。
+    /// </para>
+    /// <para>
+    /// 没有请求深度时返回 <see cref="IntPtr.Zero"/>。
+    /// </para>
+    /// </summary>
+    internal IntPtr EnsureDepthTexture(uint width, uint height)
+    {
+        if (depthFormat is not { } format)
+            return IntPtr.Zero;
+
+        if (width == 0 || height == 0)
+            return IntPtr.Zero;
+
+        if (depthTexture is not null && depthWidth == width && depthHeight == height)
+            return ((SDL3Texture)depthTexture).handle;
+
+        // 尺寸变了（首次创建 / 窗口缩放）→ 重建。
+        // SDL_ReleaseGPUTexture 是延迟释放的：GPU 仍在引用时 SDL 会在
+        // 合适时机真正回收，因此这里不需要先 WaitForIdle。
+        depthTexture?.Dispose();
+        depthTexture = null;
+
+        depthTexture = device.ResourceFactory.CreateTexture(
+            new TextureCreateInfo
+            {
+                Width = width,
+                Height = height,
+                Format = format,
+                Usage = TextureUsage.DepthStencilTarget,
+                MipLevels = 1,
+                ArrayLayers = 1,
+                SampleCount = SampleCount.Count1,
+            }
+        );
+
+        depthWidth = width;
+        depthHeight = height;
+        return ((SDL3Texture)depthTexture).handle;
+    }
 
     public void Resize(int width, int height)
     {
@@ -93,8 +176,8 @@ public sealed class SDL3Swapchain : ISwapchain
             );
 
         // SDL3 的交换链尺寸随窗口自动变化，
-        // 这里只需让缓存的尺寸失效，下一次 SetFrameBuffer 会重新取值。
-        framebuffer.Invalidate();
+        // 这里只需让缓存的尺寸失效，下一次 SetRenderTarget 会重新取值。
+        renderTarget.Invalidate();
     }
 
     /// <summary>
@@ -107,30 +190,45 @@ public sealed class SDL3Swapchain : ISwapchain
 
     public void Dispose()
     {
+        // 深度纹理是我们自己建的，必须释放 —— 否则反复开关窗口会持续泄漏。
+        // 交换链的颜色纹理由 SDL 管理，不能碰。
+        depthTexture?.Dispose();
+        depthTexture = null;
+        depthWidth = 0;
+        depthHeight = 0;
+
         if (ownsClaim && window != IntPtr.Zero)
         {
-            // 注意：这里需要 device，但为了不让 swapchain 反向依赖设备，
-            // 认领的释放留给设备销毁时统一处理（SDL 会清理）。
+            // 认领的释放留给设备销毁时统一处理（SDL 会清理），
+            // 避免 swapchain 在设备之后被销毁时访问已释放的设备。
         }
     }
 }
 
 /// <summary>
-/// SDL3 的渲染目标。
+/// SDL3 的交换链渲染目标。
 /// <para>
-/// 交换链目标每帧由命令列表填充（<see cref="AcquiredTexture"/> 等）。
-/// 只有「当前命令缓冲取到的那一个纹理」是有效的，
-/// 不要跨帧持有，也不要 Dispose。
+/// 与 <see cref="SDL3RenderTarget"/> 的区别：这里的纹理不是本对象创建的，
+/// 而是每帧通过 <c>SDL_WaitAndAcquireGPUSwapchainTexture</c> 从窗口取得，
+/// 只能由取得它的那个命令缓冲引用，且只在本帧有效。
+/// </para>
+/// <para>
+/// 因此 <see cref="ColorTextures"/> 返回空列表：交换链纹理不可采样
+/// （Vulkan 的 present layout 不支持，SDL3 也只是每帧一个临时句柄）。
 /// </para>
 /// </summary>
-public sealed class SDL3FrameBuffer : IFrameBuffer
+public sealed class SDL3SwapchainTarget : IRenderTarget
 {
-    internal IntPtr Window { get; }
+    /// <summary>
+    /// 持有它的交换链。
+    /// <para>
+    /// 深度纹理由交换链创建与管理（它的生命周期跨越「交换链重建尺寸」），
+    /// 目标只是借用。循环引用是安全的：两者同生共死。
+    /// </para>
+    /// </summary>
+    private readonly SDL3Swapchain owner;
 
-    /// <summary>本帧取到的交换链纹理。由 <c>SetFrameBuffer</c> 填充。</summary>
-    internal IntPtr AcquiredTexture;
-    internal uint AcquiredWidth;
-    internal uint AcquiredHeight;
+    internal IntPtr Window { get; }
 
     /// <summary>上一次取到的尺寸，作为 <see cref="Width"/>/<see cref="Height"/> 的返回值。</summary>
     private uint width;
@@ -143,13 +241,20 @@ public sealed class SDL3FrameBuffer : IFrameBuffer
 
     public OutputFormatDescription OutputFormat { get; internal set; }
 
-    public IReadOnlyList<FramebufferAttachmentDescription> ColorTargets =>
-        Array.Empty<FramebufferAttachmentDescription>();
+    public IReadOnlyList<ITexture> ColorTextures => [];
 
-    public FramebufferAttachmentDescription? DepthTarget => null;
+    /// <summary>
+    /// 深度纹理；没有请求深度时为 null。
+    /// <para>
+    /// 由交换链拥有，<b>不要 Dispose</b>。尺寸在每次 acquire 后可能与
+    /// <see cref="Width"/>/<see cref="Height"/> 同步变化。
+    /// </para>
+    /// </summary>
+    public ITexture DepthTexture => owner.CurrentDepthTexture;
 
-    internal SDL3FrameBuffer(IntPtr window, string name)
+    internal SDL3SwapchainTarget(SDL3Swapchain owner, IntPtr window, string name)
     {
+        this.owner = owner;
         Window = window;
         Name = name ?? "SDL3SwapchainTarget";
     }
@@ -160,14 +265,17 @@ public sealed class SDL3FrameBuffer : IFrameBuffer
         height = 0;
     }
 
-    internal void ApplyAcquiredSize()
+    internal void ApplyAcquiredSize(uint w, uint h)
     {
-        width = AcquiredWidth;
-        height = AcquiredHeight;
+        width = w;
+        height = h;
     }
+
+    /// <summary>见 <see cref="SDL3Swapchain.EnsureDepthTexture"/>。</summary>
+    internal IntPtr EnsureDepthTexture(uint w, uint h) => owner.EnsureDepthTexture(w, h);
 
     public void Dispose()
     {
-        // 交换链纹理由实现管理，不能释放。
+        // 交换链纹理由 SDL 管理、深度纹理由交换链管理，这里都不能释放。
     }
 }

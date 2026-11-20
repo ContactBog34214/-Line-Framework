@@ -22,6 +22,12 @@ namespace Line.Framework.Default.Graphics.Veldrid
         /// </summary>
         private readonly List<(uint Slot, VeldridResourceSet Set)> pendingSets = [];
 
+        /// <summary>
+        /// 当前渲染目标是否有深度附件。在 <see cref="SetRenderTarget"/> 时记录一次，
+        /// 供 <see cref="ClearDepthTarget"/> 判断是否该真正下清屏命令。
+        /// </summary>
+        private bool depthTargetAvailable;
+
         public bool Working
         {
             get;
@@ -43,6 +49,7 @@ namespace Line.Framework.Default.Graphics.Veldrid
                         // 上一次残留的登记不能带过来。
                         pendingPipeline = null;
                         pendingSets.Clear();
+                        depthTargetAvailable = false;
                     }
                     else
                         cl.End();
@@ -58,6 +65,19 @@ namespace Line.Framework.Default.Graphics.Veldrid
             cl.ClearColorTarget(index, VeldridConverter.ConvertRgbaFloat(color));
         }
 
+        public void ClearDepthTarget(float depth = 1f)
+        {
+            // Veldrid 的 ClearDepthStencil 不检查目标有没有深度附件：
+            // 当前 framebuffer 没有深度时，驱动侧是空操作或验证错误。
+            // 抽象层承诺「没有深度附件时是空操作」，所以这里显式拦一下。
+            if (!depthTargetAvailable)
+                return;
+
+            // 用两参重载：两个可用深度格式都带 8 位模板，
+            // 顺手把模板也清成 0，避免残留值影响将来接入模板的管线。
+            cl.ClearDepthStencil(depth, 0);
+        }
+
         public void Dispose()
         {
             if (Working)
@@ -68,6 +88,18 @@ namespace Line.Framework.Default.Graphics.Veldrid
         public void Draw(uint vertexCount, uint instanceCount, uint vertexStart, uint instanceStart)
         {
             cl.Draw(vertexCount, instanceCount, vertexStart, instanceStart);
+        }
+
+        public void DrawIndexed(
+            uint indexCount,
+            uint instanceCount,
+            uint indexStart,
+            int vertexOffset,
+            uint instanceStart
+        )
+        {
+            // 参数顺序与 Veldrid 原生签名逐位相同，直传即可。
+            cl.DrawIndexed(indexCount, instanceCount, indexStart, vertexOffset, instanceStart);
         }
 
         public IDisposable Record()
@@ -91,11 +123,16 @@ namespace Line.Framework.Default.Graphics.Veldrid
             }
         }
 
-        public void SetFrameBuffer(IFrameBuffer frameBuffer)
+        public void SetRenderTarget(IRenderTarget renderTarget)
         {
-            if (!(frameBuffer is VeldridFrameBuffer fb))
-                throw new InvalidDataException();
-            cl.SetFramebuffer(fb.framebuffer);
+            if (renderTarget is not VeldridRenderTarget rt)
+                throw new ArgumentException(
+                    $"Render target {renderTarget?.GetType().Name ?? "null"} "
+                        + "is not a VeldridRenderTarget.",
+                    nameof(renderTarget)
+                );
+            cl.SetFramebuffer(rt.framebuffer);
+            depthTargetAvailable = rt.DepthTexture is not null;
         }
 
         public void SetGraphicsResourceSet(uint slot, IResourceSet resourceSet)
@@ -145,6 +182,26 @@ namespace Line.Framework.Default.Graphics.Veldrid
             ApplyPendingResourceSet();
         }
 
+        public void SetViewport(
+            float x,
+            float y,
+            float width,
+            float height,
+            float minDepth = 0f,
+            float maxDepth = 1f
+        )
+        {
+            if (width <= 0 || height <= 0)
+                throw new ArgumentOutOfRangeException(
+                    nameof(width),
+                    $"Viewport size must be positive, got {width}x{height}."
+                );
+
+            // Veldrid 的 SetViewport 带 index（Vulkan 支持多视口），
+            // 抽象层只暴露单视口，所以固定用 0。
+            cl.SetViewport(0, new global::Veldrid.Viewport(x, y, width, height, minDepth, maxDepth));
+        }
+
         public void SetScissorRect(uint index, uint x, uint y, uint width, uint height)
         {
             cl.SetScissorRect(index, x, y, width, height);
@@ -156,6 +213,35 @@ namespace Line.Framework.Default.Graphics.Veldrid
                 throw new InvalidDataException();
             cl.SetVertexBuffer(slot, bf.buffer);
         }
+
+        public void SetIndexBuffer(IDeviceBuffer buffer, IndexFormat format, int offset = 0)
+        {
+            if (!(buffer is VeldridBuffer bf))
+                throw new InvalidDataException(
+                    $"Index buffer {buffer?.GetType().Name ?? "null"} is not a VeldridBuffer."
+                );
+
+            // Vulkan 绑错用途的缓冲不是「报个错」那么温和：可能是验证层报错后
+            // 继续执行、直接 device lost，或者静默读到垃圾。这里提前拦住。
+            if ((bf.Usage & BufferUsage.Index) == 0)
+                throw new ArgumentException(
+                    $"Buffer was created without BufferUsage.Index (actual: {bf.Usage}). "
+                        + "Index buffers must declare it at creation time.",
+                    nameof(buffer)
+                );
+
+            if (offset < 0)
+                throw new ArgumentOutOfRangeException(nameof(offset));
+
+            cl.SetIndexBuffer(
+                bf.buffer,
+                format == IndexFormat.UInt16
+                    ? global::Veldrid.IndexFormat.UInt16
+                    : global::Veldrid.IndexFormat.UInt32,
+                (uint)offset
+            );
+        }
+
     }
 
     public partial class VeldridResourceFactory
