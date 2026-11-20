@@ -44,6 +44,15 @@ public interface ITexture : IDisposable, IName
 
     /// <summary>
     /// 上传像素数据到指定区域。
+    /// <para>
+    /// <b>width / height / depth 的默认值按 <paramref name="mipLevel"/> 计算</b>，
+    /// 即该层的实际尺寸（<c>max(1, 基础尺寸 >> mipLevel)</c>），
+    /// 不是 mip0 的尺寸。所以上传 mip 1 时留空即可，数据长度按该层算。
+    /// </para>
+    /// <para>
+    /// <b>注意</b>：源数据必须是<b>紧密排列</b>的，没有 rowPitch 参数 ——
+    /// 从一张大缓冲里上传子矩形时，需要先在 CPU 端拷成紧凑排布。
+    /// </para>
     /// </summary>
     /// <param name="source">
     /// 源数据；长度必须恰好等于该区域的字节数
@@ -52,9 +61,9 @@ public interface ITexture : IDisposable, IName
     /// <param name="x">目标区域左上角 X。</param>
     /// <param name="y">目标区域左上角 Y。</param>
     /// <param name="z">目标区域起始深度（三维纹理用）。</param>
-    /// <param name="width">区域宽度；null 表示从 x 到纹理右边界。</param>
-    /// <param name="height">区域高度；null 表示从 y 到下边界。</param>
-    /// <param name="depth">区域深度；null 表示 1。</param>
+    /// <param name="width">区域宽度；null 表示从 x 到该 mip 层右边界。</param>
+    /// <param name="height">区域高度；null 表示从 y 到该 mip 层下边界。</param>
+    /// <param name="depth">区域深度；null 表示从 z 到该层末尾。</param>
     /// <param name="mipLevel">目标 mip 层。</param>
     /// <param name="arrayLayer">目标数组层。</param>
     void Update(

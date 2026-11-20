@@ -229,6 +229,17 @@ public sealed class SDL3Device : IGraphicsDevice
         cl.Submit();
     }
 
+    /// <summary>
+    /// 立即释放即可。
+    /// <para>
+    /// SDL 的 <c>SDL_ReleaseGPUTexture</c> / <c>SDL_ReleaseGPUBuffer</c> /
+    /// <c>SDL_ReleaseGPU*</c> 本身就是<b>延迟回收</b>的：资源仍在 GPU 上使用时，
+    /// SDL 会等到安全时机再真正销毁。所以这里不需要自己维护延迟队列 ——
+    /// 与 Veldrid 的实现方式不同，但对外语义一致。
+    /// </para>
+    /// </summary>
+    public void DisposeWhenIdle(IDisposable resource) => resource?.Dispose();
+
     public void Dispose()
     {
         if (disposed)

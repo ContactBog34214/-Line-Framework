@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Drawing;
-using System.Numerics;
 using Line.Framework.Graphics;
 
 namespace Line.Framework.Resource.Graphic;

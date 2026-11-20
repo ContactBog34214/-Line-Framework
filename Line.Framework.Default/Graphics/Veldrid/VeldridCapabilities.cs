@@ -42,6 +42,27 @@ public sealed class VeldridCapabilities : IGraphicsCapabilities
     /// </summary>
     public bool SupportsDepthStencil => true;
 
+    /// <summary>
+    /// <b>false —— Veldrid 后端的 mipmap 采样不可用。</b>
+    /// <para>
+    /// 已经验证过的事实：纹理能创建 9 层、mip1..8 数据能上传、
+    /// 视图覆盖全部 mip（<c>texelFetch(tex, ivec2(0,0), 8)</c> 能读到第 8 层）、
+    /// 采样器参数为 <c>MinLinear_MagLinear_MipLinear</c>、<c>MaxLod=32</c>。
+    /// 但 <c>texture()</c> 始终只返回 mip0，即使把
+    /// <c>MinLod</c>/<c>MaxLod</c> 双双设为 3、或直接
+    /// <c>textureLod(uv, 3.0)</c> 也不变。
+    /// </para>
+    /// <para>
+    /// 结论：Veldrid 把我们的 sampler 与 <c>vkCreateSampler</c> 之间有一层
+    /// 未生效的映射，具体位置未查明。这是已知限制，不抛异常。
+    /// </para>
+    /// <para>
+    /// 声明为 false 后，<c>RResourceSet</c> 不再生成 mip 链 ——
+    /// 省掉 CPU 降采样和那份额外 33% 的显存。需要 mipmap 时请用 SDL3 后端。
+    /// </para>
+    /// </summary>
+    public bool SupportsMipmap => false;
+
     public bool IsTextureFormatSupported(PixelFormat format, TextureUsage usage)
     {
         global::Veldrid.PixelFormat veldridFormat;

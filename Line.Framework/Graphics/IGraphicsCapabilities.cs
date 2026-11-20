@@ -68,6 +68,21 @@ public interface IGraphicsCapabilities
     bool IsSampleCountSupported(PixelFormat format, SampleCount sampleCount);
 
     /// <summary>
+    /// 是否支持 mipmap 采样。
+    /// <para>
+    /// <b>Veldrid 后端为 <c>false</c></b>：纹理与视图都能正常创建多层 mip
+    /// （<c>texelFetch</c> 能读到深层），但采样器路径只返回 mip0 ——
+    /// 即 <c>MinLod</c>/<c>MaxLod</c> 与自动 LOD 都不起作用。
+    /// 这是已知限制，不会报错，只是画面得不到 mipmap 的抗锯齿效果。
+    /// </para>
+    /// <para>
+    /// 为 <c>false</c> 时资源加载器<b>不会生成 mip 链</b>，只申请 1 层 ——
+    /// 省掉 CPU 降采样与那份显存，也避免「申请了多层但永远用不上」的浪费。
+    /// </para>
+    /// </summary>
+    bool SupportsMipmap { get; }
+
+    /// <summary>
     /// 支持的顶点输入格式。目前两个后端覆盖同一集合，
     /// 但把「某个格式在某后端不被接受」的差异留在这里，
     /// 比让管线创建时抛异常更容易排查。

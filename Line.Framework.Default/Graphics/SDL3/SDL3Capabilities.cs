@@ -47,6 +47,15 @@ public sealed class SDL3Capabilities : IGraphicsCapabilities
     /// </summary>
     public bool SupportsDepthStencil => true;
 
+    /// <summary>
+    /// true —— SDL3 后端的 mipmap 采样正常。
+    /// <para>
+    /// 实测证据：生成 9 层并染成洋红后，缩小显示的纹理明显变粉，
+    /// 说明采样器确实落到了深层。
+    /// </para>
+    /// </summary>
+    public bool SupportsMipmap => true;
+
     public bool IsTextureFormatSupported(PixelFormat format, TextureUsage usage)
     {
         // 转换失败（框架有、SDL 没有的格式）等同于「不支持」，

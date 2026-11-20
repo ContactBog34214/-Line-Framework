@@ -25,8 +25,9 @@ public class ResourceManager : IDisposable
             }
         }
         Types.Clear();
-        IsDisposed=true;
+        IsDisposed = true;
     }
+
     public bool IsDisposed { get; protected set; } = false;
     readonly ConcurrentDictionary<string, IResource> Resources = [];
     public bool AutoReleaseResources { get; set; } = true;
@@ -68,9 +69,18 @@ public class ResourceManager : IDisposable
     }
 
     /// <summary>
-    /// 获取指定ID的资产
+    /// 获取指定ID 的资产<b>使用句柄</b>（不是资源对象本身）。
+    /// <para>
+    /// 返回的是 <see cref="IResource.GetHandle"/> 的结果，类型由资源类决定：
+    /// <c>RResourceSet</c> → <c>ResourceSetArg</c>，<c>Font</c> → <c>Font</c>。
+    /// 因此 <typeparamref name="T"/> 必须写句柄类型，不要写资源类名 ——
+    /// 写资源类名会抛 InvalidCastException。
+    /// </para>
+    /// <para>
+    /// 要访问资源对象本身（配置、状态），用 <see cref="GetResourceObject"/>。
+    /// </para>
     /// </summary>
-    /// <typeparam name="资产实际类型"></typeparam>
+    /// <typeparam name="句柄类型"></typeparam>
     /// <param name="资产ID"></param>
     /// <param name="是否在未加载时自动加载"></param>
     /// <returns>资产</returns>
@@ -85,6 +95,8 @@ public class ResourceManager : IDisposable
         var target = obj;
         if (NeedLoaded)
             await LoadResource(id);
+        if (target == default)
+            return default;
         try
         {
             var t = Rs[id];
@@ -92,7 +104,10 @@ public class ResourceManager : IDisposable
             t.NumGet++;
             Rs[id] = t;
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Log.Error($"Get Resource error: {ex}");
+        }
         if (target.IsLoaded)
             return (T)target.GetHandle();
         return default;
@@ -156,6 +171,30 @@ public class ResourceManager : IDisposable
         List<string> a = [];
         a.AddRange(Resources.Keys);
         return a;
+    }
+
+    /// <summary>
+    /// 获取资产<b>对象本身</b>（<see cref="IResource"/>），而不是它的使用句柄。
+    /// <para>
+    /// <b>与 <see cref="GetResource{T}"/> 的区别</b>：后者返回的是
+    /// <see cref="IResource.GetHandle"/> 的结果，那个类型与资源类无关 ——
+    /// 例如 <c>RResourceSet</c> 的句柄是 <c>ResourceSetArg</c>，
+    /// <c>Font</c> 的句柄是 <c>Font</c> 自己。因此
+    /// <c>GetResource&lt;RResourceSet&gt;</c> 会抛 InvalidCastException。
+    /// </para>
+    /// <para>
+    /// 需要访问资源对象的<b>配置或状态</b>（如
+    /// <c>RResourceSet.EnableMipmap</c>）时用本方法；
+    /// 需要拿来绘制时用 <see cref="GetResource{T}"/>。
+    /// </para>
+    /// </summary>
+    /// <param name="id">资产ID。</param>
+    /// <returns>资产对象；不存在时返回 null。</returns>
+    public virtual IResource GetResourceObject(string id)
+    {
+        if (id == null)
+            return null;
+        return Resources.TryGetValue(id, out var obj) ? obj : null;
     }
 
     /// <summary>

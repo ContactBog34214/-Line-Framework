@@ -285,6 +285,15 @@ public sealed partial class VeldridResourceFactory
             span = span[3..];
 
         string source = System.Text.Encoding.UTF8.GetString(span);
+
+        // 必须先剥掉注释再匹配，否则注释里写的示例（例如
+        // 「绝不要手写 set = 2」）会被当成真实声明，产生误报。
+        source = System.Text.RegularExpressions.Regex.Replace(
+            source,
+            @"//[^\n]*|/\*[\s\S]*?\*/",
+            string.Empty
+        );
+
         var m = System.Text.RegularExpressions.Regex.Match(source, @"\bset\s*=\s*([1-9]\d*)");
 
         if (!m.Success)

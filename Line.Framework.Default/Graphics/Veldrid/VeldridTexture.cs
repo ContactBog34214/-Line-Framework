@@ -69,12 +69,18 @@ public sealed class VeldridTexture : ITexture
         uint arrayLayer = 0
     )
     {
+        // 目标区域的上界必须按「该 mip 层」的尺寸算，不是基础层。
+        // 用基础层尺寸校验 mip1 的数据会判定为「长度不足」（mip1 只有 1/4 大）。
+        uint mipW = MipmapGenerator.GetMipDimension(Width, mipLevel);
+        uint mipH = MipmapGenerator.GetMipDimension(Height, mipLevel);
+        uint mipD = MipmapGenerator.GetMipDimension(Depth, mipLevel);
+
         if (!width.HasValue)
-            width = (int)Width - x;
+            width = (int)mipW - x;
         if (!height.HasValue)
-            height = (int)Height - y;
+            height = (int)mipH - y;
         if (!depth.HasValue)
-            depth = (int)Depth - z;
+            depth = (int)mipD - z;
         (int w, int h, int d) textureSize = new(width.Value, height.Value, depth.Value);
         (int x, int y, int z) pos = new(x, y, z);
         (int x, int y, int z) r = new(
@@ -87,10 +93,12 @@ public sealed class VeldridTexture : ITexture
                 "Position",
                 $"{(x < 0 ? x : "OK")},{(y < 0 ? y : "OK")},{(z < 0 ? z : "OK")}"
             );
-        if (r.x > Width || r.y > Height || r.z > Depth)
+        if (r.x > mipW || r.y > mipH || r.z > mipD)
             throw new ArgumentOutOfRangeException(
                 "TextureSize",
-                $"{(r.x > Width ? r.x : "OK")},{(r.y > Height ? r.y : "OK")},{(r.z > Depth ? r.z : "OK")}"
+                $"{(r.x > mipW ? r.x : "OK")},{(r.y > mipH ? r.y : "OK")},"
+                    + $"{(r.z > mipD ? r.z : "OK")} exceeds mip{mipLevel} "
+                    + $"{mipW}x{mipH}x{mipD}"
             );
         if (textureSize.w <= 0 || textureSize.h <= 0 || textureSize.d <= 0)
             throw new ArgumentOutOfRangeException(

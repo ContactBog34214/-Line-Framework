@@ -35,9 +35,13 @@ public sealed partial class SDL3ResourceFactory : IResourceFactory
                 AddressU = SamplerAddressMode.Clamp,
                 AddressV = SamplerAddressMode.Clamp,
                 AddressW = SamplerAddressMode.Clamp,
-                // UI 纹理通常不带 mipmap，限制在 mip 0 避免无谓采样
+                // MaxLod 必须覆盖 mip 链的最大可能深度：mipmap 生成已改为
+                // 「用满」（RResourceSet.DefaultMipLevels = UnlimitedMipLevels），
+                // 400x400 会生成 9 层。传 4 会让 400x400 的图只能采到 50x50，
+                // 缩到 40px 显示时仍不够模糊。
+                // 32 是保守上限，实际层数由纹理自身决定。
                 MinLod = 0,
-                MaxLod = 0,
+                MaxLod = 32,
                 AnisotropyEnabled = false,
             }
         );
@@ -82,11 +86,7 @@ public sealed partial class SDL3ResourceFactory : IResourceFactory
             // 补一个无害的 STORAGE_BUFFER 位兜底。
             flags = GPUBufferUsageFlags.GraphicsStorageRead;
 
-        var info = new GPUBufferCreateInfo
-        {
-            Usage = flags,
-            Size = (uint)createInfo.SizeInBytes,
-        };
+        var info = new GPUBufferCreateInfo { Usage = flags, Size = (uint)createInfo.SizeInBytes };
 
         var handle = SDL.CreateGPUBuffer(Dev, info);
         if (handle == IntPtr.Zero)
@@ -382,7 +382,7 @@ public sealed partial class SDL3ResourceFactory : IResourceFactory
                         crossStage,
                         ref resourceInfo,
                         0, // infoProps：SPIR-V 输入元数据，0 = 默认
-                        0  // shaderProps：输出着色器元数据，0 = 默认
+                        0 // shaderProps：输出着色器元数据，0 = 默认
                     );
                 }
             }

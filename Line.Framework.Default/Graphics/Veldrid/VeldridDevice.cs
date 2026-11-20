@@ -44,6 +44,8 @@ public sealed class VeldridDevice : IGraphicsDevice
         ResourceFactory = new VeldridResourceFactory(graphicsDevice);
         Capabilities = new VeldridCapabilities(graphicsDevice);
 
+        WarnMipmapUnsupported();
+
         swapchain = new VeldridSwapchain(graphicsDevice.MainSwapchain, graphicsDevice);
     }
 
@@ -59,6 +61,30 @@ public sealed class VeldridDevice : IGraphicsDevice
         graphicsDevice = CreateDevice(backend, null);
         ResourceFactory = new VeldridResourceFactory(graphicsDevice);
         Capabilities = new VeldridCapabilities(graphicsDevice);
+
+        WarnMipmapUnsupported();
+    }
+
+    /// <summary>
+    /// 一次性提示本后端不支持 mipmap 采样。
+    /// <para>
+    /// 这不是错误：纹理、视图、上传都正常，只是采样器路径始终返回 mip0。
+    /// 资源加载器会据此跳过 mip 链生成（见
+    /// <see cref="IGraphicsCapabilities.SupportsMipmap"/>），
+    /// 所以既不会报错，也不会白耗 CPU 与显存。
+    /// </para>
+    /// <para>
+    /// 用 Debug 级：这是已知限制而非异常情况，正常使用不需要看到它。
+    /// </para>
+    /// </summary>
+    private static void WarnMipmapUnsupported()
+    {
+        Log.Debug(
+            "[Veldrid] mipmap sampling is not supported: downscaled textures will keep "
+                + "aliasing. Mip levels and views are created correctly; this is a "
+                + "sampler-path limitation and does not affect other features. "
+                + "Use the SDL3 backend when mipmaps are required."
+        );
     }
 
     public IResourceFactory ResourceFactory { get; }
@@ -152,5 +178,30 @@ public sealed class VeldridDevice : IGraphicsDevice
         if (commandList is not VeldridCommandList)
             throw new InvalidDataException();
         graphicsDevice?.SubmitCommands((commandList as VeldridCommandList).cl);
+    }
+
+    /// <summary>
+    /// 转入 Veldrid 的延迟释放队列，设备空闲时才真正回收。
+    /// <para>
+    /// 内部就是 <c>GraphicsDevice.DisposeWhenIdle</c> —— Veldrid 专门为
+    /// 「资源可能还在 GPU 上」这个场景提供的机制。
+    /// </para>
+    /// </summary>
+    public void DisposeWhenIdle(IDisposable resource)
+    {
+        if (resource is null)
+            return;
+
+        try
+        {
+            graphicsDevice.DisposeWhenIdle(resource);
+        }
+        catch (Exception ex)
+        {
+            // 设备已经销毁时不能再入队 —— 此时直接释放是安全的
+            //（设备没了，自然没有在途命令）。
+            Log.Warning($"[Veldrid] DisposeWhenIdle fell back to immediate dispose: {ex.Message}");
+            resource.Dispose();
+        }
     }
 }
