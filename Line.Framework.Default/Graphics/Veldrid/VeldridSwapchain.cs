@@ -59,6 +59,26 @@ public sealed class VeldridSwapchain : ISwapchain
         dev = gd;
     }
 
+    /// <summary>
+    /// 垂直同步。转发给底层交换链 —— Veldrid 的 <c>Swapchain</c> 基类就有
+    /// 这个可写属性，是<b>每张交换链独立</b>的，不是设备级。
+    /// <para>
+    /// <b>生效时机随后端不同，但都是延迟的</b>：
+    /// Vulkan 只记下新值，下一次 <c>AcquireNextImage</c> 时重建交换链
+    ///（并先 <c>WaitForIdle</c>，所以那一帧会掉）；
+    /// D3D11 立即改 <c>Present</c> 的 SyncInterval。
+    /// </para>
+    /// <para>
+    /// 不要改 <c>GraphicsDevice.SyncToVerticalBlank</c> —— 那是设备级默认值，
+    /// 改它不会影响已存在的交换链。
+    /// </para>
+    /// </summary>
+    public bool SyncToVerticalBlank
+    {
+        get => swapchain.SyncToVerticalBlank;
+        set => swapchain.SyncToVerticalBlank = value;
+    }
+
     public void Resize(int width, int height)
     {
         if (width <= 0 || height <= 0)
@@ -161,7 +181,7 @@ public partial class VeldridConverter
         return new()
         {
             // Source 无法从 Veldrid 反查，留空由调用方自行填充
-            Source = default,
+            Target = default,
             Width = des.Width,
             Height = des.Height,
             DepthFormat = des.DepthFormat.HasValue
@@ -179,16 +199,14 @@ public partial class VeldridConverter
         SwapchainCreateInfo createInfo
     )
     {
-        if (createInfo.Width == 0 || createInfo.Height == 0)
-            throw new ArgumentException(
-                $"Swapchain size must be non-zero, got {createInfo.Width}x{createInfo.Height}.",
-                nameof(createInfo)
-            );
+        // 优先窗口、其次裸源；有窗口时用像素尺寸覆盖 Width/Height。
+        // 这条规则只有 SwapchainCreateInfo.Resolve 一份实现，两个后端共用。
+        createInfo.Resolve(out var source, out var width, out var height);
 
         return new global::Veldrid.SwapchainDescription(
-            ConvertSwapchainSource(createInfo.Source),
-            createInfo.Width,
-            createInfo.Height,
+            ConvertSwapchainSource(source),
+            width,
+            height,
             createInfo.DepthFormat.HasValue
                 ? ConvertPixelFormat(createInfo.DepthFormat.Value)
                 : null,

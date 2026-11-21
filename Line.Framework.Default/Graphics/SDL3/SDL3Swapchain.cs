@@ -43,6 +43,16 @@ public sealed class SDL3Swapchain : ISwapchain
     private uint depthWidth;
     private uint depthHeight;
 
+    /// <summary>期望的垂直同步状态。</summary>
+    private bool vsync;
+
+    /// <summary>
+    /// 期望的 present mode 与「已应用」的可能不同步：SDL 要求
+    /// <c>SDL_SetGPUSwapchainParameters</c> 早于取交换链纹理，因此只能标脏，
+    /// 由下一次 <see cref="ApplyPendingPresentMode"/> 落地。
+    /// </summary>
+    private bool presentModeDirty;
+
     public string Name { get; }
 
     internal SDL3Swapchain(
@@ -50,13 +60,15 @@ public sealed class SDL3Swapchain : ISwapchain
         IntPtr window,
         string name,
         bool ownsClaim,
-        PixelFormat? depthFormat
+        PixelFormat? depthFormat,
+        bool syncToVerticalBlank
     )
     {
         this.device = device;
         this.window = window;
         this.ownsClaim = ownsClaim;
         this.depthFormat = depthFormat;
+        this.vsync = syncToVerticalBlank;
         Name = name ?? "SDL3Swapchain";
 
         // SDL_GPU 不接受带 SDL_WINDOW_TRANSPARENT 的窗口。
@@ -84,14 +96,9 @@ public sealed class SDL3Swapchain : ISwapchain
                     + $"(window flags = 0x{(ulong)SDL.GetWindowFlags(window):X})"
             );
 
-        GPUPresentMode mode = GPUPresentMode.Immediate;
-        if (!WindowSupportsGPUPresentMode(device.dev, window, GPUPresentMode.Immediate))
-        {
-            mode = GPUPresentMode.Mailbox;
-            if (!WindowSupportsGPUPresentMode(device.dev, window, GPUPresentMode.Mailbox))
-                mode = GPUPresentMode.VSync;
-        }
-        SetGPUSwapchainParameters(device.dev, window, GPUSwapchainComposition.SDR, mode);
+        // present mode 按偏好挑（此前固定 Immediate → Mailbox → VSync，
+        // 忽略了 SwapchainCreateInfo.SyncToVerticalBlank —— 那是个死字段）。
+        ApplyPresentMode(device.dev, window);
 
         // 交换链格式由窗口决定，创建立即可以查询 —— 这就是管线的 Outputs 该用的格式。
         var swapFormat = SDL.GetGPUSwapchainTextureFormat(device.dev, window);
@@ -120,6 +127,89 @@ public sealed class SDL3Swapchain : ISwapchain
     internal ITexture CurrentDepthTexture => depthTexture;
 
     public IRenderTarget RenderTarget => renderTarget;
+
+    /// <summary>
+    /// 垂直同步。SDL3 是窗口级开关，通过 present mode 实现。
+    /// <para>
+    /// 设值只标脏 —— SDL 要求 <c>SDL_SetGPUSwapchainParameters</c> 早于
+    /// acquire 交换链纹理，真正的切换发生在下一次取纹理之前
+    /// （见 <see cref="ApplyPendingPresentMode"/>）。
+    /// </para>
+    /// </summary>
+    public bool SyncToVerticalBlank
+    {
+        get => vsync;
+        set
+        {
+            if (vsync == value)
+                return;
+
+            vsync = value;
+            presentModeDirty = true;
+        }
+    }
+
+    /// <summary>
+    /// 按 vsync 偏好挑一个当前窗口<b>真实支持</b>的 present mode。
+    /// <para>
+    /// 部分合成器不支持 Mailbox / Immediate，此时
+    /// <c>SDL_WindowSupportsGPUPresentMode</c> 会明确返回 false，
+    /// 所以这里逐个降级而不是硬设。
+    /// </para>
+    /// </summary>
+    private static GPUPresentMode ChoosePresentMode(
+        SDL3Device device,
+        IntPtr window,
+        bool useVSync
+    )
+    {
+        ReadOnlySpan<GPUPresentMode> preference = useVSync
+            ? [GPUPresentMode.VSync, GPUPresentMode.Mailbox, GPUPresentMode.Immediate]
+            : [GPUPresentMode.Immediate, GPUPresentMode.Mailbox, GPUPresentMode.VSync];
+
+        foreach (var mode in preference)
+            if (WindowSupportsGPUPresentMode(device.dev, window, mode))
+                return mode;
+
+        Log.Warning("[SDL3] no supported GPU present mode detected; falling back to VSync.");
+        return GPUPresentMode.VSync;
+    }
+
+    private void ApplyPresentMode(IntPtr deviceHandle, IntPtr windowHandle)
+    {
+        var mode = ChoosePresentMode(device, windowHandle, vsync);
+
+        if (
+            !SetGPUSwapchainParameters(
+                deviceHandle,
+                windowHandle,
+                GPUSwapchainComposition.SDR,
+                mode
+            )
+        )
+            // 不抛：合成器不支持某个 mode 是环境限制，保留旧 mode 继续跑。
+            Log.Warning(
+                $"[SDL3] SDL_SetGPUSwapchainParameters({mode}) failed: {SDL.GetError()}. "
+                    + "Keeping the previous present mode."
+            );
+
+        presentModeDirty = false;
+    }
+
+    /// <summary>
+    /// 落地待应用的 present mode。
+    /// <para>
+    /// <b>必须在 acquire 交换链纹理之前调用</b> —— 否则 SDL 会拒绝本次设置，
+    /// 表现为「设了 vsync 但毫无变化」。
+    /// </para>
+    /// </summary>
+    internal void ApplyPendingPresentMode()
+    {
+        if (!presentModeDirty)
+            return;
+
+        ApplyPresentMode(device.dev, window);
+    }
 
     /// <summary>
     /// 确保深度纹理存在且尺寸与本次 acquire 到的交换链纹理一致，返回其句柄。
@@ -273,6 +363,9 @@ public sealed class SDL3SwapchainTarget : IRenderTarget
 
     /// <summary>见 <see cref="SDL3Swapchain.EnsureDepthTexture"/>。</summary>
     internal IntPtr EnsureDepthTexture(uint w, uint h) => owner.EnsureDepthTexture(w, h);
+
+    /// <summary>见 <see cref="SDL3Swapchain.ApplyPendingPresentMode"/>。</summary>
+    internal void ApplyPendingPresentMode() => owner.ApplyPendingPresentMode();
 
     public void Dispose()
     {

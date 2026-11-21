@@ -1,6 +1,17 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 using static SDL3.SDL;
+// SDL3 也在 SDL 类里定义了同名的事件结构（KeyboardEvent / MouseButtonEvent…）。
+// `using static SDL3.SDL` 会把它们一并导入，与本项目的同名类型冲突（CS0104）。
+// 逐个用别名指向本项目的事件类型，SDL 那边的则只用全名 SDL.Xxx。
+using KeyboardEvent = Line.Framework.IO.Events.KeyboardEvent;
+using MouseButtonEvent = Line.Framework.IO.Events.MouseButtonEvent;
+using MouseMotionEvent = Line.Framework.IO.Events.MouseMotionEvent;
+using MouseWheelEvent = Line.Framework.IO.Events.MouseWheelEvent;
+using TextInputEvent = Line.Framework.IO.Events.TextInputEvent;
+using TouchEvent = Line.Framework.IO.Events.TouchEvent;
+using WindowCloseEvent = Line.Framework.IO.Events.WindowCloseEvent;
+using TouchPhase = Line.Framework.IO.Events.TouchPhase;
 
 namespace Line.Framework.IO;
 
@@ -77,31 +88,69 @@ public class InputManager
 
     protected virtual void SubscribeEvents()
     {
-        _window.EventPool.TryAdd(EventType.KeyDown, OnKeyDown);
-        _window.EventPool.TryAdd(EventType.KeyUp, OnKeyUp);
-        _window.EventPool.TryAdd(EventType.MouseButtonDown, OnMouseDown);
-        _window.EventPool.TryAdd(EventType.MouseButtonUp, OnMouseUp);
-        _window.EventPool.TryAdd(EventType.MouseWheel, OnMouseWheel);
-        _window.EventPool.TryAdd(EventType.FingerDown, OnFingerDown);
-        _window.EventPool.TryAdd(EventType.FingerUp, OnFingerUp);
-        _window.EventPool.TryAdd(EventType.FingerMotion, OnFingerMove);
-        _window.EventPool.TryAdd(EventType.TextInput, OnTextInput);
-        _window.OnUpdate += (_) =>
+        // 鼠标位置由 MouseMotionEvent 驱动（见 OnMotion）。
+        //
+        // 这里不再每帧轮询 GetMouseState —— 那是 SDL3 专用的 API，
+        // 换成别的窗口实现后会返回恒 0。事件流对两个后端都成立。
+        _window.OnEvent += HandleEvent;
+    }
+
+    /// <summary>
+    /// 事件分发入口。
+    /// <para>
+    /// 按类型分派到各处理器。<b>不认识的类型直接忽略</b>（例如
+    /// <see cref="UnknownEvent"/>）——输入层只关心自己那几类。
+    /// </para>
+    /// </summary>
+    protected virtual Task HandleEvent(IWindowEvent evt)
+    {
+        switch (evt)
         {
-            OnMouseMove();
-        };
+            case KeyboardEvent k:
+                return OnKey(k);
+            case TextInputEvent t:
+                return OnText(t);
+            case MouseButtonEvent b:
+                return OnMouseButton(b);
+            case MouseWheelEvent w:
+                return OnWheel(w);
+            case MouseMotionEvent m:
+                return OnMotion(m);
+            case TouchEvent tc:
+                return OnTouch(tc);
+            case WindowCloseEvent:
+                // 关闭请求由 WindowType.BindEvents 处理（它是「窗口」的事，不是输入）。
+                return Task.CompletedTask;
+            default:
+                return Task.CompletedTask;
+        }
     }
 
-    protected virtual async Task OnKeyDown(Event evt,object[] _)
+    protected virtual Task OnKey(KeyboardEvent e)
     {
-        var K = (KeyCode)evt.Key.Key;
-        Keyboard.Keys.Add(K);
-        KeyDown?.Invoke(K);
+        if (e.IsDown)
+        {
+            // 重复事件不重复加列表，但照常通知 —— 消费方可能想要刷屏式的按键重复。
+            if (!Keyboard.Keys.Contains(e.Key))
+                Keyboard.Keys.Add(e.Key);
+
+            KeyDown?.Invoke(e.Key);
+        }
+        else
+        {
+            Keyboard.Keys.Remove(e.Key);
+            KeyUp?.Invoke(e.Key);
+        }
+
+        return Task.CompletedTask;
     }
 
-    protected virtual async Task OnTextInput(Event evt,object[] Extra)
+    protected virtual Task OnText(TextInputEvent e)
     {
-        TextInput?.Invoke(Extra[0].ToString());
+        if (!string.IsNullOrEmpty(e.Text))
+            TextInput?.Invoke(e.Text);
+
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -109,40 +158,91 @@ public class InputManager
     /// </summary>
     public virtual event Action<string> TextInput;
 
-    protected virtual async Task OnKeyUp(Event evt,object[] _)
+    protected virtual Task OnMouseButton(MouseButtonEvent e)
     {
-        var K = (KeyCode)evt.Key.Key;
-        Keyboard.Keys.Remove(K);
-        KeyUp?.Invoke(K);
+        if (e.IsDown)
+        {
+            if (!Mouse.down.Contains(e.Button))
+                Mouse.down.Add(e.Button);
+
+            MouseDown?.Invoke(Mouse, e.Button);
+            CursorDown?.Invoke(Mouse);
+        }
+        else
+        {
+            Mouse.down.Remove(e.Button);
+            MouseUp?.Invoke(Mouse, e.Button);
+            CursorUp?.Invoke(Mouse);
+        }
+
+        return Task.CompletedTask;
     }
 
-    protected virtual async Task OnMouseDown(Event evt,object[] _)
+    protected virtual Task OnWheel(MouseWheelEvent e)
     {
-        var bt = SDL3MB2LFMB((MouseButtonFlags)evt.Button.Button);
-        Mouse.down.Add(bt);
-        MouseDown?.Invoke(Mouse, bt);
-        CursorDown?.Invoke(Mouse);
-    }
-
-    protected static MouseButton SDL3MB2LFMB(MouseButtonFlags mousebutton)
-    {
-        return (MouseButton)mousebutton;
-    }
-
-    protected virtual async Task OnMouseUp(Event evt,object[] _)
-    {
-        var bt = SDL3MB2LFMB((MouseButtonFlags)evt.Button.Button);
-        Mouse.down.Remove(bt);
-        MouseUp?.Invoke(Mouse, bt);
-        CursorUp?.Invoke(Mouse);
-    }
-
-    protected virtual async Task OnMouseWheel(Event evt,object[] _)
-    {
-        Mouse.WheelDelta = new(evt.Wheel.X, evt.Wheel.Y);
+        Mouse.WheelDelta = e.Delta;
         MouseWheel?.Invoke(Mouse);
+        return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// 鼠标移动。
+    /// <para>
+    /// <b>完全由事件驱动，不再轮询</b>。事件里的 <see cref="MouseMotionEvent.Position"/>
+    /// 是逻辑坐标，这里只做 UI 缩放（<c>× Scale</c>）。
+    /// </para>
+    /// <para>
+    /// <b>相对模式下用增量而非绝对位置</b>：光标被后端固定在原地，
+    /// <see cref="MouseMotionEvent.Position"/> 不再变化，只有
+    /// <see cref="MouseMotionEvent.Delta"/> 反映真实移动。累加后钳制在窗口内，
+    /// 否则虚拟光标会一路飘出可视区。
+    /// </para>
+    /// <para>
+    /// 之前这里依赖 <c>OnMouseMove</c> 轮询 <c>GetMouseState</c> —— 那是
+    /// <b>SDL3 的 API</b>，换成 SDL2 窗口后返回恒为 0，表现为「自绘光标卡在左上角」。
+    /// </para>
+    /// </summary>
+    protected virtual Task OnMotion(MouseMotionEvent e)
+    {
+        Vector2 next;
+
+        if (_window.EnableMouseRelative)
+        {
+            // Delta 是逻辑坐标增量，同样乘 Scale 换算到 UI 空间。
+            next = Mouse.Position + e.Delta * _window.Scale;
+
+            // 钳制到窗口范围：相对模式没有天然边界，
+            // 不钳制的话虚拟光标会随累计位移无限漂移。
+            var bounds = _window.Size * _window.Scale;
+            next = Vector2.Clamp(next, Vector2.Zero, bounds);
+        }
+        else
+        {
+            next = e.Position * _window.Scale;
+        }
+
+        if (next == Mouse.Position)
+            return Task.CompletedTask;
+
+        Mouse.Position = next;
+        MouseMove?.Invoke(Mouse);
+        CursorMove?.Invoke(Mouse);
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// 轮询式鼠标位置更新。
+    /// <para>
+    /// <b>基类已不再调用它</b>：位置改由 <see cref="OnMotion"/> 从事件里取。
+    /// 保留为虚方法是因为 <c>VirtualIM</c>（UI 沙箱）重写了它做坐标变换。
+    /// </para>
+    /// <para>
+    /// ⚠️ 这里的 <c>GetMouseState</c> 是 <b>SDL3 专用</b> API ——
+    /// 窗口换成 SDL2 后会返回恒 0。这正是本次 SDL2 切换踩到的坑，
+    /// 新代码不要依赖这个方法的输出。
+    /// </para>
+    /// </summary>
     protected virtual void OnMouseMove()
     {
         GetMouseState(out float x, out float y);
@@ -173,15 +273,52 @@ public class InputManager
     public virtual bool IsMouseButtonDown(MouseButton button) => Mouse.IsMouseButtonDown(button);
 
     //触摸
-    protected virtual async Task OnFingerDown(Event evt,object[] _)
+    protected virtual Task OnTouch(TouchEvent e)
     {
-        var id = evt.TFinger.FingerID;
-        var position = new Vector2(evt.TFinger.X, evt.TFinger.Y);
-        position *= _window.Size;
-        var finger = new Sdl3TouchPoint() { Position = position * _window.Scale };
-        Touch.Touches.TryAdd(id, finger);
-        FingerDown?.Invoke((id, finger));
-        CursorDown?.Invoke(finger);
+        // 事件里的坐标是逻辑坐标（0~Size），这里换算到 UI 空间。
+        var position = e.Position * _window.Scale;
+
+        // 事件用 long 表示手指 ID（后端可能是 32 位或 64 位），
+        // 而现有触摸表用 ulong 做键 —— 转一次，负数不可能出现但也不该崩。
+        var id = (ulong)e.FingerId;
+
+        switch (e.Phase)
+        {
+            case TouchPhase.Began:
+            {
+                var finger = new Sdl3TouchPoint() { Position = position };
+                Touch.Touches.TryAdd(id, finger);
+                FingerDown?.Invoke((id, finger));
+                CursorDown?.Invoke(finger);
+                break;
+            }
+
+            case TouchPhase.Moved:
+            {
+                if (Touch.Touches.TryGetValue(id, out var touch) && touch is Sdl3TouchPoint t)
+                {
+                    t.Position = position;
+                    FingerMove?.Invoke((id, t));
+                    CursorMove?.Invoke(t);
+                }
+                break;
+            }
+
+            case TouchPhase.Ended:
+            case TouchPhase.Canceled:
+            {
+                if (Touch.Touches.TryGetValue(id, out var touch) && touch is Sdl3TouchPoint t)
+                {
+                    Touch.Touches.Remove(id);
+                    t.Position = position;
+                    FingerUp?.Invoke((id, t));
+                    CursorUp?.Invoke(t);
+                }
+                break;
+            }
+        }
+
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -189,37 +326,10 @@ public class InputManager
     /// </summary>
     public virtual event Action<(ulong Id, Sdl3TouchPoint Finger)> FingerDown;
 
-    protected virtual async Task OnFingerUp(Event evt,object[] _)
-    {
-        var id = evt.TFinger.FingerID;
-        if (Touch.Touches.TryGetValue(id, out var touch))
-        {
-            Touch.Touches.Remove(id);
-            var position = new Vector2(evt.TFinger.X, evt.TFinger.Y);
-            position *= _window.Size;
-            touch.Position = position * _window.Scale;
-            FingerUp?.Invoke((id, (Sdl3TouchPoint)touch));
-            CursorUp?.Invoke(touch);
-        }
-    }
-
     /// <summary>
     /// 当手指抬起时
     /// </summary>
     public virtual event Action<(ulong Id, Sdl3TouchPoint Finger)> FingerUp;
-
-    protected virtual async Task OnFingerMove(Event evt,object[] _)
-    {
-        var id = evt.TFinger.FingerID;
-        if (Touch.Touches.TryGetValue(id, out var touch))
-        {
-            var position = new Vector2(evt.TFinger.X, evt.TFinger.Y);
-            position *= _window.Size;
-            touch.Position = position * _window.Scale;
-            FingerMove?.Invoke((id, (Sdl3TouchPoint)touch));
-            CursorMove?.Invoke(touch);
-        }
-    }
 
     /// <summary>
     /// 当手指移动时

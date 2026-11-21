@@ -1,4 +1,5 @@
 using Line.Framework;
+using Line.Framework.Default.IO;
 using Line.Framework.Graphics;
 using SDL3;
 using static SDL3.SDL;
@@ -992,21 +993,59 @@ public sealed partial class SDL3ResourceFactory : IResourceFactory
 
     public ISwapchain CreateSwapchain(SwapchainCreateInfo createInfo)
     {
-        if (createInfo.Source.Surface == IntPtr.Zero)
-            throw new ArgumentException(
-                "SwapchainCreateInfo.Source.Surface is null. SDL3 requires an SDL_Window handle.",
-                nameof(createInfo)
-            );
+        // 取出 SDL_Window*；拿不到就在这里抛，绝不用 SwapchainSource 兜底。
+        var window = RequireSdlWindow(createInfo.Target);
+
+        // 统一走一遍 Resolve：既做「必须给出来源」的校验，
+        // 也让「有窗口时尺寸以 PixelSize 为准」这条规则只有一个实现。
+        // 尺寸本身在 SDL3 下由 SDL 自己跟随窗口，所以这里只需触发校验。
+        createInfo.Resolve(out _, out _, out _);
 
         // SDL3 的交换链纹理由 SDL 提供，但**深度纹理不提供**，必须自己建。
         // 那条路径在 SDL3Swapchain.EnsureDepthTexture 里（按 acquire 到的
         // 真实尺寸创建 / 重建）。
         return new SDL3Swapchain(
             device,
-            createInfo.Source.Surface,
+            window,
             name: null,
             ownsClaim: true,
-            depthFormat: createInfo.DepthFormat
+            depthFormat: createInfo.DepthFormat,
+            syncToVerticalBlank: createInfo.SyncToVerticalBlank
+        );
+    }
+
+    /// <summary>
+    /// 从交换链目标里取出 <c>SDL_Window*</c>。
+    /// <para>
+    /// <b>不许用 <see cref="SwapchainSource"/> 兜底</b>：
+    /// <c>SDL_ClaimWindowForGPUDevice</c> 只接受 <c>SDL_Window*</c>。
+    /// 拿别的指针去试的后果是「语法合法、语义错误」—— 原生层会读假内存，
+    /// 然后给出一句完全无关的报错（历史事故：<c>wl_surface*</c> 被当窗口，
+    /// 报「GPU API 不支持透明窗口（flags = 0x0）」）。
+    /// </para>
+    /// <para>
+    /// 判定走 <see cref="ISdlWindowSource"/> 而不是具体类型，
+    /// 这样第三方窗口只要实现那一个成员就能用。
+    /// </para>
+    /// </summary>
+    internal static nint RequireSdlWindow(SwapchainTarget target)
+    {
+        if (!target.HasWindow)
+            throw new NotSupportedException(
+                "SDL3Device requires an IWindow: SDL_ClaimWindowForGPUDevice only accepts "
+                    + "SDL_Window*. A raw SwapchainSource cannot be used with the SDL3 GPU "
+                    + "backend — there is no SDL_Window* to claim."
+            );
+
+        if (target.Window is ISdlWindowSource { SdlWindow: var handle } && handle != nint.Zero)
+            return handle;
+
+        throw new NotSupportedException(
+            $"{target.Window.GetType().Name} cannot be used with the SDL3 GPU backend: "
+                + "it must implement ISdlWindowSource (or ISdl3Window) and expose a valid "
+                + "SDL_Window*. Do not pass a SwapchainSource as a workaround — "
+                + "the resulting handle would be interpreted as a raw SDL_Window*, "
+                + "and the failure would surface as an unrelated native error."
         );
     }
 }

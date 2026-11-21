@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Line.Framework.Graphics;
+using Line.Framework.IO.Events;
 using Line.Framework.Resource;
 using Line.Framework.Resource.Audio;
 using Line.Framework.Resource.Graphic;
@@ -17,9 +18,22 @@ public abstract class WindowType : IAsyncDisposable, IName
 #if LINUX
 SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
 #endif
-    protected static ConcurrentQueue<(SDL.Event Event, object[] Extra)> PollEvents { get; } = new();
-    protected nint IconSurfaceID { get; set; } = default;
-    
+
+    /// <summary>
+    /// 底层窗口对象。
+    /// <para>
+    /// <b>本类不再直接调 SDL 窗口 API</b>：句柄、尺寸、标题、焦点、全屏、
+    /// 光标与文本输入全部转发给 <see cref="IWindow"/>。这样同一个
+    /// <c>WindowType</c> 可以架在任意 <see cref="IWindow"/> 实现之上，
+    /// 也让「窗口」这件事只剩一个真相源。
+    /// </para>
+    /// <para>
+    /// 它是构造期由派生类赋值的 —— 本类自己不知道窗口该怎么创建，
+    /// 那属于后端（<c>SDL3Window</c>）的职责。
+    /// </para>
+    /// </summary>
+    public virtual IWindow Window { get; protected set; }
+
     /// <summary>
     /// 使用Stream设置窗口图标
     /// </summary>
@@ -27,87 +41,60 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
     /// <param name="自动关闭流"></param>
     public void SetIcon(Stream iconStream, bool closeStream = false)
     {
-        try
+        Window?.SetIcon(iconStream, closeStream);
+    }
+
+    /// <summary>
+    /// 输入事件处理链。
+    /// <para>
+    /// 事件由 <see cref="IWindow.PollEvent"/> 取出后依次交给所有订阅者。
+    /// 与 <see cref="Window"/> 上的 <c>Resized</c> / <c>FocusGained</c> 等
+    /// 是两套：<b>窗口状态是「最新值」语义</b>（可合并、可丢中间态），
+    /// <b>输入是「序列」语义</b>（不可丢、必须保序）。
+    /// </para>
+    /// <para>
+    /// 处理器按订阅顺序<b>串行 await</b>：事件处理链上不允许并发，
+    /// 否则「先 KeyDown 再 KeyUp」的顺序会在不同的续体里失效。
+    /// </para>
+    /// </summary>
+    public virtual event Func<IWindowEvent, Task> OnEvent;
+
+    /// <summary>
+    /// 把事件分发给所有订阅者。
+    /// </summary>
+    protected virtual async Task DispatchEvent(IWindowEvent e)
+    {
+        var handlers = OnEvent;
+        if (handlers is null)
+            return;
+
+        foreach (var d in handlers.GetInvocationList())
         {
-            if (IconSurfaceID != nint.Zero)
+            if (d is not Func<IWindowEvent, Task> h)
+                continue;
+
+            try
             {
-                SDL.DestroySurface(IconSurfaceID);
-                IconSurfaceID = nint.Zero;
+                await h(e);
             }
-
-            using (var stream = SDL.IOFromStream(iconStream))
+            catch (Exception ex)
             {
-                IconSurfaceID = SDL.LoadSurfaceIO(stream.Handle, false);
-
-                if (IconSurfaceID == nint.Zero)
-                {
-                    Log.Error($"Failed to load window icon: {SDL.GetError()}");
-                    return;
-                }
-
-                if (!SDL.SetWindowIcon(WindowHandle, IconSurfaceID))
-                {
-                    Log.Error($"Failed to set window icon: {SDL.GetError()}");
-
-                    SDL.DestroySurface(IconSurfaceID);
-                    IconSurfaceID = nint.Zero;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex);
-
-            if (IconSurfaceID != nint.Zero)
-            {
-                try
-                {
-                    SDL.DestroySurface(IconSurfaceID);
-                }
-                catch (Exception destroyEx)
-                {
-                    Log.Error(destroyEx);
-                }
-
-                IconSurfaceID = nint.Zero;
-            }
-        }
-        finally
-        {
-            if (closeStream)
-            {
-                try
-                {
-                    iconStream.Dispose();
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex);
-                }
+                // 单个处理器异常不能打断整条链 —— 否则一个订阅者写错就再也收不到事件。
+                Log.Error(ex);
             }
         }
     }
+
     protected WindowType()
     {
         if (inited) return;
         inited = true;
-        Entry.AddFunc(token =>
-        {
-            SDL.PumpEvents();
-            List<object> obj = [];
-            while (!token.IsCancellationRequested)
-            {
-                var events = SDL.PollEvent(out var ev);
-                if (!events) break;
-                switch ((SDL.EventType)ev.Type)
-                {
-                    case SDL.EventType.TextInput:
-                        obj.Add(Marshal.PtrToStringUTF8(ev.Text.Text));
-                        break;
-                }
-                PollEvents.Enqueue(new(ev, obj.ToArray()));
-            }
-        }, -1);
+
+        // 事件泵必须在主线程跑：SDL 在 Windows 上要求主线程，
+        // 且 WindowType.Update 跑在后台任务里，不能在那里泵。
+        //
+        // 这里调的是 IWindow 的抽象 API，因此换后端时这行不用改。
+        Entry.AddFunc(_ => Window?.PumpEvents(), -1);
     }
     private static bool inited = false;
     /// <summary>
@@ -117,16 +104,12 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
     /// <summary>
     /// 启用SDL事件输出
     /// </summary>
+    /// <summary>是否输出收到的事件（排查用，逐事件打日志，会很吵）。</summary>
     public virtual bool EnableEventOutput { get; set; } = false;
     /// <summary>
-    /// 是否允许鼠标在获得焦点时离开窗口
+    /// 鼠标是否落在本窗口上
     /// </summary>
-    public virtual bool AllowMouseLeave { get; set; } = true;
-
-    /// <summary>
-    /// 窗口SDL3句柄
-    /// </summary>
-    protected internal virtual nint WindowHandle { get; init; }
+    public virtual bool IsMouseFocus => Window?.IsMouseFocus ?? false;
 
     /// <summary>
     /// 窗口输入管理器
@@ -145,22 +128,25 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
 
     /// <summary>
     /// 启用相对鼠标模式
+    /// <para>
+    /// 纯转发：值存在 <see cref="WindowAttributes"/> 里，抓取与光标显隐由
+    /// <see cref="IWindow"/> 实现落地。
+    /// </para>
+    /// <para>
+    /// <b>「推到边缘自动放人走」这类策略不在本类</b>：它在相对模式下需要一个
+    /// 虚拟光标（SDL 把光标 warp 回原处，绝对位置不再变化），
+    /// 属于 App 层的输入策略，等 App 落地时再实现。
+    /// </para>
     /// </summary>
     public virtual bool EnableMouseRelative
     {
-        get;
+        get => Window?.Attributes.RelativeMouse ?? false;
         set
         {
-            field = value;
-            if (!(AllowMouseLeave && IsPositionOnEdge(Input.Mouse.Position)))
-                SDL.SetWindowRelativeMouseMode(WindowHandle, value);
-            if (IsFocus)
-            {
-                if (ShowCursor)
-                    SDL.ShowCursor();
-                else
-                    SDL.HideCursor();
-            }
+            if (Window == null)
+                return;
+
+            Window.Attributes.RelativeMouse = value;
         }
     }
 
@@ -169,36 +155,28 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
     /// </summary>
     public virtual float MouseSpeedScale
     {
-        get;
+        get => Window?.Attributes.MouseSpeedScale ?? 1f;
         set
         {
-            if (value > 0)
-                field = value;
+            if (Window != null && value > 0)
+                Window.Attributes.MouseSpeedScale = value;
         }
-    } = 1;
+    }
 
     /// <summary>
-    /// 窗口大小
+    /// 窗口大小（逻辑尺寸）
     /// </summary>
     public virtual Vector2 Size
     {
-        get
-        {
-            try
-            {
-                SDL.GetWindowSize(WindowHandle, out int w, out int h);
-                return new(w, h);
-            }
-            catch
-            {
-                return new(0);
-            }
-        }
+        get => Window?.Size ?? new(0);
         set
         {
+            if (Window == null)
+                return;
+
             try
             {
-                SDL.SetWindowSize(WindowHandle, (int)value.X, (int)value.Y);
+                Window.Size = value;
             }
             catch (Exception ex)
             {
@@ -213,9 +191,105 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
     public virtual UIScreen Root { get; init; }
 
     /// <summary>
-    /// 垂直同步
+    /// 垂直同步。
+    /// <para>
+    /// 转发给 <see cref="ISwapchain.SyncToVerticalBlank"/> —— 本类不自持状态。
+    /// </para>
+    /// <para>
+    /// <b>生效是延迟的</b>（三个后端一致，都在下一次取呈现图像之前落地）：
+    /// Veldrid/Vulkan 会重建交换链并先 WaitForIdle，那一帧会掉；
+    /// D3D11 立即改 SyncInterval；SDL3 切 present mode。
+    /// 所以设完立刻看帧率没变化是正常的。
+    /// </para>
+    /// <para>
+    /// 交换链尚未创建时（构造期）先记在字段里，等 <see cref="MainSwapchain"/>
+    /// 就绪后再接管权威值。
+    /// </para>
+    /// <para>
+    /// <b>本属性立即生效，不做防抖。</b> 用它响应「焦点变化」这类可能连发的
+    /// 事件时请改用 <see cref="RequestVSync"/>：Vulkan 每次切换都要
+    /// <c>vkDeviceWaitIdle</c> 并重建整条交换链，高频反复会拖垮整机调度
+    /// （表现为其它实时进程——例如 PipeWire 音频线程——出现 xrun / 爆音）。
+    /// </para>
     /// </summary>
-    public virtual bool VSync { get; set; } = false;
+    public virtual bool VSync
+    {
+        get => MainSwapchain?.SyncToVerticalBlank ?? _vsync;
+        set
+        {
+            // 显式赋值优先于任何待定的防抖请求，否则待定的那个会在之后
+            // 反过来覆盖它。
+            _vsyncPendingUntil = -1;
+            _vsync = value;
+            if (MainSwapchain != null)
+                MainSwapchain.SyncToVerticalBlank = value;
+        }
+    }
+
+    /// <summary>最后一次请求的 vsync 值（权威记录，不读后端）。</summary>
+    private bool _vsync;
+
+    /// <summary>
+    /// 待定 vsync 请求的到期时刻（<see cref="GetStopwatchMs"/> 时间轴）。
+    /// 小于 0 表示没有待定请求。
+    /// </summary>
+    private double _vsyncPendingUntil = -1;
+
+    /// <summary>待定请求要应用到的值。</summary>
+    private bool _vsyncPendingValue;
+
+    /// <summary>
+    /// 与 <see cref="VSync"/> 共用的时钟。单独一个实例是因为
+    /// <c>Update</c> 里的 <c>sw</c> 还兼着帧间隔统计，混用容易互相干扰。
+    /// </summary>
+    private readonly Stopwatch _vsyncClock = Stopwatch.StartNew();
+
+    /// <summary>
+    /// 延迟合并地设置垂直同步。
+    /// <para>
+    /// <b>为什么需要它</b>：切换 vsync 在 Vulkan 上是重操作 ——
+    /// 下一次 acquire 时先 <c>vkDeviceWaitIdle</c>，然后销毁并重建整条交换链。
+    /// 而「焦点变化」这类事件会连发：alt-tab 抖动、点任务栏再点回窗口，
+    /// 一秒内可能几十次，每次一次全设备排空 + 全量重建，
+    /// 足以让整机的实时调度出现几百毫秒的抖动，其它进程（PipeWire 等）
+    /// 会因此掉音/爆音。
+    /// </para>
+    /// <para>
+    /// <b>语义是「延迟合并」而不是「节流」</b>：每次调用都刷新到期时刻，
+    /// 只有安静 <paramref name="delayMs"/> 毫秒后没再调用，才真正应用。
+    /// 所以最后一次请求一定生效，不会被吞掉。
+    /// </para>
+    /// <para>
+    /// 由 <c>Update</c> 循环驱动，不额外起线程 —— 那个循环已经在轮询了，
+    /// 借它的节拍即可（<c>UpdatePerSecond</c> 通常 1000，误差 ~1ms）。
+    /// </para>
+    /// </summary>
+    /// <param name="value">想要的目标值。</param>
+    /// <param name="delayMs">安静多久后应用。默认 250ms。</param>
+    public void RequestVSync(bool value, int delayMs = 250)
+    {
+        _vsyncPendingValue = value;
+        _vsyncPendingUntil = GetStopwatchMs(_vsyncClock) + Math.Max(0, delayMs);
+    }
+
+    /// <summary>
+    /// 到期则应用待定的 vsync 请求。由 <c>Update</c> 循环每帧调用。
+    /// </summary>
+    private void PumpPendingVSync()
+    {
+        if (_vsyncPendingUntil < 0)
+            return;
+
+        if (GetStopwatchMs(_vsyncClock) < _vsyncPendingUntil)
+            return;
+
+        _vsyncPendingUntil = -1;
+
+        // 用我们自己的记录比较，不读后端的值：
+        // Veldrid/Vulkan 的 getter 返回的是「待生效值」，拿它比较会判错。
+        if (_vsync != _vsyncPendingValue)
+            VSync = _vsyncPendingValue;
+    }
 
     /// <summary>
     /// 渲染频率
@@ -227,13 +301,13 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
     /// </summary>
     public virtual bool FullScreen
     {
-        get;
+        get => Window?.FullScreen ?? false;
         set
         {
-            SDL.SetWindowFullscreen(WindowHandle, value);
-            field = value;
+            if (Window != null)
+                Window.FullScreen = value;
         }
-    } = false;
+    }
 
     /// <summary>
     /// 更新频率
@@ -266,16 +340,17 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
     /// </summary>
     public virtual bool TextInput
     {
-        get => SDL.TextInputActive(WindowHandle);
+        get => Window?.Attributes.TextInput ?? false;
         set
         {
+            if (Window == null)
+                return;
+
+            Window.Attributes.TextInput = value;
+
+            // 开始输入时把窗口提到前台 —— 输入焦点需要可见窗口才有效。
             if (value)
-            {
-                SDL.StartTextInput(WindowHandle);
-                SDL.RaiseWindow(WindowHandle);
-            }
-            else
-                SDL.StopTextInput(WindowHandle);
+                Window.Raise();
         }
     }
 
@@ -375,35 +450,33 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
     public virtual TAudio Audio { get; protected set; }
 
     /// <summary>
-    /// SDL3窗口ID
+    /// 平台窗口ID
     /// </summary>
-    public virtual uint WindowID { get; init; }
+    public virtual uint WindowID => Window?.Id ?? 0;
 
     /// <summary>
     /// 窗口是否为焦点
     /// </summary>
-    public virtual bool IsFocus => SDL.GetKeyboardFocus() == WindowHandle;
+    public virtual bool IsFocus => Window?.IsFocus ?? false;
 
     /// <summary>
     /// 是否显示光标
+    /// <para>
+    /// 相对鼠标模式强制隐藏光标，所以这里是「请求值 AND 非相对模式」。
+    /// 请求值本身存在 <see cref="WindowAttributes"/> 里。
+    /// </para>
     /// </summary>
     public virtual bool ShowCursor
     {
-        get => field && !EnableMouseRelative;
+        get => (Window?.Attributes.ShowCursor ?? true) && !EnableMouseRelative;
         set
         {
-            field = value;
-            if (SDL.GetMouseFocus() == WindowHandle)
-            {
-                if (field)
-                    SDL.ShowCursor();
-                else
-                    SDL.HideCursor();
-            }
+            if (Window == null)
+                return;
+
+            Window.Attributes.ShowCursor = value;
         }
-    } = true;
-    protected internal virtual ConcurrentDictionary<SDL.EventType, Func<SDL.Event, object[], Task>> EventPool { get; } =
-        new();
+    }
 
     /// <summary>
     /// 当窗口获得焦点时
@@ -416,24 +489,24 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
     /// <summary>
     /// 窗口是否存在
     /// </summary>
-    public virtual bool Exists
-    {
-        get => SDL.GetWindowID(WindowHandle) != 0;
-    }
+    public virtual bool Exists => Window?.Exists ?? false;
 
     /// <summary>
     /// 窗口标题
     /// </summary>
     public virtual string Title
     {
-        get => SDL.GetWindowTitle(WindowHandle) ?? "";
+        get => Window?.Title ?? "";
         set
         {
+            if (Window == null)
+                return;
+
             try
             {
-                SDL.SetWindowTitle(WindowHandle, value);
+                Window.Title = value;
             }
-            catch (NullReferenceException ex)
+            catch (Exception ex)
             {
                 Log.Warning($"{ex.Message}");
             }
@@ -459,10 +532,6 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
                     _newHeight = (uint)Size.Y;
                     MainSwapchain?.Resize((int)_newWidth, (int)_newHeight);
                     _resizePending = false;
-                    /*
-                    if ((Dev?.SyncToVerticalBlank ?? false) != VSync)
-                        Dev?.SyncToVerticalBlank = VSync;
-                    */
                 }
                 await RendererContext();
                 if (token.IsCancellationRequested)
@@ -499,7 +568,6 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
         Stopwatch sw = new();
         double last = 0;
         sw.Start();
-        Func<SDL.Event, bool> Filter = e => e.Window.WindowID == WindowID || e.TFinger.WindowID == WindowID;
         while (!token.IsCancellationRequested)
         {
             if (QuitTask?.IsCompleted ?? false)
@@ -514,64 +582,28 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
                 }
                 QuitTask = null;
             }
-            //处理
-            if (IsFocus)
-                SDL.SetHint(
-                    SDL.Hints.MouseRelativeSpeedScale,
-                    MouseSpeedScale.ToString()
-                );
-            int count = PollEvents.Count;
-            for (int i = 0; i < count; i++)
+
+            // 落地到期的防抖 vsync 请求。放在事件处理之前，
+            // 这样同一帧内先应用的请求不会被这一帧的事件立刻推翻。
+            PumpPendingVSync();
+
+            // 处理事件。
+            //
+            // 事件已经由 IWindow 按窗口分好类，这里不需要再按 WindowID 过滤，
+            // 也不存在「不属于自己就重新入队」那套写法 —— 旧实现那样做在多窗口
+            // 时是 O(N²)，而且边遍历边改队列会丢事件。
+            while (Window != null && Window.PollEvent(out var evt))
             {
-                if (token.IsCancellationRequested) return;
-                if (!PollEvents.TryDequeue(out var ev)) break;
-                if (!Filter(ev.Event))
-                {
-                    if (!Equals(ev, default))
-                        PollEvents.Enqueue(ev);
-                    continue;
-                }
-                foreach (var item in EventPool)
-                {
-                    if (token.IsCancellationRequested) return;
-                    if (ev.Event.Type == (uint)SDL.EventType.WindowCloseRequested)
-                    {
-                        try
-                        {
-                            if (RequestQuit != null && (QuitTask == null || QuitTask.IsCompleted))
-                                QuitTask = Task.Run(RequestQuit.Invoke);
-                        }
-                        catch (TaskCanceledException)
-                        {
-                            return;
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.Error($"{ex}");
-                        }
-                    }
-                    if (ev.Event.Type == (uint)item.Key)
-                    {
-                        try
-                        {
-                            if (item.Value != null)
-                                await item.Value.Invoke(ev.Event, ev.Extra);
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.Error(ex);
-                        }
-                    }
-                }
+                if (token.IsCancellationRequested)
+                    return;
 
-                if (EnableEventOutput) Log.Debug($"Event:{((SDL.EventType)ev.Event.Type).ToString()}");
+                if (EnableEventOutput)
+                    Log.Debug($"Event:{evt.GetType().Name}");
+
+                await DispatchEvent(evt);
             }
-            if (
-                AllowMouseLeave && IsPositionOnEdge(Input.Mouse.Position)
-            )
-                SDL.SetWindowRelativeMouseMode(WindowHandle, false);
 
-            //休眠
+            // 休眠
             double waitTime = 0;
             if (UpdatePerSecond > 0) waitTime = 1000d / UpdatePerSecond;
             double ofs = GetStopwatchMs(sw) - last;
@@ -590,13 +622,18 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
             last = GetStopwatchMs(sw);
         }
     }
-    public bool IsPositionOnEdge(Vector2 pos)
+    /// <summary>
+    /// 统一出口：转发抓取状态给窗口实现。
+    /// <para>
+    /// 保留这一层是为了让「抓取」这件事只有一个入口 ——
+    /// 将来要在这里挂钩（例如把抓取状态同步给 UI 层）时只需改一处。
+    /// </para>
+    /// </summary>
+    private void ApplyMouseCapture(bool capture)
     {
-        return 2 >= pos.X ||
-            2 >= pos.Y ||
-            Size.X - 2 <= pos.X ||
-            Size.Y - 2 <= pos.Y;
+        Window?.ApplyMouseCapture(capture);
     }
+
     public static double GetStopwatchMs(Stopwatch stopwatch)
     {
         if (stopwatch == null) return 0;
@@ -617,7 +654,6 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
     protected virtual void OnWindowResized()
     {
         _resizePending = true;
-        SDL.GetWindowSize(WindowHandle, out _, out _);
         _newWidth = (uint)Size.X;
         _newHeight = (uint)Size.Y;
         Root.UpdateScreenSize((int)_newWidth, (int)_newHeight);
@@ -668,8 +704,12 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
         }
         Entry.DoOnMainThread(_ =>
         {
-            if (WindowHandle != IntPtr.Zero) SDL.DestroyWindow(WindowHandle);
-            if (IconSurfaceID != nint.Zero) try { SDL.DestroySurface(IconSurfaceID); } catch (Exception ex) { Log.Error(ex); }
+            // 窗口的所有权在 IWindow 实现那边，本类不再持有任何原生资源。
+            Window?.Dispose();
+
+            // 置空：泵事件的 lambda 是 `Window?.PumpEvents()`，不置空它会一直
+            // 往一个已销毁的窗口泵，产生「事件无处可去」的日志噪音。
+            Window = null;
         });
     }
 
@@ -689,67 +729,58 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
         return tmp.ToArray();
     }
 
+    /// <summary>
+    /// 订阅窗口状态事件。
+    /// <para>
+    /// <b>只处理 <see cref="IWindow"/> 上的「最新值」类事件</b>
+    /// （尺寸 / 焦点 / 关闭）；鼠标进出、恢复、全屏这类「输入状态需要重应用」
+    /// 的事件由 <see cref="IWindow"/> 实现自己处理 —— 它才知道自己需要重设什么。
+    /// </para>
+    /// <para>
+    /// <b>必须在派生类构造器里、<see cref="Window"/> 赋值之后调用。</b>
+    /// 基类构造器运行时 Window 还是 null。
+    /// </para>
+    /// </summary>
     protected virtual void BindEvents()
     {
-        //绑定事件
-        EventPool.TryAdd(
-            SDL.EventType.WindowResized,
-            async (a, _) =>
+        if (Window is null)
+        {
+            Log.Warning(
+                $"{GetType().Name}.BindEvents() 在 Window 赋值前被调用，事件订阅已跳过。"
+            );
+            return;
+        }
+
+        Window.Resized += OnWindowResized;
+
+        Window.FocusGained += () =>
+        {
+            Window.Raise();
+            ApplyMouseCapture(EnableMouseRelative);
+            FocusGained?.Invoke();
+        };
+
+        Window.FocusLost += () =>
+        {
+            ApplyMouseCapture(false);
+            FocusLost?.Invoke();
+        };
+
+        Window.CloseRequested += () =>
+        {
+            if (RequestQuit is null || (QuitTask is not null && !QuitTask.IsCompleted))
+                return;
+
+            try
             {
-                OnWindowResized();
+                QuitTask = Task.Run(RequestQuit.Invoke);
             }
-        );
-        EventPool.TryAdd(
-            SDL.EventType.WindowFocusGained,
-            async (a, _) =>
+            catch (Exception ex)
             {
-                SDL.RaiseWindow(WindowHandle);
-                SDL.ShowWindow(WindowHandle);
-                if (SDL.GetMouseFocus() == WindowHandle)
-                {
-                    if (ShowCursor)
-                        SDL.ShowCursor();
-                    else
-                        SDL.HideCursor();
-                    SDL.SetWindowRelativeMouseMode(WindowHandle, EnableMouseRelative);
-                }
-                FocusGained?.Invoke();
+                Log.Error(ex);
             }
-        );
-        EventPool.TryAdd(
-            SDL.EventType.WindowMouseEnter,
-            async (a, _) =>
-            {
-                SDL.SetWindowRelativeMouseMode(WindowHandle, EnableMouseRelative && IsFocus);
-                if (ShowCursor)
-                    SDL.ShowCursor();
-                else
-                    SDL.HideCursor();
-            }
-        );
-        EventPool.TryAdd(
-            SDL.EventType.WindowMouseLeave,
-            async (a, _) =>
-            {
-                SDL.SetWindowRelativeMouseMode(WindowHandle, false);
-            }
-        );
-        EventPool.TryAdd(
-            SDL.EventType.WindowRestored,
-            async (a, _) =>
-            {
-                SDL.RaiseWindow(WindowHandle);
-                SDL.ShowWindow(WindowHandle);
-            }
-        );
-        EventPool.TryAdd(
-            SDL.EventType.WindowFocusLost,
-            async (a, _) =>
-            {
-                SDL.SetWindowRelativeMouseMode(WindowHandle, false);
-                FocusLost?.Invoke();
-            }
-        );
+        };
+
         RequestQuit = async () => await DisposeAsync();
     }
 

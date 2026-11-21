@@ -59,12 +59,28 @@ public static class SimpleGameMain
             var splited = item.Split("=");
             if (splited[0] == "--AndroidActity") { }
         }
+        // 窗口实现切换：true = SDL2，false = SDL3。
+        //
+        // 用于验证 IWindow 抽象 —— 两条路径共用同一套渲染/输入/UI 代码，
+        // 差异只在窗口的创建与事件来源。
+        //
+        // 注意 SDL2 的限制：
+        //   * 只能配 Veldrid 渲染（它给不了 SDL_Window*）；
+        //   * PixelSize 退化为 Size，HiDPI 下交换链尺寸会不准；
+        //   * SDL2 与 SDL3 同进程，抢键盘/鼠标，不适合长期使用。
+        Window.UseSdl2Window = true;
+
         Host = new Window(Backend: GraphicBackend.Vulkan)
         {
             Title = "-Line-Framework example",
             UpdatePerSecond = 1000,
         };
-        Host.SetIcon(assembly.GetManifestResourceStream("SimpleGame.assets.-L-F.png"));
+        // 图标流必须是 LTX v1 格式（与 RResourceSet 同款）：
+        // 解码在调用方完成，窗口只负责把像素交给系统。
+        // 这样接口在 SDL3（有内置解码）和 SDL2（没有）上语义一致。
+        Host.SetIcon(
+            ConvertImageStream(assembly.GetManifestResourceStream("SimpleGame.assets.-L-F.png"))
+        );
         if (args.Contains("--OutputEvent"))
             Host.EnableEventOutput = true;
 
@@ -185,13 +201,20 @@ public static class SimpleGameMain
             Image.Rotation = r;
         };
         Host.FramePerSecond = 960;
+        // 用 RequestVSync 而不是直接赋 VSync：
+        // 切换 vsync 在 Vulkan 上要 vkDeviceWaitIdle + 重建整条交换链，
+        // alt-tab 来回抖动会连发几十次，足以让整机调度抖动到
+        // PipeWire 音频线程掉音（xrun / 爆音）。
+        //
+        // 延迟不对称是有意的：回到前台要尽快恢复低延迟，
+        // 离开前台不着急（省电是长期的），所以后者等更久。
         Host.FocusGained += () =>
         {
-            Host.VSync = false;
+            Host.RequestVSync(false, 200);
         };
         Host.FocusLost += () =>
         {
-            Host.VSync = true;
+            Host.RequestVSync(true, 500);
         };
 
         Host.UpdatePerSecond = Host.FramePerSecond;
@@ -458,6 +481,10 @@ public static class SimpleGameMain
         MemoryMarshal.Write(buf, in info);
         stream.Write(buf);
         stream.Write(imgR.Data);
+
+        // 必须归位：MemoryStream 写完停在末尾，直接交出去会让读取方
+        // 读到 0 字节（表现为「icon stream too short」/ 资源加载失败）。
+        stream.Position = 0;
         return stream;
     }
 }

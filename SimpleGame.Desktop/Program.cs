@@ -15,10 +15,12 @@ public static class Desktop
     /// 主线程调度器在整个窗口生命周期内饿死，没有意义。
     /// </para>
     /// </summary>
-    private const bool UseGraphicsTest = false;
+    private static bool UseGraphicsTest = false;
 
     public static async Task Main(string[] args)
     {
+        if (args.Contains("--GraphicsTest"))
+            UseGraphicsTest = true;
         if (UseGraphicsTest)
         {
             // 注意：不开 Entry，所以 Entry.DoOnMainThread / AddFunc 在测试期间不可用。

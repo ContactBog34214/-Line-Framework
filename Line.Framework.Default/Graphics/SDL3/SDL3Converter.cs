@@ -8,6 +8,9 @@ using static SDL3.SDL;
 using BlendFactor = Line.Framework.Graphics.BlendFactor;
 using BlendOperation = Line.Framework.Graphics.BlendOperation;
 using PixelFormat = Line.Framework.Graphics.PixelFormat;
+// SDL 也有一个 WindowFlags（嵌套在 SDL 类里）。用别名指向抽象层的那个，
+// 本文件里访问 SDL 的必须写全名 SDL.WindowFlags。
+using WindowFlags = Line.Framework.IO.WindowFlags;
 
 namespace Line.Framework.Default.Graphics.SDL3;
 
@@ -20,7 +23,91 @@ namespace Line.Framework.Default.Graphics.SDL3;
 /// </summary>
 public static class SDL3Converter
 {
+    // ---------------------------------------------------------------- WindowFlags
+
+    /// <summary>
+    /// 抽象层窗口标志 → SDL 标志。
+    /// <para>
+    /// 抽象层的 <see cref="WindowFlags"/> 刻意不含 OpenGL / Vulkan / Metal ——
+    /// Veldrid 自己建 surface 不需要它们，SDL3 GPU 则会因为看到这些位
+    /// 而拒绝 Claim 窗口（历史上表现为「不支持透明窗口」，完全误导排查）。
+    /// </para>
+    /// <para>
+    /// ⚠️ 这里用到的成员名（<c>Borderless</c> / <c>AlwaysOnTop</c> /
+    /// <c>HighPixelDensity</c> / <c>Utility</c> / <c>Tooltip</c> /
+    /// <c>PopupMenu</c> / <c>NotFocusable</c>）在本仓库此前没被引用过。
+    /// 升级 SDL3-CS 后若编译失败，先查
+    /// <c>~/.nuget/packages/sdl3-cs/*/lib/*/*.xml</c> 的实际命名。
+    /// </para>
+    /// </summary>
+    public static SDL.WindowFlags ConvertWindowFlags(WindowFlags flags)
+    {
+        var result = default(SDL.WindowFlags);
+
+        if ((flags & WindowFlags.Hidden) != 0)
+            result |= SDL.WindowFlags.Hidden;
+        if ((flags & WindowFlags.Resizable) != 0)
+            result |= SDL.WindowFlags.Resizable;
+        if ((flags & WindowFlags.Borderless) != 0)
+            result |= SDL.WindowFlags.Borderless;
+        if ((flags & WindowFlags.AlwaysOnTop) != 0)
+            result |= SDL.WindowFlags.AlwaysOnTop;
+        if ((flags & WindowFlags.Fullscreen) != 0)
+            result |= SDL.WindowFlags.Fullscreen;
+        if ((flags & WindowFlags.HighPixelDensity) != 0)
+            result |= SDL.WindowFlags.HighPixelDensity;
+        if ((flags & WindowFlags.InputFocus) != 0)
+            result |= SDL.WindowFlags.InputFocus;
+        if ((flags & WindowFlags.MouseFocus) != 0)
+            result |= SDL.WindowFlags.MouseFocus;
+        if ((flags & WindowFlags.Transparent) != 0)
+            result |= SDL.WindowFlags.Transparent;
+        if ((flags & WindowFlags.Utility) != 0)
+            result |= SDL.WindowFlags.Utility;
+        if ((flags & WindowFlags.Tooltip) != 0)
+            result |= SDL.WindowFlags.Tooltip;
+        if ((flags & WindowFlags.PopupMenu) != 0)
+            result |= SDL.WindowFlags.PopupMenu;
+        if ((flags & WindowFlags.NotFocusable) != 0)
+            result |= SDL.WindowFlags.NotFocusable;
+
+        return result;
+    }
+
     // ---------------------------------------------------------------- PixelFormat
+
+    /// <summary>
+    /// 抽象层像素格式 → SDL 的<b>CPU 侧</b>像素格式（<c>SDL.Surface</c> 用）。
+    /// <para>
+    /// <b>与 <see cref="ConvertPixelFormat(PixelFormat)"/> 不同</b>：那个是 GPU
+    /// 纹理格式（<see cref="GPUTextureFormat"/>），这个是内存里的像素布局。
+    /// 两者是两套独立枚举，不能混用 —— 传错会得到「格式不支持」或颜色错乱的 surface。
+    /// </para>
+    /// <para>
+    /// <b>为什么用 ABGR8888 / ARGB8888 而不是 RGBA32 / BGRA32</b>：
+    /// 后两个在 SDL 的 C 头里是 <c>SDL_DEFINE_PIXELFORMAT</c> 组合出的<b>宏</b>
+    /// （按 CPU 字节序指向不同的枚举值），C# 绑定通常不导出宏。
+    /// 而 <c>*8888</c> 系列是真实枚举常量，任何时候都能用。
+    /// </para>
+    /// <para>
+    /// <b>字节序前提</b>：抽象层的 <c>R8G8B8A8UNorm</c> 描述的是「内存里依次是
+    /// R, G, B, A」，在小端机器上按 32 位打包读出来就是 ABGR —— 所以映射到
+    /// <c>ABGR8888</c>。x86_64 / ARM64 都是小端，实际无差别；若将来支持大端，
+    /// 这两个分支要跟着翻转。
+    /// </para>
+    /// </summary>
+    public static SDL.PixelFormat ConvertSurfacePixelFormat(PixelFormat format)
+    {
+        return format switch
+        {
+            PixelFormat.R8G8B8A8UNorm => SDL.PixelFormat.ABGR8888,
+            PixelFormat.B8G8R8A8UNorm => SDL.PixelFormat.ARGB8888,
+            _ => throw new NotSupportedException(
+                $"PixelFormat {format} has no SDL surface equivalent. "
+                    + "Only 8-bit RGBA/BGRA layouts are supported for surfaces."
+            ),
+        };
+    }
 
     public static GPUTextureFormat ConvertPixelFormat(PixelFormat format)
     {
