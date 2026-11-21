@@ -7,6 +7,8 @@ using Line.Framework.Default.Graphics.SDL3;
 using Line.Framework.Default.Graphics.Veldrid;
 using Line.Framework.Default.IO;
 using Line.Framework.Graphics;
+using Line.Framework.IO;
+using Line.Framework.IO.Events;
 using SDL3;
 
 namespace LineFramework.GraphicsTest;
@@ -14,13 +16,35 @@ namespace LineFramework.GraphicsTest;
 public static class GT
 {
     /// <summary>
-    /// 切换图形后端。false = SDL3，true = Veldrid。
+    /// 用 SDL3 还是 SDL2 创建窗口。true = SDL3（默认），false = SDL2。
     /// <para>
-    /// 两个后端现在吃同一份 GLSL 源码：SDL3 在工厂内编 SPIR-V，
-    /// Veldrid 也先编 SPIR-V 再创建（Vulkan 后端直接用它）。
+    /// <b>这是验证 <see cref="IWindow"/> 抽象的手段</b>：两条路径共用同一份
+    /// 设备创建、交换链、渲染循环与资源代码，差异只在窗口实现。
+    /// </para>
+    /// <para>
+    /// <b>SD2 会强制使用 Veldrid 后端</b>：SDL2 没有 GPU API，
+    /// <c>SDL_ClaimWindowForGPUDevice</c> 只接受 SDL3 的 <c>SDL_Window*</c>，
+    /// SDL2 窗口拿不出来。这不是「暂不支持」而是概念上不存在。
+    /// </para>
+    /// <para>
+    /// SDL2 侧的已知限制：<c>PixelSize</c> 退化为逻辑尺寸，
+    /// 因此 HiDPI（缩放 ≠ 100%）下交换链尺寸会不准。
     /// </para>
     /// </summary>
-    private static readonly bool UseVeldridBackend = true;
+    private static readonly bool UseSDL3Window = true;
+
+    /// <summary>
+    /// 切换图形后端。false = SDL3 GPU，true = Veldrid。
+    /// <para>
+    /// <b>当 <see cref="UseSDL3Window"/> 为 false 时强制为 true</b> ——
+    /// SDL3 GPU 后端无法认领 SDL2 窗口。
+    /// </para>
+    /// </summary>
+    private static bool UseVeldridBackend => !UseSDL3Window || UseVeldridBackendPreferred;
+
+    /// <summary>后端偏好（仅在用 SDL3 窗口时生效）。</summary>
+    private static readonly bool UseVeldridBackendPreferred = true;
+
     private static readonly int alpha = 255;
 
     /// <summary>
@@ -64,7 +88,7 @@ public static class GT
     /// 默认关闭，先看正常效果再打开它做验证。
     /// </para>
     /// </summary>
-    private const bool IndexBufferOffsetProbe = true;
+    private const bool IndexBufferOffsetProbe = false;
 
     /// <summary>
     /// true = 跑离屏渲染目标验证：把旋转立方体渲到一张 512×512 的离屏纹理，
@@ -224,64 +248,98 @@ void main()
         Log.EnableConsole(true);
         Log.SetLogFile(null);
 
-        // ---- SDL 初始化 ---------------------------------------------------
-        // SDL_WasInit 返回「已初始化子系统的掩码」，不是 bool。
-        if ((SDL.WasInit(SDL.InitFlags.Video) & SDL.InitFlags.Video) == 0)
+        // ---- 窗口 ----------------------------------------------------------
+        // 两条路径产出的都是 IWindow：后续的设备、交换链、渲染循环、尺寸查询
+        // 全部只依赖这个接口，不关心窗口是哪个后端建的。
+        IWindow window;
+        IntPtr rawWindow = IntPtr.Zero; // 仅 SDL3 分支用：本测试自己负责销毁
+
+        if (UseSDL3Window)
         {
-            // 视频驱动必须在 SDL_Init 之前选好。
-            //
-            // SDL3 GPU 在 Wayland 下拿不到可用的交换链纹理
-            //（SDL_WaitAndAcquireGPUSwapchainTexture 返回 0），
-            // 表现为「窗口开着、画面不动、也不报错」。
-            // Veldrid 走的是自己的 wl_surface 路径，不受影响，
-            // 所以只在 SDL3 后端下强制 X11（经 XWayland）。
-            if (OperatingSystem.IsLinux())
+            // SDL_WasInit 返回「已初始化子系统的掩码」，不是 bool。
+            if ((SDL.WasInit(SDL.InitFlags.Video) & SDL.InitFlags.Video) == 0)
             {
-                if (!UseVeldridBackend)
-                    SDL.SetHint(SDL.Hints.VideoDriver, "x11");
-                else if (
-                    !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"))
-                )
-                    SDL.SetHint(SDL.Hints.VideoDriver, "wayland");
+                // 视频驱动必须在 SDL_Init 之前选好。
+                //
+                // SDL3 GPU 在 Wayland 下拿不到可用的交换链纹理
+                //（SDL_WaitAndAcquireGPUSwapchainTexture 返回 0），
+                // 表现为「窗口开着、画面不动、也不报错」。
+                // Veldrid 走的是自己的 wl_surface 路径，不受影响，
+                // 所以只在 SDL3 GPU 后端下强制 X11（经 XWayland）。
+                if (OperatingSystem.IsLinux())
+                {
+                    if (!UseVeldridBackend)
+                        SDL.SetHint(SDL.Hints.VideoDriver, "x11");
+                    else if (
+                        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"))
+                    )
+                        SDL.SetHint(SDL.Hints.VideoDriver, "wayland");
+                }
+
+                if (!SDL.Init(SDL.InitFlags.Video))
+                    throw new InvalidOperationException($"SDL_Init failed: {SDL.GetError()}");
             }
 
-            if (!SDL.Init(SDL.InitFlags.Video))
-                throw new InvalidOperationException($"SDL_Init failed: {SDL.GetError()}");
+            SDL.WindowFlags windowFlag = SDL.WindowFlags.Resizable;
+            if (alpha != 255 && UseVeldridBackend == true)
+                windowFlag |= SDL.WindowFlags.Transparent;
+
+            rawWindow = SDL.CreateWindow("Rotating Cube", InitialWidth, InitialHeight, windowFlag);
+            if (rawWindow == IntPtr.Zero)
+                throw new InvalidOperationException($"SDL_CreateWindow failed: {SDL.GetError()}");
+
+            SDL.ShowWindow(rawWindow);
+            for (int i = 0; i < 10; i++)
+            {
+                SDL.PumpEvents();
+                Thread.Sleep(10);
+            }
+
+            // ownsWindow: false —— 销毁仍由本测试负责（见结尾的 DestroyWindow）。
+            window = new SDL3Window(rawWindow, ownsWindow: false);
         }
-
-        SDL.WindowFlags windowFlag = SDL.WindowFlags.Resizable;
-        if (alpha != 255 && UseVeldridBackend == true)
-            windowFlag |= SDL.WindowFlags.Transparent;
-
-        var window = SDL.CreateWindow("Rotating Cube", InitialWidth, InitialHeight, windowFlag);
-        if (window == IntPtr.Zero)
-            throw new InvalidOperationException($"SDL_CreateWindow failed: {SDL.GetError()}");
-
-        SDL.ShowWindow(window);
-        for (int i = 0; i < 10; i++)
+        else
         {
-            SDL.PumpEvents();
-            Thread.Sleep(10);
+            // SDL2 自己初始化视频子系统；不需要上面的 hint。
+            // 透明度在 SDL2 侧没有独立标志，这里不做处理。
+            window = new SDL2Window(
+                new WindowCreateInfo
+                {
+                    Title = "Rotating Cube",
+                    Width = InitialWidth,
+                    Height = InitialHeight,
+                    Flags = WindowFlags.Resizable,
+                }
+            );
+
+            // 等窗口真正映射出来，避免第一帧交换链尺寸为 0。
+            for (int i = 0; i < 10; i++)
+            {
+                window.PumpEvents();
+                Thread.Sleep(10);
+            }
         }
 
         // ---- 诊断输出 -----------------------------------------------------
         // 关键：区分「逻辑尺寸」和「像素尺寸」。
         // Vulkan swapchain 需要的是像素尺寸；HiDPI 下两者不同，
         // 传错会导致 surface 尺寸与窗口不匹配，present 静默失败。
-        SDL.GetWindowSize(window, out int logicalW, out int logicalH);
-        int pixelW = logicalW,
-            pixelH = logicalH;
-        if (!SDL.GetWindowSizeInPixels(window, out pixelW, out pixelH))
-        {
-            pixelW = logicalW;
-            pixelH = logicalH;
-            Console.WriteLine($"GetWindowSizeInPixels failed: {SDL.GetError()}");
-        }
+        var logical = window.Size;
+        var pixel = window.PixelSize;
+        int logicalW = (int)logical.X,
+            logicalH = (int)logical.Y;
+        int pixelW = (int)pixel.X,
+            pixelH = (int)pixel.Y;
 
-        var driverName = SDL.GetCurrentVideoDriver();
+        // SDL3 未初始化时 SDL3 的 GetCurrentVideoDriver 返回 null，
+        // 所以按实际使用的窗口实现去问对应的库。
+        var driverName = UseSDL3Window
+            ? SDL.GetCurrentVideoDriver() ?? "<unknown>"
+            : SDL2.SDL.SDL_GetCurrentVideoDriver() ?? "<unknown>";
+
         Console.WriteLine(
-            $"[init] driver={driverName} window=0x{window:X} "
-                + $"flags=0x{(ulong)SDL.GetWindowFlags(window):X}"
+            $"[init] window={(UseSDL3Window ? "SDL3" : "SDL2")} driver={driverName} "
+                + $"backend={(UseVeldridBackend ? "Veldrid" : "SDL3GPU")}"
         );
         Console.WriteLine(
             $"[init] logical={logicalW}x{logicalH} pixel={pixelW}x{pixelH} "
@@ -289,23 +347,10 @@ void main()
         );
 
         // ---- 交换链参数 ---------------------------------------------------
-        // 新入口优先吃 IWindow：SDL3 从 ISdlWindowSource 拿 SDL_Window*，
-        // Veldrid 从 IWindow.Source 拿原生句柄。只有「手上只有句柄」时
-        // 才直接给 SwapchainSource（这里 Veldrid 分支就是这么用的）。
-        SwapchainSource source;
-        SwapchainTarget target;
-        if (UseVeldridBackend)
-        {
-            source = CreateVeldridSwapchainSource(window, driverName);
-            target = source;
-        }
-        else
-        {
-            // ownsWindow: false —— 窗口的销毁仍由本测试自己负责。
-            var sdlWindow = new SDL3Window(window);
-            source = sdlWindow.Source;
-            target = SwapchainTarget.FromWindow(sdlWindow);
-        }
+        // 统一走窗口入口：Veldrid 从 IWindow.Source 取原生句柄，
+        // SDL3 GPU 从 ISdlWindowSource 取 SDL_Window*。
+        var source = window.Source;
+        var target = SwapchainTarget.FromWindow(window);
 
         Console.WriteLine(
             $"[swapchain] kind={source.Kind} "
@@ -371,8 +416,39 @@ void main()
                 RunLoop(dev, chain, window);
         }
 
-        SDL.DestroyWindow(window);
+        // SDL3 分支的窗口由本测试创建（ownsWindow: false），需要自己销毁；
+        // SDL2 分支的窗口对象自己拥有原生窗口，Dispose 即可。
+        if (UseSDL3Window)
+        {
+            if (rawWindow != IntPtr.Zero)
+                SDL.DestroyWindow(rawWindow);
+        }
+
+        window.Dispose();
+
         await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// 判断这个事件是否表示「要关窗」。
+    /// <para>
+    /// 两条路径来源不同：<see cref="WindowCloseEvent"/> 是抽象层的统一事件；
+    /// SDL3 的 <c>Quit</c> 没有对应的预设类型，会落到 <see cref="UnknownEvent"/>，
+    /// 所以这里再按原生类型补一次。
+    /// </para>
+    /// </summary>
+    private static bool IsCloseRequested(IWindowEvent evt)
+    {
+        if (evt is WindowCloseEvent)
+            return true;
+
+        if (evt is UnknownEvent { Native: SDL.Event e })
+        {
+            var type = (SDL.EventType)e.Type;
+            return type is SDL.EventType.Quit or SDL.EventType.WindowCloseRequested;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -381,6 +457,10 @@ void main()
     /// X11 与 Wayland 的原生句柄完全不同，用错必然无法呈现：
     /// X11 要 <c>Window</c> + <c>Display*</c>，
     /// Wayland 要 <c>wl_surface*</c> + <c>wl_display*</c>。
+    /// </para>
+    /// <para>
+    /// <b>已不再使用</b>：现在所有路径都走 <see cref="IWindow.Source"/>，
+    /// 由窗口实现自己组装。保留仅作参考。
     /// </para>
     /// </summary>
     private static SwapchainSource CreateVeldridSwapchainSource(IntPtr window, string videoDriver)
@@ -421,7 +501,7 @@ void main()
     /// <summary>
     /// 渲染主循环。与设备 / 交换链的具体后端无关。
     /// </summary>
-    private static void RunLoop(IGraphicsDevice dev, ISwapchain chain, IntPtr window)
+    private static void RunLoop(IGraphicsDevice dev, ISwapchain chain, IWindow window)
     {
         // ---- 着色器 -------------------------------------------------------
         var vs = dev.ResourceFactory.CreateShader(
@@ -538,30 +618,30 @@ void main()
 
         while (running)
         {
-            SDL.PumpEvents();
+            window.PumpEvents();
 
             // 只响应窗口关闭，按键不退出。
-            while (SDL.PollEvent(out var ev))
+            while (window.PollEvent(out var evt))
             {
-                var type = (SDL.EventType)ev.Type;
-                if (type is SDL.EventType.Quit or SDL.EventType.WindowCloseRequested)
+                if (IsCloseRequested(evt))
                     running = false;
             }
 
-            if (!running)
+            // Exists 为 false 也退出：两个后端的关闭语义不完全一致，
+            // 用「窗口还在不在」兜底比逐个事件类型判断可靠。
+            if (!running || !window.Exists)
                 break;
 
             // ---- 响应窗口缩放 ---------------------------------------------
             // 注意：swapchain 用的是「像素尺寸」，不是逻辑尺寸。
             // HiDPI 下两者不同，混用会让 surface 尺寸与窗口不匹配。
-            SDL.GetWindowSize(window, out int winW, out int winH);
-            int pixW = winW,
-                pixH = winH;
-            if (!SDL.GetWindowSizeInPixels(window, out pixW, out pixH))
-            {
-                pixW = winW;
-                pixH = winH;
-            }
+            var logicalSize = window.Size;
+            int winW = (int)logicalSize.X,
+                winH = (int)logicalSize.Y;
+
+            var pixelSize = window.PixelSize;
+            int pixW = (int)pixelSize.X,
+                pixH = (int)pixelSize.Y;
 
             if (pixW != lastWidth || pixH != lastHeight)
             {
@@ -852,7 +932,7 @@ void main()
     /// </list>
     /// </para>
     /// </summary>
-    private static void RunUniformCube(IGraphicsDevice dev, ISwapchain chain, IntPtr window)
+    private static void RunUniformCube(IGraphicsDevice dev, ISwapchain chain, IWindow window)
     {
         const float CameraDistance = 4.5f;
         const float FocalLength = 2.5f;
@@ -1090,24 +1170,22 @@ void main()
 
         while (running)
         {
-            SDL.PumpEvents();
-            while (SDL.PollEvent(out var ev))
+            window.PumpEvents();
+            while (window.PollEvent(out var evt))
             {
-                var type = (SDL.EventType)ev.Type;
-                if (type is SDL.EventType.Quit or SDL.EventType.WindowCloseRequested)
+                if (IsCloseRequested(evt))
                     running = false;
             }
-            if (!running)
+            if (!running || !window.Exists)
                 break;
 
-            SDL.GetWindowSize(window, out int winW, out int winH);
-            int pixW = winW,
-                pixH = winH;
-            if (!SDL.GetWindowSizeInPixels(window, out pixW, out pixH))
-            {
-                pixW = winW;
-                pixH = winH;
-            }
+            var logicalSize = window.Size;
+            int winW = (int)logicalSize.X,
+                winH = (int)logicalSize.Y;
+
+            var pixelSize = window.PixelSize;
+            int pixW = (int)pixelSize.X,
+                pixH = (int)pixelSize.Y;
 
             if (pixW != lastWidth || pixH != lastHeight)
             {
@@ -1309,7 +1387,7 @@ void main()
     /// </list>
     /// </para>
     /// </summary>
-    private static void RunOffscreenDemo(IGraphicsDevice dev, ISwapchain chain, IntPtr window)
+    private static void RunOffscreenDemo(IGraphicsDevice dev, ISwapchain chain, IWindow window)
     {
         const int OffscreenSize = 512;
         const float CameraDistance = 4.5f;
@@ -1622,24 +1700,22 @@ void main()
 
         while (running)
         {
-            SDL.PumpEvents();
-            while (SDL.PollEvent(out var ev))
+            window.PumpEvents();
+            while (window.PollEvent(out var evt))
             {
-                var type = (SDL.EventType)ev.Type;
-                if (type is SDL.EventType.Quit or SDL.EventType.WindowCloseRequested)
+                if (IsCloseRequested(evt))
                     running = false;
             }
-            if (!running)
+            if (!running || !window.Exists)
                 break;
 
-            SDL.GetWindowSize(window, out int winW, out int winH);
-            int pixW = winW,
-                pixH = winH;
-            if (!SDL.GetWindowSizeInPixels(window, out pixW, out pixH))
-            {
-                pixW = winW;
-                pixH = winH;
-            }
+            var logicalSize = window.Size;
+            int winW = (int)logicalSize.X,
+                winH = (int)logicalSize.Y;
+
+            var pixelSize = window.PixelSize;
+            int pixW = (int)pixelSize.X,
+                pixH = (int)pixelSize.Y;
 
             if (pixW != lastWidth || pixH != lastHeight)
             {

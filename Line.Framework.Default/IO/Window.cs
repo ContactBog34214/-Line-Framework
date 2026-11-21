@@ -9,22 +9,32 @@ namespace Line.Framework.Default.IO;
 
 public class Window : WindowType
 {
+    /// <summary>
+    /// 用哪个窗口实现。
+    /// <para>
+    /// <b>SDL2 窗口只能配 Veldrid 渲染</b>：它无法提供 <c>SDL_Window*</c>，
+    /// SDL3 GPU 后端没法认领它。本类目前恒定使用 Veldrid，所以两种窗口都能跑。
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>SDL2 与 SDL3 同进程共存有风险</b>：两个库各自初始化视频子系统、
+    /// 各自抢键盘/鼠标/焦点。单窗口运行时通常没事，但这不是推荐配置 ——
+    /// 这个开关用于验证 <see cref="IWindow"/> 抽象，不是长期方案。
+    /// </para>
+    /// </summary>
+    public static bool UseSdl2Window = false;
+
     public override RendererType Renderer { get; }
     public override ICompositor Compositor { get; set; }
 
     /// <summary>
-    /// 底层 SDL 窗口。
+    /// 底层窗口。
     /// <para>
-    /// 本类<b>不再自己调</b> <c>SDL_CreateWindow</c> / <c>SDL_DestroyWindow</c>：
-    /// 原生窗口由 <see cref="SDL3Window"/> 持有（<c>ownsWindow: true</c>），
-    /// 这里只是借用它的句柄与 <see cref="IWindow.Source"/>。
-    /// </para>
-    /// <para>
-    /// 这也是把「窗口创建」与「图形后端选择」解耦的开端：换后端时
-    /// 窗口本身不需要重建，因为它已经是一次性把所有原生句柄填满了。
+    /// <b>类型是 <see cref="IWindow"/> 而不是具体实现</b>：本类只借用它的
+    /// <see cref="IWindow.Source"/> 与事件通路，不关心它是 SDL3 还是 SDL2 创建的。
+    /// 原生窗口的所有权在实现那边（<c>ownsWindow: true</c>）。
     /// </para>
     /// </summary>
-    protected SDL3Window Sdl { get; private set; }
+    protected IWindow Sdl { get; private set; }
 
     public Window(
         int Width = 640,
@@ -50,36 +60,56 @@ public class Window : WindowType
 
         Resource = new();
 
-        // 视频驱动 hint 必须在 SDL_Init 之前设置，否则无效。
-        if (
-            OperatingSystem.IsLinux()
-            && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"))
-        )
-            SDL.SetHint(SDL.Hints.VideoDriver, "wayland");
+        var createInfo = new WindowCreateInfo
+        {
+            Title = Title,
+            Width = Width,
+            Height = Height,
+            Flags = WindowFlags.Resizable | WindowFlags.MouseFocus | WindowFlags.InputFocus,
+        };
 
-        SDL.Init(SDL.InitFlags.Video | SDL.InitFlags.Events);
-        Log.Debug($"Video driver: {SDL.GetCurrentVideoDriver()}");
+        if (UseSdl2Window)
+        {
+            // SDL2 自己初始化视频子系统（SDL_InitSubSystem），
+            // 不需要上面那串 SDL3 的 hint。
+            //
+            // ⚠️ 但这意味着 SDL3 的视频子系统此时可能还没初始化 ——
+            // 而本类上面的 SDL.Init(...) 已经跑过了。两套库同时在跑，
+            // 见 UseSdl2Window 的说明。
+            Sdl = new SDL2Window(createInfo);
 
-        SDL.SetHint(SDL.Hints.TouchMouseEvents, "0");
-        SDL.SetHint(SDL.Hints.MouseTouchEvents, "0");
-        SDL.SetHint(SDL.Hints.WindowsEnableMessageLoop, "1");
-        SDL.SetHint(SDL.Hints.WindowActivateWhenRaised, "1");
-        SDL.SetHint(SDL.Hints.WindowsRawKeyboard, "1");
-        SDL.SetHint(SDL.Hints.WindowsRawKeyboardInputsink, "1");
+            // 打印实际选中的驱动：SDL2 在 Wayland 会话下会优先 wayland，
+            // 而它的 wayland 后端输入延迟明显高于 x11 —— 排查手感问题先看这行。
+            Log.Debug(
+                $"Window backend: SDL2, video driver: "
+                    + $"{SDL2.SDL.SDL_GetCurrentVideoDriver() ?? "<none>"}"
+            );
+        }
+        else
+        {
+            // 视频驱动 hint 必须在 SDL_Init 之前设置，否则无效。
+            if (
+                OperatingSystem.IsLinux()
+                && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"))
+            )
+                SDL.SetHint(SDL.Hints.VideoDriver, "wayland");
 
-        SDL.GLSetSwapInterval(0);
+            SDL.Init(SDL.InitFlags.Video | SDL.InitFlags.Events);
+            Log.Debug($"Video driver: {SDL.GetCurrentVideoDriver()}");
 
-        // 窗口交给 SDL3Window 创建：标志用抽象层的 WindowFlags，
-        // 不再往 SDL 传 OpenGL / Vulkan / Metal 那些会让 SDL GPU 拒绝建链的位。
-        Sdl = new SDL3Window(
-            new WindowCreateInfo
-            {
-                Title = Title,
-                Width = Width,
-                Height = Height,
-                Flags = WindowFlags.Resizable | WindowFlags.MouseFocus | WindowFlags.InputFocus,
-            }
-        );
+            SDL.SetHint(SDL.Hints.TouchMouseEvents, "0");
+            SDL.SetHint(SDL.Hints.MouseTouchEvents, "0");
+            SDL.SetHint(SDL.Hints.WindowsEnableMessageLoop, "1");
+            SDL.SetHint(SDL.Hints.WindowActivateWhenRaised, "1");
+            SDL.SetHint(SDL.Hints.WindowsRawKeyboard, "1");
+            SDL.SetHint(SDL.Hints.WindowsRawKeyboardInputsink, "1");
+
+            SDL.GLSetSwapInterval(0);
+
+            // 窗口交给 SDL3Window 创建：标志用抽象层的 WindowFlags，
+            // 不再往 SDL 传 OpenGL / Vulkan / Metal 那些会让 SDL GPU 拒绝建链的位。
+            Sdl = new SDL3Window(createInfo);
+        }
 
         // 交给基类的是 IWindow 抽象，而不是句柄 ——
         // 从此 WindowType 里不再有任何原生类型。
@@ -97,6 +127,9 @@ public class Window : WindowType
             SyncToVerticalBlank = VSync,
         };
 
+        // 始终用 Veldrid：
+        //   - SDL2 窗口无法提供 SDL_Window*，SDL3 GPU 后端认领不了它；
+        //   - 两条窗口路径共用同一套渲染代码，正好验证 IWindow.Source 抽象。
         bool UsingVeldrid = true;
         try
         {

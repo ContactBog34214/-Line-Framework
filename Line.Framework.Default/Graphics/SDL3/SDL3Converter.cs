@@ -76,6 +76,39 @@ public static class SDL3Converter
 
     // ---------------------------------------------------------------- PixelFormat
 
+    /// <summary>
+    /// 抽象层像素格式 → SDL 的<b>CPU 侧</b>像素格式（<c>SDL.Surface</c> 用）。
+    /// <para>
+    /// <b>与 <see cref="ConvertPixelFormat(PixelFormat)"/> 不同</b>：那个是 GPU
+    /// 纹理格式（<see cref="GPUTextureFormat"/>），这个是内存里的像素布局。
+    /// 两者是两套独立枚举，不能混用 —— 传错会得到「格式不支持」或颜色错乱的 surface。
+    /// </para>
+    /// <para>
+    /// <b>为什么用 ABGR8888 / ARGB8888 而不是 RGBA32 / BGRA32</b>：
+    /// 后两个在 SDL 的 C 头里是 <c>SDL_DEFINE_PIXELFORMAT</c> 组合出的<b>宏</b>
+    /// （按 CPU 字节序指向不同的枚举值），C# 绑定通常不导出宏。
+    /// 而 <c>*8888</c> 系列是真实枚举常量，任何时候都能用。
+    /// </para>
+    /// <para>
+    /// <b>字节序前提</b>：抽象层的 <c>R8G8B8A8UNorm</c> 描述的是「内存里依次是
+    /// R, G, B, A」，在小端机器上按 32 位打包读出来就是 ABGR —— 所以映射到
+    /// <c>ABGR8888</c>。x86_64 / ARM64 都是小端，实际无差别；若将来支持大端，
+    /// 这两个分支要跟着翻转。
+    /// </para>
+    /// </summary>
+    public static SDL.PixelFormat ConvertSurfacePixelFormat(PixelFormat format)
+    {
+        return format switch
+        {
+            PixelFormat.R8G8B8A8UNorm => SDL.PixelFormat.ABGR8888,
+            PixelFormat.B8G8R8A8UNorm => SDL.PixelFormat.ARGB8888,
+            _ => throw new NotSupportedException(
+                $"PixelFormat {format} has no SDL surface equivalent. "
+                    + "Only 8-bit RGBA/BGRA layouts are supported for surfaces."
+            ),
+        };
+    }
+
     public static GPUTextureFormat ConvertPixelFormat(PixelFormat format)
     {
         return format switch

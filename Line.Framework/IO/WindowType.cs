@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Line.Framework.Graphics;
+using Line.Framework.IO.Events;
 using Line.Framework.Resource;
 using Line.Framework.Resource.Audio;
 using Line.Framework.Resource.Graphic;
@@ -43,6 +44,47 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
         Window?.SetIcon(iconStream, closeStream);
     }
 
+    /// <summary>
+    /// 输入事件处理链。
+    /// <para>
+    /// 事件由 <see cref="IWindow.PollEvent"/> 取出后依次交给所有订阅者。
+    /// 与 <see cref="Window"/> 上的 <c>Resized</c> / <c>FocusGained</c> 等
+    /// 是两套：<b>窗口状态是「最新值」语义</b>（可合并、可丢中间态），
+    /// <b>输入是「序列」语义</b>（不可丢、必须保序）。
+    /// </para>
+    /// <para>
+    /// 处理器按订阅顺序<b>串行 await</b>：事件处理链上不允许并发，
+    /// 否则「先 KeyDown 再 KeyUp」的顺序会在不同的续体里失效。
+    /// </para>
+    /// </summary>
+    public virtual event Func<IWindowEvent, Task> OnEvent;
+
+    /// <summary>
+    /// 把事件分发给所有订阅者。
+    /// </summary>
+    protected virtual async Task DispatchEvent(IWindowEvent e)
+    {
+        var handlers = OnEvent;
+        if (handlers is null)
+            return;
+
+        foreach (var d in handlers.GetInvocationList())
+        {
+            if (d is not Func<IWindowEvent, Task> h)
+                continue;
+
+            try
+            {
+                await h(e);
+            }
+            catch (Exception ex)
+            {
+                // 单个处理器异常不能打断整条链 —— 否则一个订阅者写错就再也收不到事件。
+                Log.Error(ex);
+            }
+        }
+    }
+
     protected WindowType()
     {
         if (inited) return;
@@ -62,6 +104,7 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
     /// <summary>
     /// 启用SDL事件输出
     /// </summary>
+    /// <summary>是否输出收到的事件（排查用，逐事件打日志，会很吵）。</summary>
     public virtual bool EnableEventOutput { get; set; } = false;
     /// <summary>
     /// 鼠标是否落在本窗口上
@@ -434,8 +477,6 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
             Window.Attributes.ShowCursor = value;
         }
     }
-    protected internal virtual ConcurrentDictionary<SDL.EventType, Func<SDL.Event, object[], Task>> EventPool { get; } =
-        new();
 
     /// <summary>
     /// 当窗口获得焦点时
@@ -551,52 +592,15 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
             // 事件已经由 IWindow 按窗口分好类，这里不需要再按 WindowID 过滤，
             // 也不存在「不属于自己就重新入队」那套写法 —— 旧实现那样做在多窗口
             // 时是 O(N²)，而且边遍历边改队列会丢事件。
-            while (Window != null && Window.PollEvent(out var we))
+            while (Window != null && Window.PollEvent(out var evt))
             {
                 if (token.IsCancellationRequested)
                     return;
 
-                var ev = ToSdlEvent(we);
-                var extra = TextInputExtra(we);
-
-                if (ev.Type == (uint)SDL.EventType.WindowCloseRequested)
-                {
-                    try
-                    {
-                        if (RequestQuit != null && (QuitTask == null || QuitTask.IsCompleted))
-                            QuitTask = Task.Run(RequestQuit.Invoke);
-                    }
-                    catch (TaskCanceledException)
-                    {
-                        return;
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error($"{ex}");
-                    }
-                }
-
-                foreach (var item in EventPool)
-                {
-                    if (token.IsCancellationRequested)
-                        return;
-
-                    if (ev.Type == (uint)item.Key)
-                    {
-                        try
-                        {
-                            if (item.Value != null)
-                                await item.Value.Invoke(ev, extra);
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.Error(ex);
-                        }
-                    }
-                }
-
                 if (EnableEventOutput)
-                    Log.Debug($"Event:{((SDL.EventType)ev.Type)}");
+                    Log.Debug($"Event:{evt.GetType().Name}");
+
+                await DispatchEvent(evt);
             }
 
             // 休眠
@@ -618,34 +622,6 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
             last = GetStopwatchMs(sw);
         }
     }
-    /// <summary>
-    /// 把抽象层事件还原成 SDL 事件。
-    /// <para>
-    /// <b>过渡期的耦合点</b>：抽象层还没有自己的事件 union，所以只能直接解
-    /// <see cref="WindowEvent.Payload"/>。本类本来就已深度耦合 SDL
-    /// （<see cref="EventPool"/> 的键就是 <c>SDL.EventType</c>），这里不算新增债务；
-    /// 等 core 有了完整事件类型后，本方法随之消失。
-    /// </para>
-    /// </summary>
-    private static SDL.Event ToSdlEvent(WindowEvent we) =>
-        we.Payload is SDL.Event e ? e : default;
-
-    /// <summary>
-    /// 文本输入事件需要把文本作为额外参数传给处理器。
-    /// <para>
-    /// 文本已在<b>入队时</b>从原生指针复制成 string（见
-    /// <see cref="WindowEvent.Text"/>），这里直接取用 —— 不要再去读
-    /// 原生事件里的指针，那块内存在下一次泵事件时已被覆写。
-    /// </para>
-    /// </summary>
-    private static object[] TextInputExtra(WindowEvent we)
-    {
-        if (we.Text is null)
-            return [];
-
-        return [we.Text];
-    }
-
     /// <summary>
     /// 统一出口：转发抓取状态给窗口实现。
     /// <para>
@@ -753,89 +729,57 @@ SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
         return tmp.ToArray();
     }
 
+    /// <summary>
+    /// 订阅窗口状态事件。
+    /// <para>
+    /// <b>只处理 <see cref="IWindow"/> 上的「最新值」类事件</b>
+    /// （尺寸 / 焦点 / 关闭）；鼠标进出、恢复、全屏这类「输入状态需要重应用」
+    /// 的事件由 <see cref="IWindow"/> 实现自己处理 —— 它才知道自己需要重设什么。
+    /// </para>
+    /// <para>
+    /// <b>必须在派生类构造器里、<see cref="Window"/> 赋值之后调用。</b>
+    /// 基类构造器运行时 Window 还是 null。
+    /// </para>
+    /// </summary>
     protected virtual void BindEvents()
     {
-        //绑定事件
-        EventPool.TryAdd(
-            SDL.EventType.WindowResized,
-            async (a, _) =>
-            {
-                OnWindowResized();
-            }
-        );
-        EventPool.TryAdd(
-            SDL.EventType.WindowFocusGained,
-            async (a, _) =>
-            {
-                Window?.Raise();
+        if (Window is null)
+        {
+            Log.Warning(
+                $"{GetType().Name}.BindEvents() 在 Window 赋值前被调用，事件订阅已跳过。"
+            );
+            return;
+        }
 
-                // 无条件重试抓取：窗口刚拿到焦点时，之前那次设置相对模式
-                // 往往是被窗口管理器忽略掉的（没有焦点就没有抓取的语义）。
-                // 不要再判断 IsMouseFocus —— 焦点事件期间它可能还是旧值，
-                // 条件判断只会让「启动时鼠标已在内」这条常见路径失效。
-                ApplyMouseCapture(EnableMouseRelative);
-                FocusGained?.Invoke();
-            }
-        );
-        EventPool.TryAdd(
-            SDL.EventType.WindowMouseEnter,
-            async (a, _) =>
-            {
-                // 只同步抓取状态。光标显隐由 ApplyMouseCapture 内部一起做 ——
-                // 这里不要再写 Attributes.ShowCursor：它的 getter 带了
-                // 「与相对模式做与运算」的派生逻辑，写回会改写用户意图。
-                //
-                // 不再要求 IsFocus：旧实现的等价代码虽然带了该条件，但它
-                // 紧接着无条件调了 Show/HideCursor，所以光标照样被隐藏；
-                // 现在把光标处理收进 ApplyMouseCapture 后，多那个条件只会
-                // 让抓取和光标状态都不生效。
-                ApplyMouseCapture(EnableMouseRelative);
-            }
-        );
-        EventPool.TryAdd(
-            SDL.EventType.WindowMouseLeave,
-            async (a, _) =>
-            {
-                ApplyMouseCapture(false);
-            }
-        );
-        EventPool.TryAdd(
-            SDL.EventType.WindowRestored,
-            async (a, _) =>
-            {
-                Window?.Raise();
+        Window.Resized += OnWindowResized;
 
-                // 从最小化恢复同样会重置 grab / 光标状态。
-                ApplyMouseCapture(EnableMouseRelative);
-            }
-        );
-        EventPool.TryAdd(
-            SDL.EventType.WindowFocusLost,
-            async (a, _) =>
-            {
-                ApplyMouseCapture(false);
-                FocusLost?.Invoke();
-            }
-        );
+        Window.FocusGained += () =>
+        {
+            Window.Raise();
+            ApplyMouseCapture(EnableMouseRelative);
+            FocusGained?.Invoke();
+        };
 
-        // 全屏切换会重置窗口的 grab 与光标可见性（SDL 内部重配 surface）。
-        // 程序调用 Host.FullScreen 时 IWindow 已在 setter 里重落地，
-        // 但窗口管理器直接全屏（F11、WM 快捷键）不会经过我们的 setter，
-        // 所以这里也要接一次。
-        EventPool.TryAdd(
-            SDL.EventType.WindowEnterFullscreen,
-            async (a, _) =>
+        Window.FocusLost += () =>
+        {
+            ApplyMouseCapture(false);
+            FocusLost?.Invoke();
+        };
+
+        Window.CloseRequested += () =>
+        {
+            if (RequestQuit is null || (QuitTask is not null && !QuitTask.IsCompleted))
+                return;
+
+            try
             {
-                ApplyMouseCapture(EnableMouseRelative);
+                QuitTask = Task.Run(RequestQuit.Invoke);
             }
-        );
-        EventPool.TryAdd(
-            SDL.EventType.WindowLeaveFullscreen,
-            async (a, _) =>
+            catch (Exception ex)
             {
-                ApplyMouseCapture(EnableMouseRelative);
+                Log.Error(ex);
             }
-        );
+        };
 
         RequestQuit = async () => await DisposeAsync();
     }

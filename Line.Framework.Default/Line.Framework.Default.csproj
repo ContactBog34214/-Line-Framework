@@ -17,6 +17,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="ppy.SDL2-CS" Version="1.0.82" />
     <PackageReference Include="SDL3-CS" Version="3.4.16.1" />
     <PackageReference Include="SDL3-CS.Android" Version="3.4.16" />
     <PackageReference Include="SDL3-CS.iOS" Version="3.4.16" />
@@ -31,4 +32,17 @@
   <ItemGroup>
     <ProjectReference Include="../Line.Framework/Line.Framework.csproj" />
   </ItemGroup>
+
+  <!--
+    SDL2 后端：已恢复编译，但**只有窗口 + 事件可用**。
+
+    未完成的部分（明确记录，避免误以为能用）：
+    1. SwapchainSource 只填了 Kind，原生句柄为空 ——
+       需要 SDL_GetWindowWMInfo + SDL_SysWMinfo 的 union 字段名，
+       而 ppy.SDL2-CS 1.0.82 没有 XML 文档可查，猜错会静默拿到 0。
+       所以在补齐之前，SDL2 窗口**接不上任何渲染后端**。
+    2. PixelSize 一律退化为 Size（同理，拿不到 drawable size 的可靠方法）。
+
+    补齐方法见 IO/SDL2Window.cs 里 BuildSource 的注释。
+  -->
 </Project>

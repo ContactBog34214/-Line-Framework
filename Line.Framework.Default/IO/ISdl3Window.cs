@@ -1,4 +1,5 @@
 using Line.Framework.IO;
+using Line.Framework.IO.Events;
 using SDL3;
 
 namespace Line.Framework.Default.IO;
@@ -13,11 +14,11 @@ namespace Line.Framework.Default.IO;
 public interface ISdl3Window : IWindow, ISdlWindowSource, IHasNativeHandle<nint>
 {
     /// <summary>
-    /// 把抽象层的 <see cref="WindowEvent"/> 还原成 SDL 事件。
+    /// 把 <see cref="UnknownEvent"/> 里的原生事件取出来。
     /// <para>
-    /// 抽象层还没有自己的事件 union，所以现阶段必须靠后端转回来才能读字段。
-    /// 这是<b>过渡期的约定</b>，等 core 有了完整事件类型后移除。
+    /// 只有未映射的事件类型才会走 <see cref="UnknownEvent"/>；已映射的
+    /// 事件（键盘 / 鼠标 / 触摸…）不保留原生数据 —— 那些字段可能已失效。
     /// </para>
     /// </summary>
-    SDL.Event ToSdlEvent(WindowEvent evt);
+    SDL.Event ToSdlEvent(UnknownEvent evt);
 }

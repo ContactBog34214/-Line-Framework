@@ -1,9 +1,12 @@
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Line.Framework.Default.Graphics.SDL3;
 using Line.Framework.Graphics;
 using Line.Framework.IO;
+using Line.Framework.IO.Events;
+using Line.Framework.Resource.Graphic;
 using Line.Framework.Types;
 using SDL3;
 
@@ -12,11 +15,9 @@ namespace Line.Framework.Default.IO;
 /// <summary>
 /// SDL3 的 <see cref="IWindow"/> 实现。
 /// <para>
-/// <b>本类不轮询事件、不跑循环</b>。事件由 App（或你自己）泵出后按
-/// <see cref="IWindow.Id"/> 分派，调用 <see cref="ProcessEvent"/> 落到这里。
-/// 这样窗口不会变成「全局事件路由器」，多个窗口也才能干净共存 ——
-/// 旧实现用静态 <c>PollEvents</c> 队列 + 把不属于自己的事件重新入队，
-/// 多窗口时是 O(N²) 且会丢事件。
+/// <b>本类不轮询事件、不跑循环</b>。事件由 <see cref="Sdl3EventPump"/> 泵出后按
+/// <see cref="IWindow.Id"/> 投递到 <see cref="Enqueue"/>：窗口状态事件直接
+/// 触发本类的 event，输入事件转换后进队列等 <see cref="PollEvent"/> 取。
 /// </para>
 /// </summary>
 public sealed class SDL3Window : ISdl3Window
@@ -36,39 +37,14 @@ public sealed class SDL3Window : ISdl3Window
     private nint iconSurface;
 
     /// <summary>
-    /// 队列里的条目：原生事件 + 「是否全局事件」标记 + 已复制出的文本。
-    /// <para>
-    /// 用一个包装结构而不是额外的哈希集合：标记必须跟着事件一起进缓冲、
-    /// 一起被覆盖、一起被取走。分开存会在「事件长期不被认领」时泄漏。
-    /// </para>
-    /// <para>
-    /// <b>为什么在这里存文本</b>：<c>SDL.Event</c> 里的字符串指针指向 SDL
-    /// 内部队列的内存，下一次 <c>SDL_PumpEvents</c> 就会覆写。所以必须在事件
-    /// 还活着的那一刻（入队时）复制成托管 string。用 <c>GCHandle</c> 固定没用 ——
-    /// 那块内存是 SDL 分配的，不是 GC 管的。
-    /// </para>
-    /// </summary>
-    private readonly struct QueuedEvent
-    {
-        public QueuedEvent(SDL.Event evt, string text, bool isGlobal)
-        {
-            Event = evt;
-            Text = text;
-            IsGlobal = isGlobal;
-        }
-
-        public SDL.Event Event { get; }
-
-        /// <summary>已复制的文本；非文本类事件为 null。</summary>
-        public string Text { get; }
-
-        public bool IsGlobal { get; }
-    }
-
-    /// <summary>
     /// 新到的事件。由事件泵在主线程写入，由使用方（Update 循环）在另一线程读取。
+    /// <para>
+    /// <b>存的是已转换的抽象层事件</b>，不是原生 <c>SDL.Event</c>：
+    /// 原生事件里可能有指向 SDL 内部缓冲区的指针，下一次 <c>SDL_PumpEvents</c>
+    /// 就被覆写。所以必须在入队时（事件还活着）完成转换。
+    /// </para>
     /// </summary>
-    private readonly ConcurrentQueue<QueuedEvent> eventsQueue = new();
+    private readonly ConcurrentQueue<IWindowEvent> eventsQueue = new();
 
     /// <summary>
     /// 已被 filter 拒绝过的事件。
@@ -77,7 +53,7 @@ public sealed class SDL3Window : ISdl3Window
     /// 这里按到达顺序保存，满了覆盖最旧的（长时间无人认领的事件本来也没有价值）。
     /// </para>
     /// </summary>
-    private readonly CircularBuffer<QueuedEvent> eventsBuffer;
+    private readonly CircularBuffer<IWindowEvent> eventsBuffer;
 
     /// <summary>
     /// 事件容量，队列与暂存缓冲共用同一个值。
@@ -330,10 +306,28 @@ public sealed class SDL3Window : ISdl3Window
         {
             // 必须是像素尺寸：HiDPI / 分数缩放下与逻辑尺寸不同，
             // 用错会让 surface 与 swapchain 尺寸不匹配、present 静默失败。
-            SDL.GetWindowSizeInPixels(window, out int w, out int h);
-            return new(w, h);
+            if (SDL.GetWindowSizeInPixels(window, out int w, out int h) && w > 0 && h > 0)
+                return new(w, h);
+
+            // 退化路径：SDL3 一般在窗口存在时都能回答，拿不到时（窗口刚创建、
+            // 或驱动异常）按 DPI 反推。静默退化会让「尺寸不对导致 present 失败」
+            // 那个坑重现，所以第一次退化要留痕。
+            if (!pixelSizeDegradeReported)
+            {
+                pixelSizeDegradeReported = true;
+                Log.Warning(
+                    $"[SDL3Window] GetWindowSizeInPixels failed ({SDL.GetError()}); "
+                        + "PixelSize falls back to the logical size. The swapchain may "
+                        + "be created with a wrong (logical) size on HiDPI displays."
+                );
+            }
+
+            return Size;
         }
     }
+
+    /// <summary>像素尺寸退化只报一次，避免每帧刷屏。</summary>
+    private bool pixelSizeDegradeReported;
 
     public Vector2 Position
     {
@@ -452,14 +446,13 @@ public sealed class SDL3Window : ISdl3Window
     /// 等下次别的 filter 来取。缓冲满了覆盖最旧的。
     /// </para>
     /// </summary>
-    public bool PollEvent(out WindowEvent evt, Func<WindowEvent, bool> filter = null)
+    public bool PollEvent(out IWindowEvent evt, Func<IWindowEvent, bool> filter = null)
     {
         // ① 先看缓冲：更早到达的事件必须先返回。
         var count = eventsBuffer.Count;
         for (long i = 0; i < count; i++)
         {
-            var queued = eventsBuffer[i];
-            var candidate = new WindowEvent(Id, queued.Event, queued.IsGlobal, queued.Text);
+            var candidate = eventsBuffer[i];
 
             if (filter == null || filter(candidate))
             {
@@ -470,68 +463,123 @@ public sealed class SDL3Window : ISdl3Window
         }
 
         // ② 再看队列：命中即停，剩下的留在队列里等下次。
-        while (eventsQueue.TryDequeue(out var queued))
+        while (eventsQueue.TryDequeue(out var candidate))
         {
-            var candidate = new WindowEvent(Id, queued.Event, queued.IsGlobal, queued.Text);
-
             if (filter == null || filter(candidate))
             {
                 evt = candidate;
                 return true;
             }
 
-            eventsBuffer.Add(queued);
+            eventsBuffer.Add(candidate);
         }
 
-        evt = default;
+        evt = null;
         return false;
     }
 
     /// <summary>
     /// 事件泵投递入口（主线程调用，原生事件此时仍然有效）。
     /// </summary>
-    internal void Enqueue(SDL.Event evt) =>
-        Enqueue(new QueuedEvent(evt, CaptureText(evt), isGlobal: false));
+    internal void Enqueue(SDL.Event evt)
+    {
+        // 窗口状态事件（尺寸 / 焦点 / 关闭 / 全屏…）是「最新值」语义：
+        // 直接触发 IWindow 的 event，不进队列。队列只承载「序列」语义的输入。
+        if (TryHandleWindowEvent(evt))
+            return;
+
+        // 转换必须在这里做：原生事件里的字符串指针在下一次泵事件时就失效了。
+        Enqueue(SDL3EventConverter.Convert(this, evt));
+    }
 
     /// <summary>
-    /// 事件泵投递「无归属窗口的全局事件」。
-    /// </summary>
-    internal void EnqueueGlobal(SDL.Event evt) =>
-        Enqueue(new QueuedEvent(evt, CaptureText(evt), isGlobal: true));
-
-    /// <summary>
-    /// 把事件里指向后端内存的字符串复制出来。
+    /// 处理窗口状态事件。
     /// <para>
-    /// <b>必须在入队时调用</b>：这些指针指向 SDL 内部事件队列，
-    /// 下一次 <c>SDL_PumpEvents</c> 就会覆写那块内存 —— 晚一步读到的就是垃圾
-    /// （典型现象：输入框里的中文/组合字符变成乱码）。
-    /// </para>
-    /// <para>
-    /// <c>GCHandle</c> 固定解决不了这个问题：那块内存由 SDL 分配，
-    /// GC 不管它，pin 也无从谈起。唯一正确的做法就是尽早复制。
+    /// 输入状态的重应用（抓取 / 光标）也在这里做 —— 只有窗口实现自己
+    /// 知道它需要重设什么，<c>WindowType</c> 不该替它操心。
     /// </para>
     /// </summary>
-    private static string CaptureText(SDL.Event evt)
+    /// <returns>true 表示已被处理，不要再入队。</returns>
+    private bool TryHandleWindowEvent(SDL.Event evt)
     {
         switch ((SDL.EventType)evt.Type)
         {
-            case SDL.EventType.TextInput:
-            case SDL.EventType.TextEditing:
-                return evt.Text.Text != nint.Zero
-                    ? Marshal.PtrToStringUTF8(evt.Text.Text)
-                    : null;
+            case SDL.EventType.WindowResized:
+                Resized?.Invoke();
+                return true;
 
-            // 拖放文本（SDL_EVENT_DROP_TEXT）暂不处理：
-            // SDL3 原生字段名是 data，SDL3-CS 的映射成员名未核对过
-            //（写 Text 会编译失败）。要用时查
-            // ~/.nuget/packages/sdl3-cs/*/lib/*/*.xml 的 SDL.DropEvent。
+            case SDL.EventType.WindowMoved:
+                Moved?.Invoke();
+                return true;
 
-            default:
-                return null;
+            case SDL.EventType.WindowFocusGained:
+                Raise();
+
+                // 拿到焦点后无条件重试抓取：之前那次设置往往被窗口管理器
+                // 忽略了（没有焦点就没有抓取的语义）。
+                ApplyMouseCapture(Attributes.RelativeMouse);
+                FocusGained?.Invoke();
+                return true;
+
+            case SDL.EventType.WindowFocusLost:
+                SDL.SetWindowRelativeMouseMode(window, false);
+                FocusLost?.Invoke();
+                return true;
+
+            case SDL.EventType.WindowMouseEnter:
+                ApplyMouseCapture(Attributes.RelativeMouse);
+                return true;
+
+            case SDL.EventType.WindowMouseLeave:
+                ApplyMouseCapture(false);
+                return true;
+
+            case SDL.EventType.WindowRestored:
+                Raise();
+                // 从最小化恢复会重置 grab / 光标状态。
+                ReapplyInputState();
+                return true;
+
+            case SDL.EventType.WindowCloseRequested:
+                CloseRequested?.Invoke();
+
+                // 同时进事件流：让「关闭」与输入保持相对时序
+                //（例如按 ESC 的同一帧想关窗）。
+                Enqueue(
+                    new WindowCloseEvent(this, TimeSpan.FromMilliseconds(evt.Common.Timestamp))
+                );
+                return true;
+
+            case SDL.EventType.WindowEnterFullscreen:
+            case SDL.EventType.WindowLeaveFullscreen:
+                // 全屏切换会重置 grab 与光标可见性（SDL 内部重配 surface）。
+                ReapplyInputState();
+                return true;
         }
+
+        return false;
     }
 
-    private void Enqueue(QueuedEvent item)
+    /// <summary>
+    /// 事件泵投递「无归属窗口的全局事件」。
+    /// <para>
+    /// 用 <see cref="UnknownEvent"/> 包一层并标 <c>isGlobal</c> —— 这类事件
+    /// 本身没有来源窗口，是被路由到本窗口代管的。
+    /// </para>
+    /// </summary>
+    internal void EnqueueGlobal(SDL.Event evt)
+    {
+        Enqueue(
+            new UnknownEvent(
+                this,
+                TimeSpan.FromMilliseconds(evt.Common.Timestamp),
+                evt,
+                isGlobal: true
+            )
+        );
+    }
+
+    private void Enqueue(IWindowEvent item)
     {
         // 有界：满了丢最旧的。事件洪水的场景下，几秒前的鼠标移动毫无价值，
         // 而「丢弃」是 SDL 自己在内部队列满时也采用的做法。
@@ -543,8 +591,14 @@ public sealed class SDL3Window : ISdl3Window
         eventsQueue.Enqueue(item);
     }
 
-    /// <summary>把抽象层事件还原成 SDL 事件。</summary>
-    public SDL.Event ToSdlEvent(WindowEvent evt) => (SDL.Event)evt.Payload;
+    /// <summary>
+    /// 取出原生事件（仅 <see cref="UnknownEvent"/> 有）。
+    /// <para>
+    /// 已映射成具体类型的事件不再保留原生事件 —— 它的字段可能已失效，
+    /// 保留只会诱导调用方去读无效数据。
+    /// </para>
+    /// </summary>
+    public SDL.Event ToSdlEvent(UnknownEvent evt) => (SDL.Event)evt.Native;
 
     /// <summary>提升到前台并请求焦点。窗口管理器有权拒绝。</summary>
     public void Raise()
@@ -559,8 +613,9 @@ public sealed class SDL3Window : ISdl3Window
     /// <summary>
     /// 从流设置窗口图标。
     /// <para>
-    /// 整段逻辑（含失败回滚与旧 surface 释放）都在实现内部，
-    /// 调用方只关心「给一个流」。
+    /// 流格式与 <c>RResourceSet</c> 同款（LTX v1）：<c>ushort</c> 小端元数据长度
+    /// + <see cref="TextureResourceStreamInfo"/> + 紧凑像素数据。
+    /// 解码在调用方完成，这里只把像素交给 SDL。
     /// </para>
     /// </summary>
     public void SetIcon(Stream iconStream, bool closeStream = false)
@@ -573,24 +628,48 @@ public sealed class SDL3Window : ISdl3Window
             if (window == nint.Zero)
                 return;
 
+            // LTX 流按「从头读」处理，与 RResourceSet.Load 保持一致。
+            //
+            // 调用方很可能把 MemoryStream 写到末尾就直接交出来
+            //（SimpleGame.ConvertImageStream 就是这样），不归位会读到 0 字节，
+            // 表现为「icon stream too short」。不可 seek 的流保持原样。
+            if (iconStream.CanSeek)
+                iconStream.Position = 0;
+
+            if (!TryReadIconPixels(iconStream, out var meta, out var pixels, out var pitch))
+                return;
+
             // 先释放上一张，避免反复换图标时泄漏。
             ReleaseIconSurface();
 
-            using (var io = SDL.IOFromStream(iconStream))
+            // SDL 会复制像素数据到自己的 surface，所以 pixels 在这里
+            // 用完即可释放 —— 不需要 pin 到 surface 生命周期结束。
+            var handle = GCHandle.Alloc(pixels, GCHandleType.Pinned);
+            try
             {
-                iconSurface = SDL.LoadSurfaceIO(io.Handle, false);
+                iconSurface = SDL.CreateSurfaceFrom(
+                    (int)meta.Width,
+                    (int)meta.Height,
+                    SDL3Converter.ConvertSurfacePixelFormat((PixelFormat)meta.Format),
+                    handle.AddrOfPinnedObject(),
+                    pitch
+                );
+            }
+            finally
+            {
+                handle.Free();
+            }
 
-                if (iconSurface == nint.Zero)
-                {
-                    Log.Error($"Failed to load window icon: {SDL.GetError()}");
-                    return;
-                }
+            if (iconSurface == nint.Zero)
+            {
+                Log.Error($"SDL_CreateSurfaceFrom failed: {SDL.GetError()}");
+                return;
+            }
 
-                if (!SDL.SetWindowIcon(window, iconSurface))
-                {
-                    Log.Error($"Failed to set window icon: {SDL.GetError()}");
-                    ReleaseIconSurface();
-                }
+            if (!SDL.SetWindowIcon(window, iconSurface))
+            {
+                Log.Error($"Failed to set window icon: {SDL.GetError()}");
+                ReleaseIconSurface();
             }
         }
         catch (Exception ex)
@@ -612,6 +691,96 @@ public sealed class SDL3Window : ISdl3Window
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// 从 LTX v1 流里读出像素。
+    /// </summary>
+    private static bool TryReadIconPixels(
+        Stream stream,
+        out TextureResourceStreamInfo meta,
+        out byte[] pixels,
+        out int pitch
+    )
+    {
+        meta = default;
+        pixels = null;
+        pitch = 0;
+
+        if (!stream.CanRead)
+        {
+            Log.Error("[SDL3Window] icon stream is not readable.");
+            return false;
+        }
+
+        Span<byte> lenBytes = stackalloc byte[2];
+        if (stream.Read(lenBytes) != 2)
+        {
+            Log.Error("[SDL3Window] icon stream too short (missing metadata length).");
+            return false;
+        }
+
+        int metaLen = BinaryPrimitives.ReadUInt16LittleEndian(lenBytes);
+        var metaBytes = new byte[metaLen];
+
+        if (stream.Read(metaBytes, 0, metaLen) != metaLen)
+        {
+            Log.Error($"[SDL3Window] icon stream truncated (metadata {metaLen} bytes).");
+            return false;
+        }
+
+        if (!MemoryMarshal.TryRead<TextureResourceStreamInfo>(metaBytes, out meta))
+        {
+            Log.Error($"[SDL3Window] icon metadata malformed ({metaLen} bytes).");
+            return false;
+        }
+
+        if (meta.Width == 0 || meta.Height == 0)
+        {
+            Log.Error($"[SDL3Window] icon has zero size ({meta.Width}x{meta.Height}).");
+            return false;
+        }
+
+        // 数组纹理不能当图标：SDL 的 surface 只有一层。
+        if (meta.ArrayLayers > 1)
+        {
+            Log.Error($"[SDL3Window] icon must be a single layer, got {meta.ArrayLayers}.");
+            return false;
+        }
+
+        var format = (PixelFormat)meta.Format;
+        int bytesPerPixel;
+        try
+        {
+            bytesPerPixel = format.GetBytesPerPixel();
+        }
+        catch (NotSupportedException ex)
+        {
+            Log.Error($"[SDL3Window] icon format {format} has no known byte size: {ex.Message}");
+            return false;
+        }
+
+        long expected = (long)meta.Width * meta.Height * bytesPerPixel;
+        var buffer = new byte[expected];
+
+        int read = 0;
+        while (read < expected)
+        {
+            int n = stream.Read(buffer, read, (int)(expected - read));
+            if (n <= 0)
+                break;
+            read += n;
+        }
+
+        if (read != expected)
+        {
+            Log.Error($"[SDL3Window] icon pixel data short: {read}/{expected} bytes.");
+            return false;
+        }
+
+        pixels = buffer;
+        pitch = (int)meta.Width * bytesPerPixel;
+        return true;
     }
 
     /// <summary>
@@ -651,57 +820,6 @@ public sealed class SDL3Window : ISdl3Window
 
 
     // ------------------------------------------------------------------ 事件入口
-
-    /// <summary>
-    /// 由事件泵按 <see cref="Id"/> 分派进来。
-    /// <para>
-    /// 只处理<b>窗口级</b>事件；输入事件不在这里 —— 那是 InputManager 的事。
-    /// </para>
-    /// </summary>
-    public void ProcessEvent(SDL.Event ev)
-    {
-        switch ((SDL.EventType)ev.Type)
-        {
-            case SDL.EventType.WindowResized:
-                Resized?.Invoke();
-                break;
-
-            case SDL.EventType.WindowMoved:
-                Moved?.Invoke();
-                break;
-
-            case SDL.EventType.WindowFocusGained:
-                SDL.RaiseWindow(window);
-                SDL.ShowWindow(window);
-                ApplyCursorState();
-                SDL.SetWindowRelativeMouseMode(window, Attributes.RelativeMouse);
-                FocusGained?.Invoke();
-                break;
-
-            case SDL.EventType.WindowFocusLost:
-                SDL.SetWindowRelativeMouseMode(window, false);
-                FocusLost?.Invoke();
-                break;
-
-            case SDL.EventType.WindowMouseEnter:
-                SDL.SetWindowRelativeMouseMode(window, Attributes.RelativeMouse && IsFocus);
-                ApplyCursorState();
-                break;
-
-            case SDL.EventType.WindowMouseLeave:
-                SDL.SetWindowRelativeMouseMode(window, false);
-                break;
-
-            case SDL.EventType.WindowRestored:
-                SDL.RaiseWindow(window);
-                SDL.ShowWindow(window);
-                break;
-
-            case SDL.EventType.WindowCloseRequested:
-                CloseRequested?.Invoke();
-                break;
-        }
-    }
 
     /// <summary>
     /// 按当前的「显示光标意图 + 相对鼠标状态」同步实际光标。

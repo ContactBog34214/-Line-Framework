@@ -52,9 +52,16 @@ public interface IWindow : IDisposable, IName
     /// <summary>
     /// 像素尺寸。
     /// <para>
-    /// <b>这是创建 / 重建交换链的唯一尺寸来源</b>。只读 ——
-    /// 像素尺寸由 DPI 与窗口管理器决定，开放 setter 只会制造谎言。
+    /// <b>优先返回真实像素尺寸</b>，这是创建 / 重建交换链应当使用的尺寸 ——
+    /// HiDPI / 分数缩放下它大于 <see cref="Size"/>，用错会让 present 静默失败。
     /// </para>
+    /// <para>
+    /// <b>但它可能是近似值</b>：部分后端在没有渲染上下文时拿不到真实像素尺寸
+    ///（例如 SDL2 需要先有 GL 或 Vulkan 上下文），此时实现会按 DPI 反推，
+    /// 反推不了就退回 <see cref="Size"/>（等价于 DPI 缩放视作 1）。
+    /// 实现应在首次退化时打一条日志。
+    /// </para>
+    /// <para>只读 —— 像素尺寸由 DPI 与窗口管理器决定，开放 setter 只会制造谎言。</para>
     /// </summary>
     Vector2 PixelSize { get; }
 
@@ -88,6 +95,11 @@ public interface IWindow : IDisposable, IName
     /// <para>
     /// 它是窗口的<b>形态</b>而不是开关，所以留在强类型属性里，
     /// 不进 <see cref="Attributes"/>（将来退出全屏还要恢复原尺寸）。
+    /// </para>
+    /// <para>
+    /// <b>只表达「是否全屏」，不区分独占 / 无边框</b> —— SDL2 的
+    /// <c>FULLSCREEN</c> 与 <c>FULLSCREEN_DESKTOP</c> 在这里压扁成一个 bool，
+    /// 由实现选一种。需要独占全屏时要把它扩展成枚举。
     /// </para>
     /// </summary>
     bool FullScreen { get; set; }
@@ -137,7 +149,7 @@ public interface IWindow : IDisposable, IName
     /// 筛选条件；<c>null</c> 表示取最旧的一个。
     /// </param>
     /// <returns>取到返回 true；队列里没有匹配的事件返回 false。</returns>
-    bool PollEvent(out WindowEvent evt, Func<WindowEvent, bool> filter = null);
+    bool PollEvent(out IWindowEvent evt, Func<IWindowEvent, bool> filter = null);
 
     /// <summary>
     /// 提升到前台并请求焦点。
@@ -151,12 +163,18 @@ public interface IWindow : IDisposable, IName
     /// <summary>
     /// 从流设置窗口图标。
     /// <para>
-    /// 放在接口上而不是交给调用方直接调后端：图标的解码与生命周期
-    /// 都属于窗口实现（旧实现里 <c>IconSurfaceID</c> 的创建/销毁就是一整段
-    /// try/catch 加引用计数逻辑，不该由使用方重写一遍）。
+    /// <b>流格式与 <c>RResourceSet</c> 同款（LTX v1）</b>：
+    /// <c>ushort</c> 小端元数据长度 + <c>TextureResourceStreamInfo</c>
+    ///（宽 / 高 / 格式 / 层数）+ 紧凑像素数据。调用方负责解码图片，
+    /// 窗口只负责把像素交给系统 —— <b>图像解码不进核心库</b>。
+    /// </para>
+    /// <para>
+    /// <b>为什么解码放在调用方</b>：SDL3 有内置的图像加载（<c>SDL_LoadSurfaceIO</c>），
+    /// 但 SDL2 没有（需要额外的 SDL_image）。把解码留在调用方，接口在
+    /// 两个后端上才是一致的 —— 否则 <see cref="SetIcon"/> 会变成「只有某些后端能用」。
     /// </para>
     /// </summary>
-    /// <param name="iconStream">图标数据流（PNG/BMP 等解码交给实现）。</param>
+    /// <param name="iconStream">LTX v1 格式的图标数据。</param>
     /// <param name="closeStream">处理完后是否关闭流。</param>
     void SetIcon(Stream iconStream, bool closeStream = false);
 
@@ -164,9 +182,14 @@ public interface IWindow : IDisposable, IName
     /// 立即抓取 / 释放鼠标（不改 <see cref="WindowAttributes.RelativeMouse"/>）。
     /// <para>
     /// 为什么单独一个方法：<see cref="WindowAttributes.RelativeMouse"/> 是
-    /// <b>用户意图</b>，而这个方法是<b>临时状态</b>——例如鼠标贴到窗口边缘时
-    /// 临时释放抓取，让用户能把光标移出窗口。两者共用同一个存储会让
-    /// 「临时释放」变成「永久关掉用户设置」。
+    /// <b>用户意图</b>，而这个方法是<b>临时状态</b> —— 例如鼠标贴到窗口边缘时
+    /// 临时释放抓取，让用户能把光标移出窗口。
+    /// </para>
+    /// <para>
+    /// <b>多窗口语义：此刻抓取鼠标</b>。同一时刻只有一个窗口拥有抓取 ——
+    /// 焦点在谁身上谁说了算。SDL3 有窗口级的相对模式，SDL2 只有进程级的
+    /// <c>SDL_SetRelativeMouseMode</c>，因此 SDL2 的实现会在<b>非焦点时不做任何事</b>，
+    /// 避免影响真正持有焦点的那个窗口。
     /// </para>
     /// </summary>
     void ApplyMouseCapture(bool capture);
