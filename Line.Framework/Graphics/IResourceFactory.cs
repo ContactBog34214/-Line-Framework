@@ -85,13 +85,17 @@ public interface IResourceFactory
     /// <summary>
     /// 创建交换链。
     /// <para>
-    /// <see cref="SwapchainCreateInfo.Source"/> 的语义随后端不同：
-    /// SDL3 期望它携带 <c>SDL_Window*</c>；Veldrid 期望原生窗口句柄
-    /// （X11 要 Window + Display*，Wayland 要 wl_surface* + wl_display*）。
+    /// 来源见 <see cref="SwapchainCreateInfo.Target"/>：给了窗口就优先用窗口
+    /// （尺寸取 <c>IWindow.PixelSize</c>），否则用裸 <see cref="SwapchainSource"/>
+    /// 与显式的 <see cref="SwapchainCreateInfo.Width"/>/<see cref="SwapchainCreateInfo.Height"/>。
     /// </para>
     /// <para>
-    /// <see cref="SwapchainCreateInfo.Width"/>/<see cref="SwapchainCreateInfo.Height"/>
-    /// 必须是<b>像素</b>尺寸，不是逻辑尺寸。
+    /// 后端能力不同：SDL3 GPU 只接受能提供 <c>SDL_Window*</c> 的窗口
+    /// （<c>ISdlWindowSource</c>），传裸源会抛 <see cref="NotSupportedException"/>；
+    /// Veldrid 则需要按 <see cref="NativeWindowKind"/> 正确填写的原生句柄。
+    /// </para>
+    /// <para>
+    /// 尺寸必须是<b>像素</b>尺寸，不是逻辑尺寸。
     /// </para>
     /// </summary>
     ISwapchain CreateSwapchain(SwapchainCreateInfo createInfo);

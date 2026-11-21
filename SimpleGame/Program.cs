@@ -185,13 +185,20 @@ public static class SimpleGameMain
             Image.Rotation = r;
         };
         Host.FramePerSecond = 960;
+        // 用 RequestVSync 而不是直接赋 VSync：
+        // 切换 vsync 在 Vulkan 上要 vkDeviceWaitIdle + 重建整条交换链，
+        // alt-tab 来回抖动会连发几十次，足以让整机调度抖动到
+        // PipeWire 音频线程掉音（xrun / 爆音）。
+        //
+        // 延迟不对称是有意的：回到前台要尽快恢复低延迟，
+        // 离开前台不着急（省电是长期的），所以后者等更久。
         Host.FocusGained += () =>
         {
-            Host.VSync = false;
+            Host.RequestVSync(false, 200);
         };
         Host.FocusLost += () =>
         {
-            Host.VSync = true;
+            Host.RequestVSync(true, 500);
         };
 
         Host.UpdatePerSecond = Host.FramePerSecond;

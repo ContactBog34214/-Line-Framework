@@ -40,4 +40,23 @@ public interface ISwapchain : IDisposable, IName
 
     /// <summary>呈现当前帧。SDL3 下是空操作（提交即呈现）。</summary>
     void Swap();
+
+    /// <summary>
+    /// 垂直同步开关，<b>每张交换链独立</b>。
+    /// <para>
+    /// <b>生效时机</b>：三个后端都是<b>延迟</b>的，都在下一次取呈现图像之前落地 ——
+    /// 它们底层都需要重建或重新配置呈现路径：
+    /// <list type="bullet">
+    /// <item>Veldrid / Vulkan：下一次 acquire 时重建交换链（会先 WaitForIdle，那一帧丢失）。</item>
+    /// <item>Veldrid / D3D11：立即改 <c>Present</c> 的 SyncInterval。</item>
+    /// <item>SDL3：下一次 acquire 前调 <c>SDL_SetGPUSwapchainParameters</c> 切 present mode。</item>
+    /// </list>
+    /// 因此「设了之后立刻读帧率」看不到变化是正常的，至少要等一帧。
+    /// </para>
+    /// <para>
+    /// 读取返回的是<b>期望值</b>，不一定是当前硬件实际生效的值 ——
+    /// present mode 可能被合成器降级（SDL3 会打 warning）。
+    /// </para>
+    /// </summary>
+    bool SyncToVerticalBlank { get; set; }
 }

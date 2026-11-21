@@ -68,6 +68,45 @@ public sealed class SDL3Device : IGraphicsDevice
     public SDL3Device(GraphicBackend backend, string videoDriver = null)
         : this(backend, videoDriver, debug: false) { }
 
+    /// <summary>
+    /// 创建设备，并<b>同时创建第一个交换链</b>。
+    /// <para>
+    /// SDL3 并不要求这么做（可以先建设备、再建交换链），但为了与
+    /// <c>VeldridDevice(GraphicBackend, SwapchainCreateInfo, out ISwapchain)</c>
+    /// 形状一致 —— App 侧的初始化代码才能不按后端分支。
+    /// </para>
+    /// <para>
+    /// <see cref="SwapchainCreateInfo.Target"/> 必须能提供 <c>SDL_Window*</c>
+    /// （即窗口实现 <see cref="ISdlWindowSource"/>），否则
+    /// <see cref="ISwapchain"/> 创建时抛 <see cref="NotSupportedException"/>，
+    /// 且本构造器会先把已建好的设备释放掉再抛 ——
+    /// 构造器里失败必须「要么完整可用，要么抛」，半初始化的设备比直接失败更难查。
+    /// </para>
+    /// </summary>
+    public SDL3Device(
+        GraphicBackend backend,
+        SwapchainCreateInfo swapchainCreateInfo,
+        out ISwapchain swapchain
+    )
+        : this(backend, videoDriver: null, debug: false)
+    {
+        swapchain = null;
+
+        try
+        {
+            swapchain = ResourceFactory.CreateSwapchain(swapchainCreateInfo);
+        }
+        catch
+        {
+            // 构造器里失败必须「要么完整可用，要么抛」：半初始化的设备更难查。
+            Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 实际建设备的构造器。
+    /// </summary>
     public SDL3Device(GraphicBackend backend, string videoDriver, bool debug)
     {
         if (

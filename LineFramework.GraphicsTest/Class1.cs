@@ -5,6 +5,7 @@ using System.Text;
 using Line.Framework;
 using Line.Framework.Default.Graphics.SDL3;
 using Line.Framework.Default.Graphics.Veldrid;
+using Line.Framework.Default.IO;
 using Line.Framework.Graphics;
 using SDL3;
 
@@ -288,17 +289,22 @@ void main()
         );
 
         // ---- 交换链参数 ---------------------------------------------------
-        // 两个后端对 SwapchainSource 的解释不同：
-        //   SDL3   → Surface 存 SDL_Window*
-        //   Veldrid→ Surface/Connection 存原生窗口句柄
+        // 新入口优先吃 IWindow：SDL3 从 ISdlWindowSource 拿 SDL_Window*，
+        // Veldrid 从 IWindow.Source 拿原生句柄。只有「手上只有句柄」时
+        // 才直接给 SwapchainSource（这里 Veldrid 分支就是这么用的）。
         SwapchainSource source;
+        SwapchainTarget target;
         if (UseVeldridBackend)
         {
             source = CreateVeldridSwapchainSource(window, driverName);
+            target = source;
         }
         else
         {
-            source = new() { Kind = NativeWindowKind.Xlib, Surface = window };
+            // ownsWindow: false —— 窗口的销毁仍由本测试自己负责。
+            var sdlWindow = new SDL3Window(window);
+            source = sdlWindow.Source;
+            target = SwapchainTarget.FromWindow(sdlWindow);
         }
 
         Console.WriteLine(
@@ -309,7 +315,7 @@ void main()
 
         var swapchainInfo = new SwapchainCreateInfo
         {
-            Source = source,
+            Target = target,
             // 用像素尺寸，不是逻辑尺寸
             Width = (uint)pixelW,
             Height = (uint)pixelH,

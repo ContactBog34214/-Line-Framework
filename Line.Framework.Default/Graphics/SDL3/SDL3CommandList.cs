@@ -348,6 +348,10 @@ public sealed class SDL3CommandList : ICommandList
             return;
         }
 
+        // 落地待应用的 present mode。SDL 要求 SDL_SetGPUSwapchainParameters
+        // 早于取交换链纹理，晚一步设就会被拒绝（表现是「设了 vsync 但没变化」）。
+        sc.ApplyPendingPresentMode();
+
         // SDL3 的交换链纹理是在命令缓冲上「取」出来的，
         // 且只能由取它的那个命令缓冲引用。
         if (

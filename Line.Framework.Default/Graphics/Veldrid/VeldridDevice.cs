@@ -109,7 +109,9 @@ public sealed class VeldridDevice : IGraphicsDevice
         var options = new GraphicsDeviceOptions
         {
             PreferStandardClipSpaceYDirection = true,
-            SyncToVerticalBlank = false,
+            // 设备级 vsync 只是「创建交换链时的默认值」，
+            // 运行期切换请改 ISwapchain.SyncToVerticalBlank（每张链独立）。
+            SyncToVerticalBlank = description?.SyncToVerticalBlank ?? false,
             ResourceBindingModel = ResourceBindingModel.Default,
         };
 

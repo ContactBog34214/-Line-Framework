@@ -12,6 +12,20 @@ public class Window : WindowType
     public override RendererType Renderer { get; }
     public override ICompositor Compositor { get; set; }
 
+    /// <summary>
+    /// 底层 SDL 窗口。
+    /// <para>
+    /// 本类<b>不再自己调</b> <c>SDL_CreateWindow</c> / <c>SDL_DestroyWindow</c>：
+    /// 原生窗口由 <see cref="SDL3Window"/> 持有（<c>ownsWindow: true</c>），
+    /// 这里只是借用它的句柄与 <see cref="IWindow.Source"/>。
+    /// </para>
+    /// <para>
+    /// 这也是把「窗口创建」与「图形后端选择」解耦的开端：换后端时
+    /// 窗口本身不需要重建，因为它已经是一次性把所有原生句柄填满了。
+    /// </para>
+    /// </summary>
+    protected SDL3Window Sdl { get; private set; }
+
     public Window(
         int Width = 640,
         int Height = 480,
@@ -35,12 +49,8 @@ public class Window : WindowType
         }
 
         Resource = new();
-        //一个窗口
-        if (Width < Height)
-            SDL.SetHint(SDL.Hints.Orientations, "Portrait");
-        else if (Width > Height)
-            SDL.SetHint(SDL.Hints.Orientations, "Landscape");
 
+        // 视频驱动 hint 必须在 SDL_Init 之前设置，否则无效。
         if (
             OperatingSystem.IsLinux()
             && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"))
@@ -59,126 +69,35 @@ public class Window : WindowType
 
         SDL.GLSetSwapInterval(0);
 
-        SDL.WindowFlags flags =
-            SDL.WindowFlags.Resizable | SDL.WindowFlags.InputFocus | SDL.WindowFlags.MouseFocus;
+        // 窗口交给 SDL3Window 创建：标志用抽象层的 WindowFlags，
+        // 不再往 SDL 传 OpenGL / Vulkan / Metal 那些会让 SDL GPU 拒绝建链的位。
+        Sdl = new SDL3Window(
+            new WindowCreateInfo
+            {
+                Title = Title,
+                Width = Width,
+                Height = Height,
+                Flags = WindowFlags.Resizable | WindowFlags.MouseFocus | WindowFlags.InputFocus,
+            }
+        );
 
-        /*
-        if (Backend == GraphicBackend.OpenGL)
-            flags |= SDL.WindowFlags.OpenGL;
-        if (Backend == GraphicBackend.Vulkan)
-            flags |= SDL.WindowFlags.Vulkan;
-        if (Backend == GraphicBackend.Metal)
-            flags |= SDL.WindowFlags.Metal;
-        */
-
-        WindowHandle = SDL.CreateWindow(Title, Width, Height, flags);
-        SDL.ShowWindow(WindowHandle);
-        SwapchainSource source = default;
-        var driver = SDL.GetCurrentVideoDriver();
-
-        try
-        {
-            uint props = SDL.GetWindowProperties(WindowHandle);
-            if (driver == "wayland")
-            {
-                IntPtr display = SDL.GetPointerProperty(
-                    props,
-                    SDL.Props.WindowWaylandDisplayPointer,
-                    IntPtr.Zero
-                );
-                IntPtr surface = SDL.GetPointerProperty(
-                    props,
-                    SDL.Props.WindowWaylandSurfacePointer,
-                    IntPtr.Zero
-                );
-                source = new()
-                {
-                    Surface = surface,
-                    Connection = display,
-                    Kind = NativeWindowKind.Wayland,
-                };
-            }
-            else if (driver == "x11")
-            {
-                var display = SDL.GetPointerProperty(
-                    props,
-                    SDL.Props.WindowX11DisplayPointer,
-                    IntPtr.Zero
-                );
-                var x11Window = (IntPtr)
-                    SDL.GetNumberProperty(props, SDL.Props.WindowX11WindowNumber, 0);
-                source = new()
-                {
-                    Surface = x11Window,
-                    Connection = display,
-                    Kind = NativeWindowKind.Xlib,
-                };
-            }
-            else if (driver == "windows")
-            {
-                var hwnd = SDL.GetPointerProperty(
-                    props,
-                    SDL.Props.WindowWin32HWNDPointer,
-                    IntPtr.Zero
-                );
-                var hinstance = SDL.GetPointerProperty(
-                    props,
-                    SDL.Props.WindowWin32InstancePointer,
-                    IntPtr.Zero
-                );
-                source = new()
-                {
-                    Surface = hwnd,
-                    Connection = hinstance,
-                    Kind = NativeWindowKind.Win32,
-                };
-            }
-            else if (driver == "Android")
-            {
-                var surfaceHandle = SDL.GetPointerProperty(
-                    props,
-                    SDL.Props.WindowAndroidSurfacePointer,
-                    IntPtr.Zero
-                );
-                var jniEnv = SDL.GetAndroidJNIEnv();
-                source = new()
-                {
-                    Surface = surfaceHandle,
-                    Connection = jniEnv,
-                    Kind = NativeWindowKind.AndroidSurface,
-                };
-            }
-            else if (driver == "cocoa")
-            {
-                IntPtr nsWindow = SDL.GetPointerProperty(
-                    props,
-                    SDL.Props.WindowCocoaWindowPointer,
-                    IntPtr.Zero
-                );
-                source = new() { Surface = nsWindow, Kind = NativeWindowKind.Cocoa };
-            }
-            else
-            {
-                Log.Error($"What is {driver}");
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error($"{ex}");
-        }
-
-        Width = (int)Size.X;
-        Height = (int)Size.Y;
+        // 交给基类的是 IWindow 抽象，而不是句柄 ——
+        // 从此 WindowType 里不再有任何原生类型。
+        Window = Sdl;
 
         var swapchainDesc = new SwapchainCreateInfo()
         {
-            Source = source,
-            Width = (uint)Width,
-            Height = (uint)Height,
+            // 两个后端都走窗口入口：Veldrid 从 IWindow.Source 取原生句柄，
+            // SDL3 从 ISdlWindowSource 取 SDL_Window*。
+            // 尺寸由 SwapchainCreateInfo.Resolve 用 PixelSize 覆盖 ——
+            // 这同时修掉了「HiDPI 下用逻辑尺寸建交换链会静默失败」的老问题。
+            Target = SwapchainTarget.FromWindow(Sdl),
+            // 交换链创建时就把当前 vsync 偏好带上（构造期设置的值存在
+            // WindowType._vsync 里）。之后改 VSync 会直接转发给交换链。
+            SyncToVerticalBlank = VSync,
         };
 
-        WindowID = SDL.GetWindowID(WindowHandle);
-        bool UsingVeldrid = false;
+        bool UsingVeldrid = true;
         try
         {
             if (UsingVeldrid)
@@ -191,9 +110,11 @@ public class Window : WindowType
             }
             else
             {
-                swapchainDesc.Source = new() { Surface = WindowHandle };
-                Dev = new SDL3Device(Backend ?? GraphicBackend.Vulkan);
-                MainSwapchain = Dev.ResourceFactory.CreateSwapchain(swapchainDesc);
+                Dev = new SDL3Device(
+                    Backend ?? GraphicBackend.Vulkan,
+                    swapchainDesc,
+                    out MainSwapchain
+                );
             }
         }
         catch (Exception ex)

@@ -8,6 +8,9 @@ using static SDL3.SDL;
 using BlendFactor = Line.Framework.Graphics.BlendFactor;
 using BlendOperation = Line.Framework.Graphics.BlendOperation;
 using PixelFormat = Line.Framework.Graphics.PixelFormat;
+// SDL 也有一个 WindowFlags（嵌套在 SDL 类里）。用别名指向抽象层的那个，
+// 本文件里访问 SDL 的必须写全名 SDL.WindowFlags。
+using WindowFlags = Line.Framework.IO.WindowFlags;
 
 namespace Line.Framework.Default.Graphics.SDL3;
 
@@ -20,6 +23,57 @@ namespace Line.Framework.Default.Graphics.SDL3;
 /// </summary>
 public static class SDL3Converter
 {
+    // ---------------------------------------------------------------- WindowFlags
+
+    /// <summary>
+    /// 抽象层窗口标志 → SDL 标志。
+    /// <para>
+    /// 抽象层的 <see cref="WindowFlags"/> 刻意不含 OpenGL / Vulkan / Metal ——
+    /// Veldrid 自己建 surface 不需要它们，SDL3 GPU 则会因为看到这些位
+    /// 而拒绝 Claim 窗口（历史上表现为「不支持透明窗口」，完全误导排查）。
+    /// </para>
+    /// <para>
+    /// ⚠️ 这里用到的成员名（<c>Borderless</c> / <c>AlwaysOnTop</c> /
+    /// <c>HighPixelDensity</c> / <c>Utility</c> / <c>Tooltip</c> /
+    /// <c>PopupMenu</c> / <c>NotFocusable</c>）在本仓库此前没被引用过。
+    /// 升级 SDL3-CS 后若编译失败，先查
+    /// <c>~/.nuget/packages/sdl3-cs/*/lib/*/*.xml</c> 的实际命名。
+    /// </para>
+    /// </summary>
+    public static SDL.WindowFlags ConvertWindowFlags(WindowFlags flags)
+    {
+        var result = default(SDL.WindowFlags);
+
+        if ((flags & WindowFlags.Hidden) != 0)
+            result |= SDL.WindowFlags.Hidden;
+        if ((flags & WindowFlags.Resizable) != 0)
+            result |= SDL.WindowFlags.Resizable;
+        if ((flags & WindowFlags.Borderless) != 0)
+            result |= SDL.WindowFlags.Borderless;
+        if ((flags & WindowFlags.AlwaysOnTop) != 0)
+            result |= SDL.WindowFlags.AlwaysOnTop;
+        if ((flags & WindowFlags.Fullscreen) != 0)
+            result |= SDL.WindowFlags.Fullscreen;
+        if ((flags & WindowFlags.HighPixelDensity) != 0)
+            result |= SDL.WindowFlags.HighPixelDensity;
+        if ((flags & WindowFlags.InputFocus) != 0)
+            result |= SDL.WindowFlags.InputFocus;
+        if ((flags & WindowFlags.MouseFocus) != 0)
+            result |= SDL.WindowFlags.MouseFocus;
+        if ((flags & WindowFlags.Transparent) != 0)
+            result |= SDL.WindowFlags.Transparent;
+        if ((flags & WindowFlags.Utility) != 0)
+            result |= SDL.WindowFlags.Utility;
+        if ((flags & WindowFlags.Tooltip) != 0)
+            result |= SDL.WindowFlags.Tooltip;
+        if ((flags & WindowFlags.PopupMenu) != 0)
+            result |= SDL.WindowFlags.PopupMenu;
+        if ((flags & WindowFlags.NotFocusable) != 0)
+            result |= SDL.WindowFlags.NotFocusable;
+
+        return result;
+    }
+
     // ---------------------------------------------------------------- PixelFormat
 
     public static GPUTextureFormat ConvertPixelFormat(PixelFormat format)
